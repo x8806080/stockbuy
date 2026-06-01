@@ -1214,6 +1214,26 @@
         // 寫入全域供 PDF 按鈕存取
         _lastAnalysis = { masterDict, top50, total: Object.keys(masterDict).length };
 
+        // ── 同步分析結果到 GitHub Repo ──
+        const resultPayload = {
+            date:      new Date().toLocaleString('zh-TW'),
+            thrA:      autoRatioThrA,
+            thrB:      autoRatioThrB,
+            thrC:      autoRatioThrC,
+            top50:     top50,
+            inv:       finalData.filter(r => inventorySymbols.has(r.代號)),
+            top20:     top50.filter(r => !inventorySymbols.has(r.代號)).slice(0,20),
+            inds:      Object.entries(indMap)
+                           .sort((a,b)=>b[1].corp-a[1].corp).slice(0,8)
+                           .map(([k,v])=>({ind:k,count:v.count,corp:v.corp})),
+            resonance: resonanceData,
+            etfRes:    Object.entries(etfSourceDict)
+                           .map(([s,st])=>({代號:s,名稱:masterDict[s]?.名稱||'',共振次數:st.size,ETF清單:[...st].join(' / ')}))
+                           .filter(r=>r.共振次數>=(SC.etf?.minCount||2))
+                           .sort((a,b)=>b.共振次數-a.共振次數),
+        };
+        saveResult(resultPayload); // 非同步，不 block UI
+
         // 產出 PDF 按鈕 + 報告尾部
         const pdfDate = new Date().toLocaleString('zh-TW', {
             year:'numeric', month:'2-digit', day:'2-digit',
@@ -1267,12 +1287,14 @@
     // ║       GitHub Repo 同步設定（只需填入 TOKEN）          ║
     // ╚══════════════════════════════════════════════════════╝
     const REPO_CONFIG = {
-        OWNER  : 'x8806080',
-        REPO   : 'stockbuy',
-        BRANCH : 'main',
-        FILE   : 'data/history.json',
+        OWNER       : 'x8806080',
+        REPO        : 'stockbuy',
+        BRANCH      : 'main',
+        FILE        : 'data/history.json',      // 歷史溫度紀錄
+        RESULT_FILE : 'data/result.json',        // 最新分析結果
         get TOKEN() { return localStorage.getItem('gh_token') || ''; },
     };
+    const RESULT_LS_KEY = 'lastAnalysisResult_v1'; // localStorage key
     // ────────────────────────────────────────────────────────
     // TOKEN 取得方式：
     //   GitHub → Settings → Developer Settings
@@ -1302,6 +1324,9 @@
     function repoFileURL() {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${REPO_CONFIG.FILE}`;
     }
+    function resultFileURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${REPO_CONFIG.RESULT_FILE}`;
+    }
 
     // ── 讀取：GitHub Repo 優先，失敗則用 localStorage ──
     async function loadHistory() {
@@ -1326,6 +1351,63 @@
             return remote;
         } catch (e) {
             console.warn('GitHub Repo 讀取失敗，使用本機快取:', e.message);
+            return local;
+        }
+    }
+
+
+    // ── 分析結果 同步 ────────────────────────────────────
+    async function saveResult(payload) {
+        // payload：{ date, top50, inv, top20, inds, resonance, etfRes, thrA, thrB, thrC }
+        // localStorage 立即儲存
+        try { localStorage.setItem(RESULT_LS_KEY, JSON.stringify(payload)); } catch {}
+
+        if (!hasRepo()) return;
+        try {
+            let sha = null;
+            const getRes = await fetch(resultFileURL(), { headers: repoHeaders() });
+            if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+            const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+            const res = await fetch(resultFileURL(), {
+                method: 'PUT', headers: repoHeaders(),
+                body: JSON.stringify({
+                    message: `update result ${payload.date}`,
+                    content, branch: REPO_CONFIG.BRANCH,
+                    ...(sha ? { sha } : {})
+                })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            console.log('✅ 分析結果同步成功');
+        } catch (e) {
+            console.warn('⚠️ 分析結果同步失敗（本機已儲存）:', e.message);
+        }
+    }
+
+    async function loadResult() {
+        // 先讀 localStorage 快取
+        let local = null;
+        try {
+            const raw = localStorage.getItem(RESULT_LS_KEY);
+            if (raw) local = JSON.parse(raw);
+        } catch {}
+
+        if (!hasRepo()) return local;
+
+        try {
+            const res = await fetch(resultFileURL(), { headers: repoHeaders() });
+            if (res.status === 404) return local;
+            if (!res.ok) throw new Error(res.status);
+            const data = await res.json();
+            const content = atob(data.content.replace(/\\n/g,''));
+            const remote = JSON.parse(content);
+            // 比較日期，取較新的
+            if (!local || (remote.date && remote.date >= (local.date || ''))) {
+                localStorage.setItem(RESULT_LS_KEY, JSON.stringify(remote));
+                return remote;
+            }
+            return local;
+        } catch (e) {
+            console.warn('分析結果讀取失敗，使用本機快取:', e.message);
             return local;
         }
     }
@@ -1652,9 +1734,117 @@
         }
     }
 
+
+    // ── 載入並渲染上次分析結果 ───────────────────────────
+    async function loadAndRenderResult() {
+        const payload = await loadResult();
+        if (!payload || !payload.top50 || !payload.top50.length) return;
+
+        // 更新 gistMsg 顯示載入狀態
+        const dot = document.getElementById('gistDot');
+        const msg = document.getElementById('gistMsg');
+
+        // 重建六大輸出 HTML（與 runAnalysis 輸出邏輯一致）
+        let outputHTML = '';
+        const SC = getScoreConfig();
+        const { top50, inv, top20, inds, resonance, etfRes, date, thrA, thrB, thrC } = payload;
+
+        // 門檻說明列
+        outputHTML += `<div style="background:#1a2540;border-left:4px solid #3b82f6;border-radius:0 6px 6px 0;
+            padding:10px 14px;font-size:12px;color:#93c5fd;margin-bottom:14px;line-height:1.8">
+            <b>📊 上次分析 ${date||''}　法人比值門檻</b><br>
+            🔴 P70（+60分）= <b>${thrA?(thrA*100).toFixed(3)+'%':'—'}</b>　
+            🟡 P40 = <b>${thrB?(thrB*100).toFixed(3)+'%':'—'}</b>　
+            🟢 P20（+30分）= <b>${thrC?(thrC*100).toFixed(3)+'%':'—'}</b>
+            <span style="margin-left:16px;color:#64748b">（重新上傳 CSV 可更新分析）</span>
+        </div>`;
+
+        // 輸出1
+        outputHTML += createSection(
+            `輸出 1：整份資料 TOP 50 推薦表`, '輸出1_TOP50.csv',
+            ['排名','代號','名稱','評分','法人市值比','法人5日買超(百萬)','市值(億)','大摩排名','投信排名','標註'],
+            top50.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分,
+                r.法人市值比pct||'-', (r.三大法人5日買超||0).toLocaleString(),
+                r.市值億||'-', r.大摩排名||'-', r.投信排名||'-',
+                renderTags(r.狀態標註)])
+        );
+
+        // 輸出2
+        if (inv && inv.length) {
+            outputHTML += createSection(
+                `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, '輸出2_庫存診斷.csv',
+                ['代號','名稱','評分','法人市值比','法人5日(百萬)','法人一月(百萬)','投信(百萬)','營收年增','標註'],
+                inv.map(r => [r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-',
+                    (r.三大法人5日買超||0).toLocaleString(), (r.法人一月買超||0).toLocaleString(),
+                    (r.投信週買超||0).toLocaleString(),
+                    r.營收年增?`+${r.營收年增.toFixed(1)}%`:'-',
+                    renderTags(r.狀態標註)])
+            );
+        }
+
+        // 輸出3
+        if (top20 && top20.length) {
+            outputHTML += createSection(
+                'Top 20 推薦表（排除庫存）', '輸出3_TOP20排除庫存.csv',
+                ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','大摩排名','投信排名','標註'],
+                top20.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分,
+                    r.法人市值比pct||'-', (r.三大法人5日買超||0).toLocaleString(),
+                    r.大摩排名||'-', r.投信排名||'-', renderTags(r.狀態標註)])
+            );
+        }
+
+        // 輸出4 圓餅圖
+        if (inds && inds.length) {
+            const pieData = inds.filter(d=>d.corp>0).map(d=>({label:d.ind, v:d.corp}));
+            let out4HTML = `<div class="report-section">
+                <h2>輸出 4：今日熱門族群解析（TOP50資金匯聚）</h2>`;
+            if (pieData.length) {
+                out4HTML += `<div class="pie-wrap">${buildPieChart(pieData,240)}`;
+                out4HTML += '<div class="pie-legend">' + pieData.map((d,i) => {
+                    const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+                    return `<div class="pie-legend-item"><div class="pie-swatch" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div>
+                        <span><b>${d.label}</b>：${(d.v/100).toFixed(1)}億</span></div>`;
+                }).join('') + '</div></div>';
+            }
+            out4HTML += `<div class="tbl-wrap"><table>
+                <tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
+            inds.forEach((d,i) => {
+                out4HTML += `<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`;
+            });
+            out4HTML += '</table></div></div>';
+            outputHTML += out4HTML;
+        }
+
+        // 輸出5
+        if (resonance && resonance.length) {
+            outputHTML += createSection(
+                `輸出 5：五日/一月漲幅多重共振清單（${resonance.length} 檔）`, '輸出5_雙漲幅共振.csv',
+                ['排名','代號','名稱','評分','標註'],
+                resonance.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, renderTags(r.狀態標註)])
+            );
+        }
+
+        // 輸出6
+        if (etfRes && etfRes.length) {
+            outputHTML += createSection(
+                `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`, '輸出6_ETF共振.csv',
+                ['排名','代號','名稱','共振次數','出現清單','評分'],
+                etfRes.map((r,i) => [i+1, r.代號, r.名稱, r.共振次數, r.ETF清單, r.綜合評分])
+            );
+        }
+
+        document.getElementById('outputArea').innerHTML = outputHTML;
+        if (dot && msg && hasRepo()) {
+            dot.style.background = '#4ade80';
+            msg.textContent = `✅ 已載入上次分析結果（${date||''}）`;
+        }
+    }
+
     // 頁面載入即渲染歷史
     updateTokenStatus();
     renderHistory();
+    // 自動載入上次分析結果
+    loadAndRenderResult();
 </script>
 </body>
 </html>
