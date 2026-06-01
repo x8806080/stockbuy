@@ -1211,6 +1211,9 @@
 
         document.getElementById('loadingStatus').style.display = 'none';
 
+        // 寫入全域供 PDF 按鈕存取
+        _lastAnalysis = { masterDict, top50, total: Object.keys(masterDict).length };
+
         // 產出 PDF 按鈕 + 報告尾部
         const pdfDate = new Date().toLocaleString('zh-TW', {
             year:'numeric', month:'2-digit', day:'2-digit',
@@ -1219,7 +1222,7 @@
         outputHTML += `
         <div class="report-section" style="text-align:center;padding:28px 0 12px;border-top:1px solid var(--border);margin-top:40px">
             <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px">
-                分析時間：${pdfDate}　·　標的總數：${Object.keys(masterDict).length} 檔　·　TOP50 平均評分：${top50.length ? Math.round(top50.reduce((s,r)=>s+r.綜合評分,0)/top50.length) : 0} 分
+                分析時間：${pdfDate}　·　標的總數：${_lastAnalysis.total} 檔　·　TOP50 平均評分：${_lastAnalysis.top50.length ? Math.round(_lastAnalysis.top50.reduce((s,r)=>s+r.綜合評分,0)/_lastAnalysis.top50.length) : 0} 分
             </div>
             <button class="btn-pdf" onclick="exportPDF('${pdfDate}')"
                 style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border:none;
@@ -1279,7 +1282,10 @@
     //   → 複製 ghp_... 貼在上方 TOKEN 欄位
     // ────────────────────────────────────────────────────────
 
-    const HIST_KEY = 'momentumAnalyzerHistory_v1'; // localStorage 備用 key
+    const HIST_KEY = 'momentumAnalyzerHistory_v1';
+
+    // 全域：最後一次分析結果（PDF按鈕、外部存取用）
+    let _lastAnalysis = { masterDict:{}, top50:[], total:0 }; // localStorage 備用 key
 
     // ── GitHub Repo Contents API 工具 ──────────────────
     function repoHeaders() {
@@ -1511,7 +1517,7 @@
             }
         }
         const hist = await loadHistory();
-        if (dot && msg && hasGist()) {
+        if (dot && msg && hasRepo()) {
             dot.style.background = '#4ade80';
             msg.textContent = `✅ GitHub Repo 同步（${hist.length} 筆紀錄）`;
         }
@@ -1618,7 +1624,7 @@
         if (val.startsWith('ghp_') && val.length > 10) {
             localStorage.setItem('gh_token', val);
             updateTokenStatus();
-            renderHistory();  // 立即嘗試同步
+            renderHistory();  // 立即嘗試同步（async，不 block UI）
         } else if (val === '') {
             localStorage.removeItem('gh_token');
             updateTokenStatus();
