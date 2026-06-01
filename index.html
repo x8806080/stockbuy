@@ -254,6 +254,38 @@
             th, td { padding: 4px 5px; }
             h1 { font-size: 13px; }
         }
+
+        /* ══ 列印 / PDF 樣式 ══ */
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { background: #fff !important; color: #111 !important; padding: 0 !important; font-size: 11pt; }
+            .container { box-shadow: none !important; border: none !important; padding: 10px !important; max-width: 100% !important; background: #fff !important; }
+            /* 隱藏不需列印的元件 */
+            .control-panel, .score-editor, .loading, .debug-box,
+            .history-panel, .btn-download, .btn-pdf, .btn-reset,
+            .btn-export-cfg, #gistStatus { display: none !important; }
+            /* 標題 */
+            h1 { color: #1e3a5f !important; border-bottom: 2px solid #1e3a5f !important; font-size: 16pt; }
+            .report-section { page-break-inside: avoid; margin-top: 20px; }
+            .report-section h2 { color: #1e3a5f !important; border-bottom: 1px solid #ccc !important; font-size: 13pt; page-break-after: avoid; }
+            /* 表格 */
+            .tbl-wrap { overflow: visible !important; }
+            table { font-size: 8.5pt; page-break-inside: auto; border-collapse: collapse; width: 100%; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+            th { background: #1e3a5f !important; color: #fff !important; padding: 5px 7px !important; font-size: 8pt; }
+            td { border: 1px solid #ccc !important; padding: 4px 7px !important; background: #fff !important; color: #111 !important; }
+            tr:nth-child(even) td { background: #f4f7fb !important; }
+            /* TAG 彩色保留 */
+            .s-tag { border: 1px solid #999 !important; font-size: 7.5pt !important; padding: 1px 5px !important; }
+            /* 圓餅圖 */
+            .pie-wrap { page-break-inside: avoid; }
+            /* 報告標題列 */
+            .pdf-header { display: block !important; }
+            @page { size: A4 landscape; margin: 10mm 12mm; }
+        }
+        /* 列印標題（正常模式隱藏）*/
+        .pdf-header { display: none; }
     </style>
 </head>
 <body>
@@ -265,7 +297,7 @@
     <div class="history-panel">
             <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
                 <span id="gistDot" style="width:8px;height:8px;border-radius:50%;background:#4b5563;display:inline-block;flex-shrink:0"></span>
-                <span id="gistMsg">Gist 未設定（本機模式）</span>
+                <span id="gistMsg">GitHub Repo 未設定（本機模式）</span>
             </div>
         <h2>📈 市場溫度歷史走勢</h2>
         <p class="history-subtitle">每次分析後自動記錄 TOP 20 平均分，追蹤市場籌碼強度趨勢</p>
@@ -445,7 +477,12 @@
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
 
-    <div id="outputArea"></div>
+    <div id="outputArea">
+    <div class="pdf-header" style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:16px">
+        <div style="font-size:18pt;font-weight:700;color:#1e3a5f">籌碼先行動能待發 — 量化策略分析報告</div>
+        <div id="pdfSubtitle" style="font-size:10pt;color:#555;margin-top:4px"></div>
+    </div>
+</div>
 </div>
 
 <script>
@@ -1143,7 +1180,34 @@
         }
 
         document.getElementById('loadingStatus').style.display = 'none';
+
+        // 產出 PDF 按鈕 + 報告尾部
+        const pdfDate = new Date().toLocaleString('zh-TW', {
+            year:'numeric', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit'
+        });
+        outputHTML += `
+        <div class="report-section" style="text-align:center;padding:28px 0 12px;border-top:1px solid var(--border);margin-top:40px">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px">
+                分析時間：${pdfDate}　·　標的總數：${Object.keys(masterDict).length} 檔　·　TOP50 平均評分：${top50.length ? Math.round(top50.reduce((s,r)=>s+r.綜合評分,0)/top50.length) : 0} 分
+            </div>
+            <button class="btn-pdf" onclick="exportPDF('${pdfDate}')"
+                style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border:none;
+                       padding:14px 36px;font-size:16px;border-radius:8px;cursor:pointer;
+                       font-weight:700;box-shadow:0 4px 12px rgba(220,38,38,.4);
+                       display:inline-flex;align-items:center;gap:10px;letter-spacing:.5px">
+                📄 產出 PDF 報告
+            </button>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:10px">
+                瀏覽器列印對話框 → 選「另存為 PDF」→ 設定 A4 橫向
+            </div>
+        </div>`;
+
         document.getElementById('outputArea').innerHTML = outputHTML;
+
+        // 更新 PDF 頁首日期
+        const sub = document.getElementById('pdfSubtitle');
+        if (sub) sub.textContent = '分析日期：' + pdfDate + '　TOP50 共 ' + top50.length + ' 檔';
 
         // ── 計算 TOP20 平均分並寫入歷史 ──
         const top20scores = top50.slice(0, 20).map(r => r.綜合評分);
@@ -1166,58 +1230,65 @@
     // ══════════════════════════════════════════════
     //  歷史紀錄：存取 localStorage
     // ══════════════════════════════════════════════
-    // ╔══════════════════════════════════════════════════╗
-    // ║         GitHub Gist 同步設定（請填入以下兩個值）      ║
-    // ╚══════════════════════════════════════════════════╝
-    const GIST_CONFIG = {
-        GIST_ID : '40b7fad6e98aa5607134aa83a65cc0be', // ← Gist ID（不用改）
-        TOKEN   : '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',                  // ← 貼上新 ghp_... Token
+    // ╔══════════════════════════════════════════════════════╗
+    // ║       GitHub Repo 同步設定（只需填入 TOKEN）          ║
+    // ╚══════════════════════════════════════════════════════╝
+    const REPO_CONFIG = {
+        OWNER  : 'x8806080',            // ← GitHub 帳號（不用改）
+        REPO   : 'stockbuy',            // ← Repo 名稱（不用改）
+        BRANCH : 'main',                // ← 分支（通常是 main 或 master）
+        FILE   : 'data/history.json',   // ← 儲存路徑（不用改）
+        TOKEN  : '填入你的新 Token',    // ← 貼上新 ghp_... Token
     };
-    // ────────────────────────────────────────────────────
-    // 說明：
-    //   GIST_ID  → 固定不變，已預填
-    //   TOKEN    → 去 GitHub → Settings → Developer Settings
-    //              → Personal access tokens → Tokens (classic)
-    //              → Generate new token → 只勾 gist → 複製貼上
-    // ────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────
+    // TOKEN 取得方式：
+    //   GitHub → Settings → Developer Settings
+    //   → Personal access tokens → Tokens (classic)
+    //   → Generate new token
+    //   → 勾選 repo（或只勾 public_repo 若 repo 是公開的）
+    //   → 複製 ghp_... 貼在上方 TOKEN 欄位
+    // ────────────────────────────────────────────────────────
 
     const HIST_KEY = 'momentumAnalyzerHistory_v1'; // localStorage 備用 key
 
-    // ── Gist API 工具 ──────────────────────────────────
-    function gistHeaders() {
+    // ── GitHub Repo Contents API 工具 ──────────────────
+    function repoHeaders() {
         return {
-            'Authorization': `token ${GIST_CONFIG.TOKEN}`,
+            'Authorization': `token ${REPO_CONFIG.TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json',
         };
     }
-    function hasGist() {
-        return GIST_CONFIG.GIST_ID && GIST_CONFIG.TOKEN &&
-               !GIST_CONFIG.TOKEN.includes('填入');
+    function hasRepo() {
+        return REPO_CONFIG.TOKEN && !REPO_CONFIG.TOKEN.includes('填入');
+    }
+    function repoFileURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${REPO_CONFIG.FILE}`;
     }
 
-    // ── 讀取：Gist 優先，失敗則用 localStorage ──────────
+    // ── 讀取：GitHub Repo 優先，失敗則用 localStorage ──
     async function loadHistory() {
-        // 先從 localStorage 快取讀（立即顯示）
         let local = [];
         try { local = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch {}
 
-        if (!hasGist()) return local;
+        if (!hasRepo()) return local;
 
         try {
-            const res = await fetch(
-                `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
-                { headers: gistHeaders() }
-            );
+            const res = await fetch(repoFileURL(), { headers: repoHeaders() });
+            if (res.status === 404) {
+                // 檔案尚不存在，視為空紀錄
+                return local;
+            }
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
-            const content = data.files['analysis_history.json']?.content || '[]';
+            // content 是 Base64 編碼
+            const content = atob(data.content.replace(/\\n/g,'').replace(/\\r/g,''));
             const remote = JSON.parse(content);
             // 同步到 localStorage 作快取
             localStorage.setItem(HIST_KEY, JSON.stringify(remote));
             return remote;
         } catch (e) {
-            console.warn('Gist 讀取失敗，使用本機快取:', e);
+            console.warn('GitHub Repo 讀取失敗，使用本機快取:', e.message);
             return local;
         }
     }
@@ -1240,20 +1311,31 @@
         // 寫入 localStorage（立即）
         localStorage.setItem(HIST_KEY, JSON.stringify(hist));
 
-        // 寫入 Gist（非同步，失敗不影響主流程）
-        if (hasGist()) {
+        // 寫入 GitHub Repo（非同步，失敗不影響主流程）
+        if (hasRepo()) {
             try {
+                // 先取現有檔案的 SHA（更新檔案需要 sha）
+                let sha = null;
+                const getRes = await fetch(repoFileURL(), { headers: repoHeaders() });
+                if (getRes.ok) {
+                    const getData = await getRes.json();
+                    sha = getData.sha;
+                }
+                // Base64 編碼內容
+                const content = btoa(unescape(encodeURIComponent(JSON.stringify(hist, null, 2))));
                 const body = JSON.stringify({
-                    files: { 'analysis_history.json': { content: JSON.stringify(hist, null, 2) } }
+                    message: `update history ${new Date().toISOString().slice(0,10)}`,
+                    content,
+                    branch: REPO_CONFIG.BRANCH,
+                    ...(sha ? { sha } : {})
                 });
-                const res = await fetch(
-                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
-                    { method: 'PATCH', headers: gistHeaders(), body }
-                );
-                if (!res.ok) throw new Error(res.status);
-                console.log('✅ Gist 同步成功');
+                const res = await fetch(repoFileURL(), {
+                    method: 'PUT', headers: repoHeaders(), body
+                });
+                if (!res.ok) throw new Error(await res.text());
+                console.log('✅ GitHub Repo 同步成功');
             } catch (e) {
-                console.warn('⚠️ Gist 寫入失敗（本機已儲存）:', e);
+                console.warn('⚠️ GitHub Repo 寫入失敗（本機已儲存）:', e.message);
             }
         }
     }
@@ -1263,14 +1345,15 @@
         try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch {}
         hist.splice(idx, 1);
         localStorage.setItem(HIST_KEY, JSON.stringify(hist));
-        if (hasGist()) {
+        if (hasRepo()) {
             try {
-                await fetch(
-                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
-                    { method: 'PATCH', headers: gistHeaders(),
-                      body: JSON.stringify({ files: { 'analysis_history.json': { content: JSON.stringify(hist, null, 2) } } }) }
-                );
-            } catch (e) { console.warn('Gist 刪除同步失敗:', e); }
+                let sha = null;
+                const getRes = await fetch(repoFileURL(), { headers: repoHeaders() });
+                if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+                const content = btoa(unescape(encodeURIComponent(JSON.stringify(hist, null, 2))));
+                await fetch(repoFileURL(), { method: 'PUT', headers: repoHeaders(),
+                    body: JSON.stringify({ message: 'delete history record', content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) }) });
+            } catch (e) { console.warn('GitHub Repo 刪除同步失敗:', e.message); }
         }
         renderHistory();
     }
@@ -1278,14 +1361,15 @@
     async function clearAllHist() {
         if (!confirm('確定要清除所有歷史紀錄？')) return;
         localStorage.removeItem(HIST_KEY);
-        if (hasGist()) {
+        if (hasRepo()) {
             try {
-                await fetch(
-                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
-                    { method: 'PATCH', headers: gistHeaders(),
-                      body: JSON.stringify({ files: { 'analysis_history.json': { content: '[]' } } }) }
-                );
-            } catch (e) { console.warn('Gist 清除同步失敗:', e); }
+                let sha = null;
+                const getRes = await fetch(repoFileURL(), { headers: repoHeaders() });
+                if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+                const content = btoa('[]');
+                await fetch(repoFileURL(), { method: 'PUT', headers: repoHeaders(),
+                    body: JSON.stringify({ message: 'clear all history', content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) }) });
+            } catch (e) { console.warn('GitHub Repo 清除同步失敗:', e.message); }
         }
         renderHistory();
     }
@@ -1387,18 +1471,18 @@
         const dot = document.getElementById('gistDot');
         const msg = document.getElementById('gistMsg');
         if (dot && msg) {
-            if (!hasGist()) {
+            if (!hasRepo()) {
                 dot.style.background = '#6b7280';
-                msg.textContent = 'Gist 未設定（填入 Token 後啟用跨裝置同步）';
+                msg.textContent = 'GitHub Repo 未設定（填入 Token 後啟用跨裝置同步）';
             } else {
                 dot.style.background = '#facc15';
-                msg.textContent = '同步中…';
+                msg.textContent = 'GitHub Repo 同步中…';
             }
         }
         const hist = await loadHistory();
         if (dot && msg && hasGist()) {
             dot.style.background = '#4ade80';
-            msg.textContent = `✅ Gist 同步（${hist.length} 筆紀錄）`;
+            msg.textContent = `✅ GitHub Repo 同步（${hist.length} 筆紀錄）`;
         }
 
         // 溫度燈號（最新一筆）
@@ -1484,6 +1568,16 @@
             })
         ];
         downloadCSV('市場溫度歷史_' + new Date().toISOString().slice(0,10) + '.csv', rows);
+    }
+
+
+    // ── PDF 報告產出 ─────────────────────────────────────
+    function exportPDF(dateStr) {
+        // 設定頁首日期
+        const sub = document.getElementById('pdfSubtitle');
+        if (sub) sub.textContent = '分析日期：' + (dateStr || new Date().toLocaleString('zh-TW'));
+        // 短暫延遲確保 DOM 更新後再列印
+        setTimeout(() => window.print(), 150);
     }
 
     // 頁面載入即渲染歷史
