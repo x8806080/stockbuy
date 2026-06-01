@@ -290,6 +290,36 @@
 </head>
 <body>
 
+<!-- ══ GitHub Token 頂部欄 ══ -->
+<div id="tokenBar" style="
+    position:sticky; top:0; z-index:999;
+    background:#0f172a; border-bottom:1px solid #1e3a5f;
+    padding:8px 16px; display:flex; align-items:center;
+    gap:10px; flex-wrap:wrap; font-size:13px;
+">
+    <span style="color:#60a5fa; font-weight:700; white-space:nowrap">🔑 GitHub Token</span>
+    <input id="tokenInput" type="password"
+        placeholder="貼上 ghp_... Token 啟用跨裝置同步"
+        style="flex:1; min-width:200px; max-width:420px;
+               padding:6px 12px; border-radius:6px; font-size:13px; font-family:monospace;
+               background:#1e293b; color:#e2e8f0; border:1px solid #2a3350;
+               outline:none;"
+        oninput="handleTokenInput(this.value)"
+    />
+    <span id="tokenStatus" style="font-size:12px; white-space:nowrap; color:#64748b">未設定</span>
+    <button onclick="clearToken()"
+        style="background:#dc2626; color:#fff; border:none; padding:5px 12px;
+               border-radius:5px; font-size:12px; cursor:pointer; white-space:nowrap">
+        清除
+    </button>
+    <span style="font-size:11px; color:#475569; flex-basis:100%">
+        Token 僅存在瀏覽器本機，不會上傳。前往
+        <a href="https://github.com/settings/tokens" target="_blank"
+           style="color:#60a5fa">GitHub Settings → Tokens (classic)</a>
+        產生（勾選 repo 權限）
+    </span>
+</div>
+
 <div class="container">
     <h1>🚀 籌碼先行動能待發 - 量化分析儀 <small style="font-size:14px;color:#7f8c8d">（評分可調版）</small></h1>
 
@@ -297,7 +327,7 @@
     <div class="history-panel">
             <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
                 <span id="gistDot" style="width:8px;height:8px;border-radius:50%;background:#4b5563;display:inline-block;flex-shrink:0"></span>
-                <span id="gistMsg">GitHub Repo 未設定（本機模式）</span>
+                <span id="gistMsg">尚未同步</span>
             </div>
         <h2>📈 市場溫度歷史走勢</h2>
         <p class="history-subtitle">每次分析後自動記錄 TOP 20 平均分，追蹤市場籌碼強度趨勢</p>
@@ -1234,11 +1264,11 @@
     // ║       GitHub Repo 同步設定（只需填入 TOKEN）          ║
     // ╚══════════════════════════════════════════════════════╝
     const REPO_CONFIG = {
-        OWNER  : 'x8806080',            // ← GitHub 帳號（不用改）
-        REPO   : 'stockbuy',            // ← Repo 名稱（不用改）
-        BRANCH : 'main',                // ← 分支（通常是 main 或 master）
-        FILE   : 'data/history.json',   // ← 儲存路徑（不用改）
-        TOKEN  : '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',    // ← 貼上新 ghp_... Token
+        OWNER  : 'x8806080',
+        REPO   : 'stockbuy',
+        BRANCH : 'main',
+        FILE   : 'data/history.json',
+        get TOKEN() { return localStorage.getItem('gh_token') || ''; },
     };
     // ────────────────────────────────────────────────────────
     // TOKEN 取得方式：
@@ -1260,7 +1290,8 @@
         };
     }
     function hasRepo() {
-        return REPO_CONFIG.TOKEN && !REPO_CONFIG.TOKEN.includes('填入');
+        const t = REPO_CONFIG.TOKEN;
+        return t && t.startsWith('ghp_') && t.length > 10;
     }
     function repoFileURL() {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${REPO_CONFIG.FILE}`;
@@ -1580,7 +1611,43 @@
         setTimeout(() => window.print(), 150);
     }
 
+
+    // ── Token 管理 ───────────────────────────────────────
+    function handleTokenInput(val) {
+        val = val.trim();
+        if (val.startsWith('ghp_') && val.length > 10) {
+            localStorage.setItem('gh_token', val);
+            updateTokenStatus();
+            renderHistory();  // 立即嘗試同步
+        } else if (val === '') {
+            localStorage.removeItem('gh_token');
+            updateTokenStatus();
+        }
+    }
+    function clearToken() {
+        localStorage.removeItem('gh_token');
+        const inp = document.getElementById('tokenInput');
+        if (inp) inp.value = '';
+        updateTokenStatus();
+        renderHistory();
+    }
+    function updateTokenStatus() {
+        const t = localStorage.getItem('gh_token') || '';
+        const el = document.getElementById('tokenStatus');
+        const inp = document.getElementById('tokenInput');
+        if (!el) return;
+        if (t && t.startsWith('ghp_')) {
+            el.textContent = '✅ 已設定（' + t.slice(0,12) + '...）';
+            el.style.color = '#4ade80';
+            if (inp && !inp.value) inp.value = t;  // 回填（若空）
+        } else {
+            el.textContent = '未設定（本機模式）';
+            el.style.color = '#64748b';
+        }
+    }
+
     // 頁面載入即渲染歷史
+    updateTokenStatus();
     renderHistory();
 </script>
 </body>
