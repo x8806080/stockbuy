@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d0f14">
+    <title>籌碼先行 — 動能量化分析儀</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        /* ══ CSS 變數 ══ */
+        :root {
+            --bg:         #0d0f14;
+            --bg2:        #161b25;
+            --bg3:        #1e2535;
+            --bg4:        #111827;
+            --border:     #2a3350;
+            --text:       #cdd6f4;
+            --text-dim:   #7a8ab0;
+            --accent:     #3b82f6;
+            --accent2:    #60a5fa;
+            --th-bg:      #1a2540;
+            --row-even:   #131825;
+            --row-hover:  #1e2d4a;
+            --input-bg:   #0d1220;
+            --red:        #f87171;
+            --green:      #4ade80;
+            --gold:       #fbbf24;
+            --orange:     #fb923c;
+        }
+
+        /* ══ Reset & Base ══ */
+        *, *::before, *::after { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 12px;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* ══ Container ══ */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: var(--bg2);
+            padding: 20px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,.7);
+            border: 1px solid var(--border);
+        }
+
+        /* ══ 標題 ══ */
+        h1 {
+            color: var(--accent2);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+            font-size: clamp(16px, 4vw, 24px);
+            margin: 0 0 16px;
+            line-height: 1.3;
+        }
+
+        /* ══ 上傳控制區 ══ */
+        .control-panel {
+            background: var(--bg3);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border-left: 4px solid var(--accent);
+        }
+        .control-panel p { margin: 0 0 10px; font-size: 13px; color: var(--text-dim); }
+        .upload-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        input[type="file"] {
+            font-size: 14px;
+            padding: 8px 10px;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            flex: 1;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        /* ══ 按鈕 ══ */
+        button {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            color: #fff;
+            border: none;
+            padding: 11px 22px;
+            font-size: 15px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-weight: 700;
+            white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        button:hover  { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
+        button:active { opacity: .85; }
+        .btn-download {
+            background: #16a34a;
+            padding: 6px 14px;
+            font-size: 12px;
+            margin-left: 8px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+        .btn-download:hover { background: #15803d; }
+        .btn-reset         { background: #d97706; padding: 8px 16px; font-size: 13px; border-radius: 5px; margin-right: 6px; }
+        .btn-reset:hover   { background: #b45309; }
+        .btn-export-cfg    { background: #7c3aed; padding: 8px 16px; font-size: 13px; border-radius: 5px; }
+        .btn-export-cfg:hover { background: #6d28d9; }
+        .btn-hist-export   { background: #16a34a; color: #fff; border: none; padding: 8px 16px; font-size: 13px; border-radius: 5px; cursor: pointer; font-weight: 700; }
+        .btn-hist-export:hover { background: #15803d; }
+        .btn-hist-clear    { background: #dc2626; color: #fff; border: none; padding: 8px 16px; font-size: 13px; border-radius: 5px; cursor: pointer; font-weight: 700; }
+        .btn-hist-clear:hover  { background: #b91c1c; }
+        .btn-del-hist { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
+        .btn-del-hist:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
+
+        /* ══ 表格 ══ */
+        .tbl-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; min-width: 480px; }
+        th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: middle; }
+        th { background: var(--th-bg); color: var(--accent2); border-bottom: 2px solid var(--accent); white-space: nowrap; font-size: 12px; position: sticky; top: 0; z-index: 1; }
+        tr:nth-child(even) { background: var(--row-even); }
+        tr:hover td { background: var(--row-hover); }
+        td { word-break: break-word; }
+
+        /* ══ 報告區 ══ */
+        .report-section { margin-top: 32px; }
+        .report-section h2 {
+            color: var(--accent2);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            font-size: clamp(14px, 3.5vw, 18px);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ══ 載入中 ══ */
+        .loading { display: none; color: var(--gold); font-weight: 700; font-size: 16px; margin-top: 10px; padding: 12px; background: #1a1500; border-radius: 6px; border: 1px solid #554400; }
+
+        /* ══ 偵錯 ══ */
+        .debug-box { background: #0f1200; border: 1px solid #2a3300; border-radius: 6px; padding: 10px 14px; margin-top: 10px; font-size: 11px; color: var(--text-dim); }
+        .debug-box summary { cursor: pointer; font-weight: 700; color: #854d0e; }
+        pre { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        /* ══ 圓餅圖 ══ */
+        .pie-wrap { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; margin-top: 14px; }
+        .pie-legend { min-width: 180px; }
+        .pie-legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 13px; }
+        .pie-swatch { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+
+        /* ══ 評分編輯器 ══ */
+        .score-editor { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+        .score-editor summary { cursor: pointer; font-size: 16px; font-weight: 700; color: var(--accent2); padding: 4px 0; user-select: none; }
+        .score-editor summary:hover { color: var(--accent); }
+        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; margin-top: 14px; }
+        .editor-section-title { grid-column: 1/-1; font-size: 13px; font-weight: 700; color: var(--text); background: var(--th-bg); padding: 5px 10px; border-radius: 4px; margin: 10px 0 5px; }
+        .score-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; font-size: 13px; flex-wrap: wrap; }
+        .score-row label { min-width: 160px; color: var(--text-dim); font-size: 12px; }
+        .score-row input[type=number] {
+            width: 64px; padding: 4px 6px;
+            border: 1px solid var(--border); border-radius: 4px;
+            font-size: 13px; text-align: center;
+            background: var(--input-bg); color: var(--text);
+            -moz-appearance: textfield;
+        }
+        .score-row input[type=number]::-webkit-inner-spin-button,
+        .score-row input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .score-row input[type=number]:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+        .score-row .unit { color: var(--text-dim); font-size: 11px; }
+        .editor-actions { grid-column: 1/-1; margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .changed-badge { display: inline-block; background: #dc2626; color: #fff; font-size: 11px; border-radius: 10px; padding: 2px 8px; margin-left: 6px; }
+
+        /* ══ 歷史紀錄 ══ */
+        .history-panel { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 20px 16px; margin-bottom: 20px; }
+        .history-panel h2 { color: var(--accent2); margin: 0 0 4px; font-size: 17px; border: none; padding: 0; }
+        .history-subtitle { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+        .temp-bar { display: flex; align-items: stretch; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+        .temp-gauge { display: flex; align-items: center; gap: 10px; background: var(--bg2); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 180px; }
+        .temp-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+        .temp-label { font-size: 12px; color: var(--text-dim); }
+        .temp-value { font-size: 22px; font-weight: 700; margin-left: auto; }
+        .temp-signal { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+        .chart-wrap { background: var(--bg2); border-radius: 8px; padding: 12px 6px 6px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .chart-wrap svg { display: block; min-width: 280px; }
+        .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+        .hist-table th { background: var(--th-bg); color: var(--accent2); padding: 7px 8px; text-align: left; font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        .hist-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+        .hist-table tr:last-child td { border-bottom: none; }
+        .hist-table tr:hover td { background: var(--row-hover); }
+        .signal-chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+        .sig-full   { background: #14532d; color: #4ade80; }
+        .sig-normal { background: #1e3a5f; color: #60a5fa; }
+        .sig-reduce { background: #451a03; color: #fb923c; }
+        .sig-exit   { background: #450a0a; color: #f87171; }
+        .hist-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .no-hist { color: var(--text-dim); font-size: 13px; padding: 20px 0; text-align: center; }
+
+        /* ══ 彩色狀態 TAG ══ */
+        .s-tag { display: inline-block; border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 700; margin: 1px 2px; white-space: nowrap; letter-spacing: .3px; }
+        .s-tag.gold   { background: #b45309; color: #fef3c7; }
+        .s-tag.red    { background: #991b1b; color: #fecaca; }
+        .s-tag.blue   { background: #1e40af; color: #bfdbfe; }
+        .s-tag.green  { background: #14532d; color: #bbf7d0; }
+        .s-tag.purple { background: #5b21b6; color: #ede9fe; }
+        .s-tag.teal   { background: #134e4a; color: #99f6e4; }
+        .s-tag.orange { background: #92400e; color: #fed7aa; }
+        .s-tag.pink   { background: #881337; color: #fecdd3; }
+        .s-tag.navy   { background: #1e3a5f; color: #bfdbfe; }
+        .s-tag.lime   { background: #14532d; color: #d9f99d; }
+
+        /* ══ RWD：平板 ══ */
+        @media (max-width: 900px) {
+            .editor-grid { grid-template-columns: 1fr; }
+            table { font-size: 12px; }
+            th, td { padding: 6px 8px; }
+        }
+
+        /* ══ RWD：手機 ══ */
+        @media (max-width: 600px) {
+            body { padding: 6px; }
+            .container { padding: 12px 10px; border-radius: 8px; }
+            h1 { font-size: 15px; }
+            button { padding: 10px 16px; font-size: 14px; width: 100%; }
+            .btn-download { width: auto; margin-left: 0; margin-top: 6px; }
+            .upload-row { flex-direction: column; }
+            input[type="file"] { font-size: 13px; }
+            .score-row label { min-width: 120px; font-size: 11px; }
+            .score-row input[type=number] { width: 54px; font-size: 12px; }
+            .report-section h2 { font-size: 13px; }
+            table { font-size: 11px; min-width: 360px; }
+            th, td { padding: 5px 6px; }
+            .s-tag { font-size: 10px; padding: 1px 5px; }
+            .temp-value { font-size: 18px; }
+            .temp-gauge { min-width: 140px; padding: 8px 10px; }
+            .pie-wrap { flex-direction: column; }
+            .hist-actions { flex-direction: column; }
+            .hist-actions button { width: 100%; }
+        }
+
+        /* ══ RWD：iPhone SE / 小手機 ══ */
+        @media (max-width: 390px) {
+            .container { padding: 8px 6px; }
+            table { font-size: 10px; min-width: 300px; }
+            th, td { padding: 4px 5px; }
+            h1 { font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 籌碼先行動能待發 - 量化分析儀 <small style="font-size:14px;color:#7f8c8d">（評分可調版）</small></h1>
+
+    <!-- ══════════════ 歷史紀錄區 ══════════════ -->
+    <div class="history-panel">
+            <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <span id="gistDot" style="width:8px;height:8px;border-radius:50%;background:#4b5563;display:inline-block;flex-shrink:0"></span>
+                <span id="gistMsg">Gist 未設定（本機模式）</span>
+            </div>
+        <h2>📈 市場溫度歷史走勢</h2>
+        <p class="history-subtitle">每次分析後自動記錄 TOP 20 平均分，追蹤市場籌碼強度趨勢</p>
+        <div id="histTempBar" class="temp-bar"></div>
+        <div class="chart-wrap"><svg id="histChart" width="100%" height="180"></svg></div>
+        <div id="histTableWrap"></div>
+        <div class="hist-actions">
+            <button class="btn-hist-export" onclick="exportHistCSV()">📥 匯出歷史 CSV</button>
+            <button class="btn-hist-clear" onclick="clearAllHist()">🗑 清除所有紀錄</button>
+        </div>
+    </div>
+
+    <!-- ══════════════ 評分規則編輯器 ══════════════ -->
+    <details class="score-editor" id="scoreEditorDetails">
+        <summary>⚙️ 評分規則編輯器 <span id="changedBadge" class="changed-badge" style="display:none">已修改</span></summary>
+        <div class="editor-grid">
+
+            <div class="editor-section-title">① 基礎權重 — 法人超級力道（三大法人5日買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用漲幅排行TOP40標的的 P70/P40/P20 比值分位數；填入小數可手動覆蓋（如 0.03 = 3%）</div>
+
+            <div class="score-row">
+                <label>門檻 A：比值 ≥</label>
+                <input type="number" id="corp_thrA" value="0" step="0.001"> <span class="unit">（0=自動P70）→ 得分</span>
+                <input type="number" id="corp_scoreA" value="60">
+            </div>
+            <div class="score-row">
+                <label>門檻 B 起（線性起點）</label>
+                <input type="number" id="corp_thrB_lo" value="0" step="0.001"> <span class="unit">（0=自動P40，得分起）</span>
+                <input type="number" id="corp_scoreB_lo" value="40">
+            </div>
+            <div class="score-row">
+                <label>門檻 B 止（線性終點）</label>
+                <input type="number" id="corp_thrB_hi" value="0" step="0.001"> <span class="unit">（0=自動P70，得分止）</span>
+                <input type="number" id="corp_scoreB_hi" value="50">
+            </div>
+            <div class="score-row">
+                <label>門檻 C：比值 ≥</label>
+                <input type="number" id="corp_thrC" value="0" step="0.001"> <span class="unit">（0=自動P20）→ 得分</span>
+                <input type="number" id="corp_scoreC" value="30">
+            </div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">📦 市值缺漏時退回絕對金額保底門檻（百萬）：</div>
+            <div class="score-row">
+                <label>保底 A（>）</label><input type="number" id="corp_fallbackA" value="6000"><span class="unit">百萬</span>
+                <label>保底 B（≥）</label><input type="number" id="corp_fallbackB" value="1000"><span class="unit">百萬</span>
+                <label>保底 C（≥）</label><input type="number" id="corp_fallbackC" value="500"><span class="unit">百萬</span>
+            </div>
+
+            <div class="editor-section-title">② 基礎權重 — 動能與市場性（漲幅排名 TOP40）</div>
+
+            <div class="score-row">
+                <label>5日 &amp; 1月 雙進 TOP40 得分</label>
+                <input type="number" id="momentum_both" value="20">
+            </div>
+            <div class="score-row">
+                <label>僅 5日 進 TOP40 得分</label>
+                <input type="number" id="momentum_5d" value="10">
+            </div>
+            <div class="score-row">
+                <label>僅 1月 進 TOP40 得分</label>
+                <input type="number" id="momentum_1m" value="10">
+            </div>
+            <div class="score-row">
+                <label>漲幅排名取 TOP 幾名？</label>
+                <input type="number" id="momentum_topN" value="40">
+            </div>
+
+            <div class="editor-section-title">③ 基礎權重 — 中期法人力道（法人一月累計買超，單位：百萬）</div>
+
+            <div class="score-row">
+                <label>門檻 A：買超 &gt;</label>
+                <input type="number" id="corp1m_thrA" value="3000"> <span class="unit">百萬</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreA" value="15">
+            </div>
+            <div class="score-row">
+                <label>門檻 B：買超 ≥</label>
+                <input type="number" id="corp1m_thrB" value="1000"> <span class="unit">百萬</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreB" value="10">
+            </div>
+            <div class="score-row">
+                <label>門檻 C：買超 ≥</label>
+                <input type="number" id="corp1m_thrC" value="500"> <span class="unit">百萬</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreC" value="5">
+            </div>
+
+            <div class="editor-section-title">④ 基礎權重 — 投信動向（投信週買超排名，0-based）</div>
+
+            <div class="score-row">
+                <label>排名 &lt;</label>
+                <input type="number" id="trust_rankA" value="10">
+                <label>→ 得分</label>
+                <input type="number" id="trust_scoreA" value="10">
+            </div>
+            <div class="score-row">
+                <label>排名 &lt;</label>
+                <input type="number" id="trust_rankB" value="20">
+                <label>→ 得分</label>
+                <input type="number" id="trust_scoreB" value="7">
+            </div>
+            <div class="score-row">
+                <label>有買超（&gt;0）→ 得分</label>
+                <input type="number" id="trust_scoreC" value="3">
+            </div>
+
+            <div class="editor-section-title">⑤ 基礎權重 — 基本面（營收年增率 %）</div>
+
+            <div class="score-row">
+                <label>年增率 &gt;</label>
+                <input type="number" id="rev_thrA" value="80"> <span class="unit">%</span>
+                <label>→ 得分</label>
+                <input type="number" id="rev_scoreA" value="5">
+            </div>
+            <div class="score-row">
+                <label>年增率 ≥</label>
+                <input type="number" id="rev_thrB" value="30"> <span class="unit">%</span>
+                <label>→ 得分</label>
+                <input type="number" id="rev_scoreB" value="3">
+            </div>
+
+            <div class="editor-section-title">⑥ 特殊加分</div>
+
+            <div class="score-row">
+                <label>🐉 潛龍出海（大摩/投信前N名但未進5日TOP40）</label>
+                <label>排名門檻 &lt;</label>
+                <input type="number" id="dragon_rankThr" value="10">
+                <label>加分</label>
+                <input type="number" id="dragon_score" value="25">
+            </div>
+            <div class="score-row">
+                <label>⚡ 超級基本面共振（營收年增 &gt; <input type="number" id="superfund_revThr" value="80" style="width:55px"> % 且 法人5日 &gt; <input type="number" id="superfund_corpThr" value="5000" style="width:70px"> 百萬）</label>
+                <label>加分</label>
+                <input type="number" id="superfund_score" value="15">
+            </div>
+            <div class="score-row">
+                <label>💎 大摩投信合買（大摩前N &amp; 投信前N）</label>
+                <label>排名門檻 &lt;</label>
+                <input type="number" id="morganTrust_rankThr" value="20">
+                <label>加分</label>
+                <input type="number" id="morganTrust_score" value="10">
+            </div>
+            <div class="score-row">
+                <label>🔥 族群共振（產業在5日TOP40出現 &gt; <input type="number" id="sector_minCount" value="5" style="width:50px"> 檔）</label>
+                <label>加分</label>
+                <input type="number" id="sector_score" value="10">
+            </div>
+            <div class="score-row">
+                <label>🎯 ETF多重共振（出現在指定ETF/大摩 ≥ <input type="number" id="etf_minCount" value="2" style="width:50px"> 次）</label>
+                <label>加分</label>
+                <input type="number" id="etf_score" value="15">
+            </div>
+
+            <div class="editor-actions">
+    
+            <div class="editor-section-title">⑦ 週K布林通道（需 CSV 含布林上/中/下軌欄位）</div>
+            <div style="font-size:12px;color:#7a8ab0;margin:4px 0 12px 0;line-height:1.7">
+                💡 均線設定：<b>120日</b>（≈24週，對齊半年線）<br>
+                程式自動偵測欄位名稱含「布林上軌/下軌/中軌」的欄位。<br>
+                🔥 <b style="color:#f87171">超過 +3σ</b> → 過熱警示 &emsp;
+                ⚠️ +2σ～+3σ → 強勢 &emsp;
+                ✅ ±2σ內 → 正常，不警示<br>
+                σ推算公式：σ = (上軌 - 中軌) ÷ 2 &emsp; 3σ上軌 = 中軌 + 1.5 × (上軌 - 中軌)
+            </div>
+            <button class="btn-reset" onclick="resetScores()">↺ 還原預設值</button>
+                <button class="btn-export-cfg" onclick="exportConfig()">📥 匯出設定 CSV</button>
+                <span style="font-size:13px;color:#888">修改後直接按下方「開始分析」即套用新規則</span>
+            </div>
+        </div>
+    </details>
+
+    <!-- ══════════════ 主控制面板 ══════════════ -->
+    <div class="control-panel">
+        <p>1. 點擊下方按鈕，請 <b>框選或 Ctrl+A 一次選取所有 CSV 檔案</b> (包含 庫存.csv 及各項排行)。</p>
+        <input type="file" id="csvFiles" multiple accept=".csv">
+        <button onclick="runAnalysis()">開始執行大師策略分析</button>
+        <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
+    </div>
+
+    <div id="outputArea"></div>
+</div>
+
+<script>
+    // ══════════════════════════════════════════════
+    //  讀取當前評分參數
+    // ══════════════════════════════════════════════
+    function getScoreConfig() {
+        const v = id => parseFloat(document.getElementById(id).value) || 0;
+        return {
+            corp: {
+                // 比值制：門檻為 買超/市值 比值（小數，如 0.02 = 2%）
+                // 若設為 0 則使用自動分位數（推薦）
+                thrA:     v('corp_thrA'),
+                scoreA:   v('corp_scoreA'),
+                thrB_lo:  v('corp_thrB_lo'),
+                scoreB_lo:v('corp_scoreB_lo'),
+                thrB_hi:  v('corp_thrB_hi'),
+                scoreB_hi:v('corp_scoreB_hi'),
+                thrC:     v('corp_thrC'),
+                scoreC:   v('corp_scoreC'),
+                // 保底：市值缺漏時回退用的絕對金額門檻（百萬）
+                fallbackA:  v('corp_fallbackA'),
+                fallbackB:  v('corp_fallbackB'),
+                fallbackC:  v('corp_fallbackC'),
+            },
+            momentum: {
+                both:   v('momentum_both'),
+                only5d: v('momentum_5d'),
+                only1m: v('momentum_1m'),
+                topN:   Math.round(v('momentum_topN')),
+            },
+            corp1m: {
+                thrA: v('corp1m_thrA'), scoreA: v('corp1m_scoreA'),
+                thrB: v('corp1m_thrB'), scoreB: v('corp1m_scoreB'),
+                thrC: v('corp1m_thrC'), scoreC: v('corp1m_scoreC'),
+            },
+            trust: {
+                rankA: v('trust_rankA'), scoreA: v('trust_scoreA'),
+                rankB: v('trust_rankB'), scoreB: v('trust_scoreB'),
+                scoreC: v('trust_scoreC'),
+            },
+            rev: {
+                thrA: v('rev_thrA'), scoreA: v('rev_scoreA'),
+                thrB: v('rev_thrB'), scoreB: v('rev_scoreB'),
+            },
+            dragon: {
+                rankThr: v('dragon_rankThr'),
+                score:   v('dragon_score'),
+            },
+            superfund: {
+                revThr:  v('superfund_revThr'),
+                corpThr: v('superfund_corpThr'),
+                score:   v('superfund_score'),
+            },
+            morganTrust: {
+                rankThr: v('morganTrust_rankThr'),
+                score:   v('morganTrust_score'),
+            },
+            sector: {
+                minCount: v('sector_minCount'),
+                score:    v('sector_score'),
+            },
+            etf: {
+                minCount: v('etf_minCount'),
+                score:    v('etf_score'),
+            },
+        };
+    }
+
+    // 預設值
+    const DEFAULTS = {
+        corp_thrA:0, corp_scoreA:60, corp_thrB_lo:0, corp_scoreB_lo:40,
+        corp_thrB_hi:0, corp_scoreB_hi:50, corp_thrC:0, corp_scoreC:30,
+        corp_fallbackA:6000, corp_fallbackB:1000, corp_fallbackC:500,
+        momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_topN:40,
+        corp1m_thrA:3000, corp1m_scoreA:15, corp1m_thrB:1000, corp1m_scoreB:10,
+        corp1m_thrC:500,  corp1m_scoreC:5,
+        trust_rankA:10, trust_scoreA:10, trust_rankB:20, trust_scoreB:7, trust_scoreC:3,
+        rev_thrA:80, rev_scoreA:5, rev_thrB:30, rev_scoreB:3,
+        dragon_rankThr:10, dragon_score:25,
+        superfund_revThr:80, superfund_corpThr:5000, superfund_score:15,
+        morganTrust_rankThr:20, morganTrust_score:10,
+        sector_minCount:5, sector_score:10,
+        etf_minCount:2, etf_score:15,
+    };
+
+    // 預設值裡 corp_thrA 其實是 6000，下面寫入 input 初始值時用 DEFAULTS 填
+    function resetScores() {
+        Object.entries(DEFAULTS).forEach(([k, v]) => {
+            const el = document.getElementById(k);
+            if (el) el.value = v;
+        });
+        document.getElementById('changedBadge').style.display = 'none';
+    }
+
+    // 偵測任何 input 變動 → 顯示「已修改」badge
+    document.querySelectorAll('.score-editor input[type=number]').forEach(el => {
+        el.addEventListener('input', () => {
+            document.getElementById('changedBadge').style.display = '';
+        });
+    });
+
+    function exportConfig() {
+        const cfg = getScoreConfig();
+        const rows = [
+            ['類別','參數名稱','當前值'],
+            ['法人5日','門檻A(百萬)',cfg.corp.thrA],['法人5日','門檻A得分',cfg.corp.scoreA],
+            ['法人5日','線性起點(百萬)',cfg.corp.thrB_lo],['法人5日','線性起點得分',cfg.corp.scoreB_lo],
+            ['法人5日','線性終點(百萬)',cfg.corp.thrB_hi],['法人5日','線性終點得分',cfg.corp.scoreB_hi],
+            ['法人5日','門檻C(百萬)',cfg.corp.thrC],['法人5日','門檻C得分',cfg.corp.scoreC],
+            ['動能','雙進TOP40得分',cfg.momentum.both],['動能','僅5日得分',cfg.momentum.only5d],
+            ['動能','僅1月得分',cfg.momentum.only1m],['動能','TOP名次範圍',cfg.momentum.topN],
+            ['法人一月','門檻A(百萬)',cfg.corp1m.thrA],['法人一月','門檻A得分',cfg.corp1m.scoreA],
+            ['法人一月','門檻B(百萬)',cfg.corp1m.thrB],['法人一月','門檻B得分',cfg.corp1m.scoreB],
+            ['法人一月','門檻C(百萬)',cfg.corp1m.thrC],['法人一月','門檻C得分',cfg.corp1m.scoreC],
+            ['投信','排名門檻A',cfg.trust.rankA],['投信','排名A得分',cfg.trust.scoreA],
+            ['投信','排名門檻B',cfg.trust.rankB],['投信','排名B得分',cfg.trust.scoreB],
+            ['投信','有買超得分',cfg.trust.scoreC],
+            ['營收','年增門檻A(%)',cfg.rev.thrA],['營收','門檻A得分',cfg.rev.scoreA],
+            ['營收','年增門檻B(%)',cfg.rev.thrB],['營收','門檻B得分',cfg.rev.scoreB],
+            ['特殊-潛龍','排名門檻',cfg.dragon.rankThr],['特殊-潛龍','加分',cfg.dragon.score],
+            ['特殊-超級基本面','營收門檻(%)',cfg.superfund.revThr],['特殊-超級基本面','法人門檻(百萬)',cfg.superfund.corpThr],['特殊-超級基本面','加分',cfg.superfund.score],
+            ['特殊-大摩投信合買','排名門檻',cfg.morganTrust.rankThr],['特殊-大摩投信合買','加分',cfg.morganTrust.score],
+            ['特殊-族群共振','最少檔數',cfg.sector.minCount],['特殊-族群共振','加分',cfg.sector.score],
+            ['特殊-ETF共振','最少次數',cfg.etf.minCount],['特殊-ETF共振','加分',cfg.etf.score],
+        ];
+        downloadCSV('評分設定_' + new Date().toISOString().slice(0,10) + '.csv', rows);
+    }
+
+    // ══════════════════════════════════════════════
+    //  工具函式
+    // ══════════════════════════════════════════════
+    function parseNum(val) {
+        if (val === undefined || val === null || val === '') return null;
+        let s = String(val).replace(/[+,%]/g, '').trim();
+        let num = parseFloat(s);
+        return isNaN(num) ? null : num;
+    }
+
+    function downloadCSV(filename, rows) {
+        let csvContent = "\uFEFF";
+        rows.forEach(row => {
+            csvContent += row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",") + "\r\n";
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // ─── 圓餅圖 ────────────────────────────────────
+    const PIE_COLORS = ['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+
+    function buildPieChart(data, width) {
+        const W = width || 260, H = W;
+        const cx = W/2, cy = H/2, r = W*0.38;
+        const total = data.reduce((s,d) => s + d.value, 0);
+        if (total === 0) return '';
+        let paths = '', startAngle = -Math.PI / 2;
+        const slices = [];
+        data.forEach((d, i) => {
+            const angle = (d.value / total) * 2 * Math.PI;
+            const endAngle = startAngle + angle;
+            const x1 = cx + r * Math.cos(startAngle);
+            const y1 = cy + r * Math.sin(startAngle);
+            const x2 = cx + r * Math.cos(endAngle);
+            const y2 = cy + r * Math.sin(endAngle);
+            const large = angle > Math.PI ? 1 : 0;
+            const color = PIE_COLORS[i % PIE_COLORS.length];
+            paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+            if (angle / (2*Math.PI) > 0.05) {
+                const midA = startAngle + angle/2;
+                const lx = cx + r * 0.65 * Math.cos(midA);
+                const ly = cy + r * 0.65 * Math.sin(midA);
+                const pct = ((d.value/total)*100).toFixed(1);
+                paths += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="bold">${pct}%</text>`;
+            }
+            slices.push({ color, label: d.label, value: d.value, pct: ((d.value/total)*100).toFixed(1) });
+            startAngle = endAngle;
+        });
+        const svgStr = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
+        let legendHTML = '<div class="pie-legend">';
+        slices.forEach(s => {
+            legendHTML += `<div class="pie-legend-item"><div class="pie-swatch" style="background:${s.color}"></div><span><b>${s.label}</b>：${s.value} 億 (${s.pct}%)</span></div>`;
+        });
+        legendHTML += '</div>';
+        return `<div class="pie-wrap">${svgStr}${legendHTML}</div>`;
+    }
+
+    // ══════════════════════════════════════════════
+    //  主分析流程
+    // ══════════════════════════════════════════════
+    async function runAnalysis() {
+        const files = document.getElementById('csvFiles').files;
+        if (files.length === 0) { alert("請先選擇 CSV 檔案！"); return; }
+
+        document.getElementById('loadingStatus').style.display = 'block';
+        document.getElementById('outputArea').innerHTML = '';
+
+        // 讀取當前評分設定
+        const SC = getScoreConfig();
+        const TOP_N = SC.momentum.topN;
+
+        let masterDict       = {};
+        let inventorySymbols = new Set();
+        let isInventoryUploaded = false;
+        let rise5dTop40      = new Set();
+        let rise1mTop40      = new Set();
+        let rise5dMap        = {};
+        let rise1mMap        = {};
+        let etfSourceDict    = {};
+        let fileTypeLog      = [];
+
+        // ── 解析所有 CSV ──
+        const filePromises = Array.from(files).map(file => new Promise(resolve => {
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true, encoding: "Big5",
+                complete: results => resolve({ name: file.name, data: results.data, meta: results.meta })
+            });
+        }));
+        const parsedFiles = await Promise.all(filePromises);
+
+        // ── 逐檔識別類型 ──
+        parsedFiles.forEach(fileObj => {
+            const fileName = fileObj.name;
+            const data     = fileObj.data;
+            const headers  = fileObj.meta ? fileObj.meta.fields || [] : [];
+
+            const isInventory  = fileName.includes('庫存');
+            const is5dRankFile = !isInventory && fileName.includes('5日');
+            const is1mRankFile = !isInventory && !is5dRankFile && (fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月'));
+            const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
+            const etfLabel = fileName.replace(/\.csv$/i, '');
+
+            if (isInventory) isInventoryUploaded = true;
+
+            const riseKey = headers.find(k => k.includes('漲跌幅') || k.includes('累計漲跌') || k.includes('漲幅'));
+            const corp5dKey = headers.find(k =>
+                (k.includes('法人') || k.includes('外資') || k.includes('買賣超')) &&
+                (k.includes('5日') || k.includes('五日') || k.includes('近5') || k.includes('累計'))
+            ) || headers.find(k =>
+                (k.includes('法人') && (k.includes('買') || k.includes('超'))) ||
+                k.includes('買賣超')
+            );
+            const corp1mKey = headers.find(k =>
+                (k.includes('法人') || k.includes('外資')) &&
+                (k.includes('一月') || k.includes('1個月') || k.includes('月累') || k.includes('30日'))
+            );
+            const trustKey = headers.find(k => k.includes('投信') && (k.includes('買') || k.includes('超')));
+            const revKey   = headers.find(k => k.includes('營收年增') || (k.includes('年增') && k.includes('率')));
+            // 布林三軌（週K / 120日均線）
+            const bollUpKey  = headers.find(k => k.includes('布林') && (k.includes('上軌') || k.includes('上通道') || k.includes('UB') || k.includes('upper')));
+            const bollMidKey = headers.find(k => k.includes('布林') && (k.includes('中軌') || k.includes('中線') || k.includes('MB') || k.includes('middle')));
+            const bollDnKey  = headers.find(k => k.includes('布林') && (k.includes('下軌') || k.includes('下通道') || k.includes('LB') || k.includes('lower')));
+            const closeKey   = headers.find(k => k === '收盤' || k === '收盤價' || k === '成交' || k === '股價');
+            // 找「市值」欄名
+            const mktCapKey = headers.find(k => k.includes('市值') || k.includes('總市值'));
+
+            const detectedRiseType = is5dRankFile ? '5日漲幅排行' : is1mRankFile ? '1個月漲幅排行' : '';
+            const detectedOther = [
+                corp5dKey ? '法人買賣超' : '',   // ← 修正：原版此處為未定義的 corpKey
+                trustKey  ? '投信買超'   : '',
+                revKey    ? '營收年增'   : '',
+                isEtfOrMorgan ? 'ETF/大摩' : '',
+                isInventory   ? '庫存'     : '',
+            ].filter(Boolean).join('+');
+            fileTypeLog.push(`${fileName} → 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
+            fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
+
+            data.forEach((row, rowIdx) => {
+                let symbol = row['代號'] || row['股票代號'] || row['代碼'] || row['商品代碼'] || row['Code'] || row['證券代號'];
+                if (!symbol) return;
+                symbol = String(symbol).trim();
+                if (!symbol) return;
+
+                const stockName = String(row['名稱'] || row['股票名稱'] || row['證券名稱'] || row['商品名稱'] || '').trim();
+                const industry  = String(row['相關產業'] || row['產業別'] || row['產業'] || '').trim();
+
+                if (!masterDict[symbol]) {
+                    masterDict[symbol] = {
+                        代號: symbol, 名稱: '', 相關產業: '',
+                        五日漲幅: null, 一月漲幅: null, 營收年增: null,
+                        三大法人5日買超: null, 法人一月買超: null, 投信週買超: null,
+                        市值: null,
+                        etfCount: 0,
+                        大摩5日排名: Infinity, 投信週排名: Infinity,
+                        族群加分已算: false,
+                        布林上軌: null, 布林中軌: null, 布林下軌: null, 收盤價: null
+                    };
+                }
+                const entry = masterDict[symbol];
+                if (!entry.名稱 && stockName) entry.名稱 = stockName;
+                if (!entry.相關產業 && industry) entry.相關產業 = industry;
+
+                if (is5dRankFile && riseKey) {
+                    const v = parseNum(row[riseKey]);
+                    if (v !== null) rise5dMap[symbol] = v;
+                    if (rowIdx < TOP_N) rise5dTop40.add(symbol);
+                }
+                if (is1mRankFile && riseKey) {
+                    const v = parseNum(row[riseKey]);
+                    if (v !== null) rise1mMap[symbol] = v;
+                    if (rowIdx < TOP_N) rise1mTop40.add(symbol);
+                }
+
+                if (corp5dKey) {
+                    const v = parseNum(row[corp5dKey]);
+                    if (v !== null) entry.三大法人5日買超 = Math.max(entry.三大法人5日買超 ?? -Infinity, v);
+                    if (isEtfOrMorgan) entry.大摩5日排名 = Math.min(entry.大摩5日排名, rowIdx);
+                }
+                if (corp1mKey) {
+                    const v = parseNum(row[corp1mKey]);
+                    if (v !== null) entry.法人一月買超 = Math.max(entry.法人一月買超 ?? -Infinity, v);
+                }
+                if (trustKey) {
+                    const v = parseNum(row[trustKey]);
+                    if (v !== null) {
+                        entry.投信週買超 = Math.max(entry.投信週買超 ?? -Infinity, v);
+                        entry.投信週排名 = Math.min(entry.投信週排名, rowIdx);
+                    }
+                }
+                if (revKey) {
+                    const v = parseNum(row[revKey]);
+                    if (v !== null) entry.營收年增 = v;
+                }
+                if (mktCapKey) {
+                    const v = parseNum(row[mktCapKey]);
+                    if (v !== null && v > 0) {
+                        // 市值欄單位為「億」，直接使用
+                        const vM = v * 100; // 億 → 百萬（供比值計算用）
+                        if (entry.市值 === null || vM > entry.市值) entry.市值 = vM;
+                    }
+                }
+
+                // 布林三軌寫入（取最後讀到的值，不取 max）
+                if (bollUpKey)  { const v = parseNum(row[bollUpKey]);  if (v !== null) entry.布林上軌 = v; }
+                if (bollMidKey) { const v = parseNum(row[bollMidKey]); if (v !== null) entry.布林中軌 = v; }
+                if (bollDnKey)  { const v = parseNum(row[bollDnKey]);  if (v !== null) entry.布林下軌 = v; }
+                if (closeKey)   { const v = parseNum(row[closeKey]);   if (v !== null) entry.收盤價   = v; }
+                // 若沒有獨立收盤欄，嘗試用「成交」欄（看盤軟體常見命名）
+                if (!closeKey && !entry.收盤價) {
+                    const v = parseNum(row['成交']);
+                    if (v !== null && v > 0) entry.收盤價 = v;
+                }
+
+                if (isInventory) inventorySymbols.add(symbol);
+                if (isEtfOrMorgan) {
+                    entry.etfCount += 1;
+                    if (!etfSourceDict[symbol]) etfSourceDict[symbol] = new Set();
+                    etfSourceDict[symbol].add(etfLabel);
+                }
+            });
+        });
+
+        // null → 0
+        Object.values(masterDict).forEach(e => {
+            if (e.五日漲幅          === null)          e.五日漲幅          = 0;
+            if (e.一月漲幅          === null)          e.一月漲幅          = 0;
+            if (e.營收年增          === null)          e.營收年增          = 0;
+            if (e.三大法人5日買超 === null || e.三大法人5日買超 === -Infinity) e.三大法人5日買超 = 0;
+            if (e.法人一月買超    === null || e.法人一月買超    === -Infinity) e.法人一月買超    = 0;
+            if (e.投信週買超      === null || e.投信週買超      === -Infinity) e.投信週買超      = 0;
+            if (e.市值            === null) e.市值 = 0;
+            // 買超/市值比值
+            e.法人市值比 = e.市值 > 0 ? e.三大法人5日買超 / e.市值 : 0;
+
+            // 週K布林通道位置計算（120日均線，2σ上軌）
+            // σ = (上軌 - 中軌) / 2  → 3σ上軌 = 中軌 + 3σ = 中軌 + 1.5×(上軌-中軌)
+            if (e.布林上軌 && e.布林中軌 && e.布林上軌 > e.布林中軌) {
+                const sigma = (e.布林上軌 - e.布林中軌) / 2;
+                e.布林3倍上軌 = e.布林中軌 + sigma * 3;
+                e.布林3倍下軌 = e.布林中軌 - sigma * 3;
+                if (e.收盤價 && sigma > 0) {
+                    e.布林σ位置 = (e.收盤價 - e.布林中軌) / sigma;  // 正=偏上, 負=偏下
+                } else {
+                    e.布林σ位置 = null;
+                }
+            } else {
+                e.布林3倍上軌 = null;
+                e.布林3倍下軌 = null;
+                e.布林σ位置   = null;
+            }
+        });
+
+        // ── 依漲幅排行TOP40標的，自動推算「買超/市值比值」分位數門檻 ──
+        const benchmarkSymbols = new Set([...rise5dTop40, ...rise1mTop40]);
+        const benchmarkRatios = [...benchmarkSymbols]
+            .map(s => masterDict[s]?.法人市值比 ?? 0)
+            .filter(v => v > 0)
+            .sort((a, b) => a - b);
+        function pct(arr, p) {
+            if (!arr.length) return 0;
+            return arr[Math.max(0, Math.floor(arr.length * p / 100) - 1)];
+        }
+        const autoRatioThrA = pct(benchmarkRatios, 70);
+        const autoRatioThrB = pct(benchmarkRatios, 40);
+        const autoRatioThrC = pct(benchmarkRatios, 20);
+        fileTypeLog.push('');
+        fileTypeLog.push('📊 買超/市值比值門檻（基於漲幅TOP40 ' + benchmarkRatios.length + ' 筆樣本）');
+        fileTypeLog.push('　P20(C)=' + autoRatioThrC.toFixed(4) + ' | P40(B起)=' + autoRatioThrB.toFixed(4) + ' | P70(A)=' + autoRatioThrA.toFixed(4));
+
+        // 族群共振預處理
+        let industryCountIn5d = {};
+        rise5dTop40.forEach(sym => {
+            const ind = masterDict[sym]?.相關產業 || '';
+            ind.split(/[,、，]/).forEach(i => {
+                i = i.trim();
+                if (i) industryCountIn5d[i] = (industryCountIn5d[i] || 0) + 1;
+            });
+        });
+        const resonantIndustries = new Set(
+            Object.entries(industryCountIn5d).filter(([,c]) => c > SC.sector.minCount).map(([i]) => i)
+        );
+
+        // ── 計分（使用編輯器設定）──
+        let finalData = Object.values(masterDict).map(row => {
+            let score = 0, tags = [];
+            const corp          = row.三大法人5日買超;
+            const corp1m        = row.法人一月買超;
+            const trust         = row.投信週買超;
+            const rev           = row.營收年增;
+            const r5In          = rise5dTop40.has(row.代號);
+            const r1mIn         = rise1mTop40.has(row.代號);
+            const morgan5dRank  = row.大摩5日排名;
+            const trustWeekRank = row.投信週排名;
+
+                        // ① 法人超級力道（買超/市值比值，門檻自動由漲幅TOP40分位數推算）
+            const c = SC.corp;
+            const ratio = row.法人市值比;
+            // 門檻：UI設0則用自動分位數，否則用手動輸入值
+            const tA   = c.thrA   > 0 ? c.thrA   : autoRatioThrA;
+            const tBlo = c.thrB_lo > 0 ? c.thrB_lo : autoRatioThrB;
+            const tBhi = c.thrB_hi > 0 ? c.thrB_hi : autoRatioThrA;
+            const tC   = c.thrC   > 0 ? c.thrC   : autoRatioThrC;
+            const ratioLabel = `比值${(ratio*100).toFixed(2)}%`;
+
+            if (row.市值 > 0) {
+                // 有市值 → 比值計分
+                if (ratio >= tA && tA > 0) {
+                    score += c.scoreA; tags.push(`🏆法人比值≥P70(${ratioLabel})`);
+                } else if (ratio >= tBlo && ratio < tBhi && tBlo > 0) {
+                    const s = Math.round(c.scoreB_lo + (ratio - tBlo) / Math.max(tBhi - tBlo, 1e-9) * (c.scoreB_hi - c.scoreB_lo));
+                    score += s; tags.push(`法人比值${s}分(${ratioLabel})`);
+                } else if (ratio >= tC && tC > 0) {
+                    score += c.scoreC; tags.push(`法人比值P20(${ratioLabel})`);
+                }
+            } else if (corp > 0) {
+                // 市值缺漏 → 退回絕對金額保底
+                const fA = c.fallbackA || 6000, fB = c.fallbackB || 1000, fC = c.fallbackC || 500;
+                if (corp > fA)      { score += c.scoreA; tags.push(`法人>${fA/100}億(無市值)`); }
+                else if (corp >= fB) {
+                    const s = Math.round(c.scoreB_lo + (corp - fB) / Math.max(fA - fB, 1) * (c.scoreB_hi - c.scoreB_lo));
+                    score += s; tags.push(`法人${s}分(無市值)`);
+                } else if (corp >= fC) { score += c.scoreC; tags.push(`法人>=${fC/100}億(無市值)`); }
+            }
+
+            // ② 動能
+            const m = SC.momentum;
+            if (r5In && r1mIn) { score += m.both;   tags.push('雙動能共振'); }
+            else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
+            else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
+
+            // ③ 中期法人
+            const c1 = SC.corp1m;
+            if (corp1m > c1.thrA)      { score += c1.scoreA; tags.push('法人月續買'); }
+            else if (corp1m >= c1.thrB) { score += c1.scoreB; }
+            else if (corp1m >= c1.thrC) { score += c1.scoreC; }
+
+            // ④ 投信
+            const t = SC.trust;
+            if      (trustWeekRank < t.rankA) { score += t.scoreA; tags.push(`投信Top${t.rankA}`); }
+            else if (trustWeekRank < t.rankB) { score += t.scoreB; tags.push(`投信Top${t.rankB}`); }
+            else if (trust > 0)               { score += t.scoreC; }
+
+            // ⑤ 基本面
+            const rv = SC.rev;
+            if (rev > rv.thrA)      { score += rv.scoreA; tags.push(`營收>${rv.thrA}%`); }
+            else if (rev >= rv.thrB) { score += rv.scoreB; }
+
+            // ⑥ 特殊加分
+            const dr = SC.dragon;
+            if ((morgan5dRank < dr.rankThr || trustWeekRank < dr.rankThr) && !r5In) {
+                score += dr.score; tags.push('🐉潛龍出海');
+            }
+
+            const sf = SC.superfund;
+            if (rev > sf.revThr && corp > sf.corpThr) {
+                score += sf.score; tags.push('⚡超級基本面');
+            }
+
+            const mt = SC.morganTrust;
+            if (morgan5dRank < mt.rankThr && trustWeekRank < mt.rankThr) {
+                score += mt.score; tags.push('💎大摩投信合買');
+            }
+
+            const myInds = (row.相關產業 || '').split(/[,、，]/).map(i => i.trim()).filter(Boolean);
+            if (myInds.some(i => resonantIndustries.has(i))) {
+                score += SC.sector.score; tags.push('🔥族群共振');
+            }
+
+            if (row.etfCount >= SC.etf.minCount) {
+                score += SC.etf.score; tags.push(`🎯ETF共振x${row.etfCount}`);
+            }
+
+            row.綜合評分 = score;
+            row.狀態標註 = tags.join(' / ');
+            row.防禦指令 = '獲利<10%守60分K20T；>10%守雙週K低點；>100%守雙月K低點';
+            return row;
+        });
+
+        finalData.sort((a, b) =>
+            b.綜合評分 - a.綜合評分 ||
+            b.三大法人5日買超 - a.三大法人5日買超 ||
+            b.營收年增 - a.營收年增
+        );
+
+        // ── 輸出 ──
+        let outputHTML = '';
+        const top50 = finalData.slice(0, 50);
+
+        outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
+
+
+        // 將狀態標註字串轉為彩色 TAG HTML
+        function renderTags(str) {
+            if (!str) return '';
+            return str.split(' / ').filter(Boolean).map(t => {
+                let cls = 'blue';
+                if (t.includes('🏆') || t.includes('比值'))          cls = 'gold';
+                else if (t.includes('🐉') || t.includes('潛龍'))     cls = 'red';
+                else if (t.includes('⚡') || t.includes('超級基本面')) cls = 'orange';
+                else if (t.includes('💎') || t.includes('合買'))      cls = 'teal';
+                else if (t.includes('🔥') || t.includes('族群'))      cls = 'purple';
+                else if (t.includes('🎯') || t.includes('ETF'))       cls = 'green';
+                else if (t.includes('雙動能') || t.includes('動能'))  cls = 'navy';
+                else if (t.includes('月續買') || t.includes('法人'))  cls = 'blue';
+                else if (t.includes('投信'))                           cls = 'lime';
+                else if (t.includes('營收'))                           cls = 'pink';
+                return `<span class="s-tag ${cls}">${t}</span>`;
+            }).join('');
+        }
+
+
+        // 週K布林通道位置渲染
+        function renderBoll(r) {
+            if (r.布林σ位置 === null || r.布林σ位置 === undefined) {
+                return '<span style="color:#444;font-size:11px">— 無資料</span>';
+            }
+            const s = r.布林σ位置;
+            const sFixed = s.toFixed(2);
+
+            if (s > 3) {
+                // 超過3σ：紅色警示
+                return `<span class="s-tag" style="background:#b91c1c;color:#fff;font-size:12px">🔥 過熱 ${sFixed}σ</span>`;
+            } else if (s > 2) {
+                return `<span class="s-tag" style="background:#d97706;color:#fff;font-size:12px">⚠️ 強勢 ${sFixed}σ</span>`;
+            } else if (s > 1) {
+                return `<span class="s-tag" style="background:#1d4ed8;color:#fff;font-size:12px">↑ 偏上 ${sFixed}σ</span>`;
+            } else if (s >= -1) {
+                return `<span class="s-tag" style="background:#1e3a2f;color:#4ade80;font-size:12px">— 中性 ${sFixed}σ</span>`;
+            } else if (s >= -2) {
+                return `<span class="s-tag" style="background:#1e2d4a;color:#93c5fd;font-size:12px">↓ 偏下 ${sFixed}σ</span>`;
+            } else {
+                return `<span class="s-tag" style="background:#1a1a2e;color:#a78bfa;font-size:12px">↓↓ 弱勢 ${sFixed}σ</span>`;
+            }
+        }
+
+        function createSection(title, filename, headers, dataRows) {
+            // CSV下載用純文字（去除 HTML）
+            const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
+            const csvRows = dataRows.map(row => row.map(stripHtml));
+            let html = `<div class="report-section">
+                <h2>${title} <button class="btn-download" onclick='downloadCSV("${filename}", ${JSON.stringify([headers, ...csvRows])})'>下載 CSV</button></h2>
+                <div class="tbl-wrap"><table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+            dataRows.forEach(row => { html += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`; });
+            html += `</table></div></div>`;
+            return html;
+        }
+
+        // 輸出 1
+        outputHTML += createSection(
+            '輸出 1：整份資料 TOP 50 推薦表', '輸出1_TOP50.csv',
+            ['排名','代號','名稱','綜合評分','狀態標註','週K布林位置'],
+            top50.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, renderTags(r.狀態標註), renderBoll(r)])
+        );
+
+        // 輸出 2
+        if (isInventoryUploaded) {
+            const invData = finalData.filter(r => inventorySymbols.has(r.代號));
+            if (invData.length > 0) {
+                outputHTML += createSection(
+                    '輸出 2：庫存標的診斷報告', '輸出2_庫存診斷.csv',
+                    ['代號','名稱','綜合評分','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
+                    invData.map(r => [r.代號, r.名稱, r.綜合評分,
+                        r.三大法人5日買超 !== 0 ? r.三大法人5日買超 : '⚠️ 0（未讀到）',
+                        r.法人一月買超    !== 0 ? r.法人一月買超    : '⚠️ 0（未讀到）',
+                        r.投信週買超      !== 0 ? r.投信週買超      : '⚠️ 0（未讀到）',
+                        r.營收年增        !== 0 ? r.營收年增        : '⚠️ 0（未讀到）',
+                        renderTags(r.狀態標註), renderBoll(r)])
+                );
+            } else {
+                outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 偵測到庫存檔案，但無有效資料列（格式異常？）</p></div>`;
+            }
+        } else {
+            outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 未偵測到檔名含「庫存」的 CSV。</p></div>`;
+        }
+
+        // 輸出 3
+        const top20NoInv = top50.filter(r => !inventorySymbols.has(r.代號)).slice(0, 20);
+        outputHTML += createSection(
+            'Top 20 推薦表 (排除庫存)', '輸出3_TOP20_排除庫存.csv',
+            ['排名','代號','名稱','綜合評分','籌碼狀態標註','週K布林位置'],
+            top20NoInv.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, renderTags(r.狀態標註), renderBoll(r)])
+        );
+
+        // 輸出 4
+        let indMap = {};
+        top50.forEach(r => {
+            if (!r.相關產業) return;
+            r.相關產業.split(/[,、，]/).forEach(ind => {
+                ind = ind.trim();
+                if (!ind) return;
+                if (!indMap[ind]) indMap[ind] = { count: 0, corpSum: 0 };
+                indMap[ind].count   += 1;
+                indMap[ind].corpSum += (r.三大法人5日買超 || 0);
+            });
+        });
+        const sortedInds = Object.entries(indMap).sort((a,b) => b[1].corpSum - a[1].corpSum).slice(0, 8);
+        const out4Rows = sortedInds.map(([ ind, { count, corpSum } ], i) => {
+            const 億 = (corpSum / 2000).toFixed(2);
+            return [i+1, ind, `${count} 檔`, `${億} 億元`];
+        });
+        const pieData = sortedInds
+            .map(([ind, { corpSum }]) => ({ label: ind, value: Math.max(0, parseFloat((corpSum/2000).toFixed(2))) }))
+            .filter(d => d.value > 0);
+
+        let out4HTML = `<div class="report-section">
+            <h2>輸出 4：今日熱門族群解析 (TOP 50 資金匯聚)
+                <button class="btn-download" onclick='downloadCSV("輸出4_熱門族群.csv", ${JSON.stringify([["排行","產業名稱","進榜檔數","三大法人資金匯入(億元估算)"], ...out4Rows])})'>下載 CSV</button>
+            </h2>`;
+        if (pieData.length > 0) {
+            out4HTML += buildPieChart(pieData, 260);
+            out4HTML += `<p style="font-size:12px;color:#888;margin-top:4px">※ 資金估算：法人買超張數 ÷ 2000 ≈ 億元（以均價 NT$50 / 1000股/張 計）</p>`;
+        }
+        out4HTML += `<table><tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
+        out4Rows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
+        out4HTML += `</table></div>`;
+        outputHTML += out4HTML;
+
+        // 輸出 5
+        const resonanceSymbols = [...rise5dTop40].filter(s => rise1mTop40.has(s));
+        const resonanceData = resonanceSymbols
+            .map(s => {
+                const base = masterDict[s] || { 代號: s, 名稱: '' };
+                return { 代號: s, 名稱: base.名稱, 五日漲幅: rise5dMap[s] ?? 0, 一月漲幅: rise1mMap[s] ?? 0 };
+            })
+            .sort((a, b) => b.五日漲幅 - a.五日漲幅);
+
+        const out5Hint = `（5日排行 TOP${TOP_N} 共 ${rise5dTop40.size} 檔 ∩ 1個月排行 TOP${TOP_N} 共 ${rise1mTop40.size} 檔，交集 ${resonanceData.length} 檔）`;
+        if (resonanceData.length > 0) {
+            outputHTML += createSection(
+                `輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}`, '輸出5_長短動能共振.csv',
+                ['排名','代號','名稱'],
+                resonanceData.map((r,i) => [i+1, r.代號, r.名稱])
+            );
+        } else {
+            const h5 = rise5dTop40.size === 0 ? '（未偵測到檔名含「5日」的排行檔）' : '';
+            const h1 = rise1mTop40.size === 0 ? '（未偵測到檔名含「1個月/一月/1月」的排行檔）' : '';
+            outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}</h2>
+                <p style="color:#e67e22;font-weight:bold;">⚠️ 本期無標的同時出現在兩份排行榜 TOP${TOP_N} 中。${h5}${h1}</p></div>`;
+        }
+
+        // 輸出 6
+        const etfResonanceData = Object.entries(etfSourceDict)
+            .map(([sym, sourceSet]) => {
+                const sources = [...sourceSet];
+                return { 代號: sym, 名稱: masterDict[sym]?.名稱 || '', 共振次數: sources.length, 出現清單: sources.join(' / ') };
+            })
+            .filter(r => r.共振次數 >= SC.etf.minCount)
+            .sort((a,b) => b.共振次數 - a.共振次數 || a.代號.localeCompare(b.代號));
+
+        if (etfResonanceData.length > 0) {
+            outputHTML += createSection(
+                `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
+                '輸出6_特定ETF大摩共振.csv',
+                ['排名','代號','名稱','共振次數','出現清單'],
+                etfResonanceData.map((r,i) => [i+1, r.代號, r.名稱, r.共振次數, r.出現清單])
+            );
+        } else {
+            outputHTML += `<div class="report-section"><h2>輸出 6：大摩與指定 ETF 共振清單</h2><p>本期無標的在指定名單中重疊出現兩次以上。</p></div>`;
+        }
+
+        document.getElementById('loadingStatus').style.display = 'none';
+        document.getElementById('outputArea').innerHTML = outputHTML;
+
+        // ── 計算 TOP20 平均分並寫入歷史 ──
+        const top20scores = top50.slice(0, 20).map(r => r.綜合評分);
+        const avg20 = top20scores.length > 0
+            ? Math.round(top20scores.reduce((a,b) => a+b, 0) / top20scores.length)
+            : 0;
+        const top1score  = top50.length > 0 ? top50[0].綜合評分 : 0;
+        const top20min   = top20scores.length > 0 ? Math.min(...top20scores) : 0;
+
+        await saveHistoryRecord({
+            date:    new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' }),
+            avg20,
+            top1:    top1score,
+            min20:   top20min,
+            total:   finalData.length,
+        });
+        renderHistory();
+    }
+
+    // ══════════════════════════════════════════════
+    //  歷史紀錄：存取 localStorage
+    // ══════════════════════════════════════════════
+    // ╔══════════════════════════════════════════════════╗
+    // ║         GitHub Gist 同步設定（請填入以下兩個值）      ║
+    // ╚══════════════════════════════════════════════════╝
+    const GIST_CONFIG = {
+        GIST_ID : '40b7fad6e98aa5607134aa83a65cc0be', // ← Gist ID（不用改）
+        TOKEN   : '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',                  // ← 貼上新 ghp_... Token
+    };
+    // ────────────────────────────────────────────────────
+    // 說明：
+    //   GIST_ID  → 固定不變，已預填
+    //   TOKEN    → 去 GitHub → Settings → Developer Settings
+    //              → Personal access tokens → Tokens (classic)
+    //              → Generate new token → 只勾 gist → 複製貼上
+    // ────────────────────────────────────────────────────
+
+    const HIST_KEY = 'momentumAnalyzerHistory_v1'; // localStorage 備用 key
+
+    // ── Gist API 工具 ──────────────────────────────────
+    function gistHeaders() {
+        return {
+            'Authorization': `token ${GIST_CONFIG.TOKEN}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+        };
+    }
+    function hasGist() {
+        return GIST_CONFIG.GIST_ID && GIST_CONFIG.TOKEN &&
+               !GIST_CONFIG.TOKEN.includes('填入');
+    }
+
+    // ── 讀取：Gist 優先，失敗則用 localStorage ──────────
+    async function loadHistory() {
+        // 先從 localStorage 快取讀（立即顯示）
+        let local = [];
+        try { local = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch {}
+
+        if (!hasGist()) return local;
+
+        try {
+            const res = await fetch(
+                `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
+                { headers: gistHeaders() }
+            );
+            if (!res.ok) throw new Error(res.status);
+            const data = await res.json();
+            const content = data.files['analysis_history.json']?.content || '[]';
+            const remote = JSON.parse(content);
+            // 同步到 localStorage 作快取
+            localStorage.setItem(HIST_KEY, JSON.stringify(remote));
+            return remote;
+        } catch (e) {
+            console.warn('Gist 讀取失敗，使用本機快取:', e);
+            return local;
+        }
+    }
+
+    async function saveHistoryRecord(rec) {
+        // 讀現有資料
+        let hist = [];
+        try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch {}
+
+        // 同一天若重跑則覆蓋最後一筆
+        const last = hist[hist.length - 1];
+        if (last && last.date === rec.date) {
+            hist[hist.length - 1] = rec;
+        } else {
+            hist.push(rec);
+        }
+        // 最多保留 52 週
+        if (hist.length > 52) hist.splice(0, hist.length - 52);
+
+        // 寫入 localStorage（立即）
+        localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+
+        // 寫入 Gist（非同步，失敗不影響主流程）
+        if (hasGist()) {
+            try {
+                const body = JSON.stringify({
+                    files: { 'analysis_history.json': { content: JSON.stringify(hist, null, 2) } }
+                });
+                const res = await fetch(
+                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
+                    { method: 'PATCH', headers: gistHeaders(), body }
+                );
+                if (!res.ok) throw new Error(res.status);
+                console.log('✅ Gist 同步成功');
+            } catch (e) {
+                console.warn('⚠️ Gist 寫入失敗（本機已儲存）:', e);
+            }
+        }
+    }
+
+    async function deleteHistRecord(idx) {
+        let hist = [];
+        try { hist = JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch {}
+        hist.splice(idx, 1);
+        localStorage.setItem(HIST_KEY, JSON.stringify(hist));
+        if (hasGist()) {
+            try {
+                await fetch(
+                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
+                    { method: 'PATCH', headers: gistHeaders(),
+                      body: JSON.stringify({ files: { 'analysis_history.json': { content: JSON.stringify(hist, null, 2) } } }) }
+                );
+            } catch (e) { console.warn('Gist 刪除同步失敗:', e); }
+        }
+        renderHistory();
+    }
+
+    async function clearAllHist() {
+        if (!confirm('確定要清除所有歷史紀錄？')) return;
+        localStorage.removeItem(HIST_KEY);
+        if (hasGist()) {
+            try {
+                await fetch(
+                    `https://api.github.com/gists/${GIST_CONFIG.GIST_ID}`,
+                    { method: 'PATCH', headers: gistHeaders(),
+                      body: JSON.stringify({ files: { 'analysis_history.json': { content: '[]' } } }) }
+                );
+            } catch (e) { console.warn('Gist 清除同步失敗:', e); }
+        }
+        renderHistory();
+    }
+
+    function getSignal(avg) {
+        if (avg >= 70) return { text: '滿倉', cls: 'sig-full',   dot: '#2ecc71', color: '#2ecc71' };
+        if (avg >= 50) return { text: '正常持倉', cls: 'sig-normal', dot: '#3498db', color: '#3498db' };
+        if (avg >= 35) return { text: '縮減部位', cls: 'sig-reduce', dot: '#f39c12', color: '#f39c12' };
+        return            { text: '⚠ 出場觀望', cls: 'sig-exit',   dot: '#e74c3c', color: '#e74c3c' };
+    }
+
+    // ── 純 SVG 折線圖 ──────────────────────────────
+    function buildLineChart(hist) {
+        const W = 900, H = 160, PAD = { t: 20, b: 34, l: 44, r: 20 };
+        const cW = W - PAD.l - PAD.r;
+        const cH = H - PAD.t - PAD.b;
+        const scores = hist.map(h => h.avg20);
+        const maxV = Math.max(...scores, 75);
+        const minV = Math.max(0, Math.min(...scores, 30) - 5);
+        const range = maxV - minV || 1;
+
+        // helper: value → y pixel
+        const vy = v => PAD.t + cH - ((v - minV) / range) * cH;
+        // helper: index → x pixel
+        const vx = i => PAD.l + (hist.length === 1 ? cW / 2 : (i / (hist.length - 1)) * cW);
+
+        let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${H}px">`;
+
+        // 區域參考線 (70, 50, 35)
+        const zones = [
+            { v: 70, color: '#2ecc7133', label: '70 滿倉' },
+            { v: 50, color: '#3498db33', label: '50 正常' },
+            { v: 35, color: '#f39c1233', label: '35 縮減' },
+        ];
+        zones.forEach(z => {
+            if (z.v < minV || z.v > maxV) return;
+            const y = vy(z.v);
+            svg += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="${z.color.slice(0,7)}" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>`;
+            svg += `<text x="${PAD.l - 4}" y="${y + 4}" text-anchor="end" fill="${z.color.slice(0,7)}" font-size="9" opacity="0.8">${z.v}</text>`;
+        });
+
+        // Y 軸刻度
+        [minV, Math.round((minV+maxV)/2), maxV].forEach(v => {
+            const y = vy(v);
+            svg += `<text x="${PAD.l - 6}" y="${y + 4}" text-anchor="end" fill="#5a6a8a" font-size="10">${Math.round(v)}</text>`;
+        });
+
+        if (hist.length < 2) {
+            // 只有 1 筆：畫一個點
+            if (hist.length === 1) {
+                const x = vx(0), y = vy(scores[0]);
+                const sig = getSignal(scores[0]);
+                svg += `<circle cx="${x}" cy="${y}" r="6" fill="${sig.color}"/>`;
+                svg += `<text x="${x}" y="${y - 10}" text-anchor="middle" fill="#e0e6f0" font-size="11">${scores[0]}</text>`;
+                svg += `<text x="${x}" y="${H - 6}" text-anchor="middle" fill="#6a7a9a" font-size="10">${hist[0].date.slice(5)}</text>`;
+            } else {
+                svg += `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#5a6a8a" font-size="13">尚無歷史資料，執行一次分析即開始記錄</text>`;
+            }
+            svg += '</svg>';
+            return svg;
+        }
+
+        // 填充區域
+        const areaPoints = hist.map((h, i) => `${vx(i)},${vy(h.avg20)}`).join(' ');
+        const firstX = vx(0), lastX = vx(hist.length - 1), baseY = vy(minV);
+        svg += `<polygon points="${firstX},${baseY} ${areaPoints} ${lastX},${baseY}" fill="#3498db" opacity="0.08"/>`;
+
+        // 折線
+        const linePoints = hist.map((h, i) => `${vx(i)},${vy(h.avg20)}`).join(' ');
+        svg += `<polyline points="${linePoints}" fill="none" stroke="#3498db" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+        // 各點
+        hist.forEach((h, i) => {
+            const x = vx(i), y = vy(h.avg20);
+            const sig = getSignal(h.avg20);
+            svg += `<circle cx="${x}" cy="${y}" r="4.5" fill="${sig.color}" stroke="#1a1f2e" stroke-width="1.5"/>`;
+            // 分數標籤（只顯示首尾 + 最大最小 + 最近）
+            const isFirst = i === 0, isLast = i === hist.length - 1;
+            const isMax = h.avg20 === Math.max(...scores);
+            const isMin = h.avg20 === Math.min(...scores);
+            if (isFirst || isLast || isMax || isMin) {
+                const labelY = y < PAD.t + 16 ? y + 16 : y - 8;
+                svg += `<text x="${x}" y="${labelY}" text-anchor="middle" fill="${sig.color}" font-size="10" font-weight="bold">${h.avg20}</text>`;
+            }
+            // X 軸日期（稀疏顯示，每隔幾週一個）
+            const step = Math.max(1, Math.floor(hist.length / 10));
+            if (i % step === 0 || isLast) {
+                svg += `<text x="${x}" y="${H - 4}" text-anchor="middle" fill="#5a6a8a" font-size="9">${h.date.slice(5)}</text>`;
+            }
+        });
+
+        svg += '</svg>';
+        return svg;
+    }
+
+    // ── 渲染整個歷史面板 ──────────────────────────
+    async function renderHistory() {
+        // 更新 Gist 狀態指示
+        const dot = document.getElementById('gistDot');
+        const msg = document.getElementById('gistMsg');
+        if (dot && msg) {
+            if (!hasGist()) {
+                dot.style.background = '#6b7280';
+                msg.textContent = 'Gist 未設定（填入 Token 後啟用跨裝置同步）';
+            } else {
+                dot.style.background = '#facc15';
+                msg.textContent = '同步中…';
+            }
+        }
+        const hist = await loadHistory();
+        if (dot && msg && hasGist()) {
+            dot.style.background = '#4ade80';
+            msg.textContent = `✅ Gist 同步（${hist.length} 筆紀錄）`;
+        }
+
+        // 溫度燈號（最新一筆）
+        const tempBar = document.getElementById('histTempBar');
+        if (hist.length > 0) {
+            const latest = hist[hist.length - 1];
+            const sig = getSignal(latest.avg20);
+            // 趨勢箭頭
+            let trend = '', trendColor = '#9aafc8';
+            if (hist.length >= 2) {
+                const prev = hist[hist.length - 2].avg20;
+                const diff = latest.avg20 - prev;
+                if (diff > 3)       { trend = `▲ +${diff}`; trendColor = '#2ecc71'; }
+                else if (diff < -3) { trend = `▼ ${diff}`;  trendColor = '#e74c3c'; }
+                else                { trend = `— ${diff > 0 ? '+':''}${diff}`; trendColor = '#f39c12'; }
+            }
+            tempBar.innerHTML = `
+                <div class="temp-gauge">
+                    <div class="temp-dot" style="background:${sig.dot};box-shadow:0 0 8px ${sig.dot}"></div>
+                    <div>
+                        <div class="temp-label">最新 TOP 20 平均分（${latest.date}）</div>
+                        <div style="font-size:11px;color:#5a6a8a">共 ${latest.total} 支標的參與評分</div>
+                    </div>
+                    <div class="temp-value" style="color:${sig.color}">${latest.avg20}</div>
+                </div>
+                <div class="temp-gauge" style="flex:0;min-width:150px">
+                    <div>
+                        <div class="temp-label">操作訊號</div>
+                        <div style="margin-top:4px"><span class="signal-chip ${sig.cls}">${sig.text}</span></div>
+                    </div>
+                </div>
+                <div class="temp-gauge" style="flex:0;min-width:150px">
+                    <div>
+                        <div class="temp-label">週趨勢</div>
+                        <div style="font-size:20px;font-weight:bold;color:${trendColor};margin-top:2px">${trend || '—'}</div>
+                    </div>
+                </div>`;
+        } else {
+            tempBar.innerHTML = `<div style="color:#5a6a8a;font-size:13px">尚無紀錄，執行分析後自動儲存</div>`;
+        }
+
+        // 走勢圖
+        document.getElementById('histChart').outerHTML =
+            `<div id="histChart" class="chart-wrap" style="padding:0">${buildLineChart(hist)}</div>`;
+        // 因 outerHTML 替換後 id 仍有效但元素已換，需再找 chart-wrap 重置
+        // 實際上直接插到 chart-wrap 裡
+        document.querySelector('.chart-wrap').innerHTML = buildLineChart(hist);
+
+        // 表格（倒序：最新在上）
+        const wrap = document.getElementById('histTableWrap');
+        if (hist.length === 0) {
+            wrap.innerHTML = '<div class="no-hist">執行一次分析後，歷史紀錄將顯示在這裡</div>';
+            return;
+        }
+        const reversed = [...hist].reverse();
+        let tbl = `<div class="tbl-wrap"><table class="hist-table">
+            <tr><th>日期</th><th>TOP20 平均分</th><th>TOP1 最高分</th><th>TOP20 最低分</th><th>標的總數</th><th>市場訊號</th><th></th></tr>`;
+        reversed.forEach((h, ri) => {
+            const realIdx = hist.length - 1 - ri;
+            const sig = getSignal(h.avg20);
+            tbl += `<tr>
+                <td>${h.date}</td>
+                <td style="font-weight:bold;color:${sig.color}">${h.avg20}</td>
+                <td>${h.top1}</td>
+                <td>${h.min20}</td>
+                <td>${h.total}</td>
+                <td><span class="signal-chip ${sig.cls}">${sig.text}</span></td>
+                <td><button class="btn-del-hist" onclick="deleteHistRecord(${realIdx})">刪除</button></td>
+            </tr>`;
+        });
+        tbl += '</table>';
+        wrap.innerHTML = tbl;
+    }
+
+    async function exportHistCSV() {
+        const hist = await loadHistory();
+        if (hist.length === 0) { alert('尚無歷史紀錄'); return; }
+        const rows = [
+            ['日期','TOP20平均分','TOP1最高分','TOP20最低分','標的總數','市場訊號'],
+            ...hist.map(h => {
+                const sig = getSignal(h.avg20);
+                return [h.date, h.avg20, h.top1, h.min20, h.total, sig.text];
+            })
+        ];
+        downloadCSV('市場溫度歷史_' + new Date().toISOString().slice(0,10) + '.csv', rows);
+    }
+
+    // 頁面載入即渲染歷史
+    renderHistory();
+</script>
+</body>
+</html>
