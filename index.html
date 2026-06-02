@@ -1306,17 +1306,51 @@
             rise5d: [...rise5dTop40],
             rise1m: [...rise1mTop40],
         };
+
+        // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
+        function slimEntry(r) {
+            return {
+                代號: r.代號, 名稱: r.名稱, 相關產業: r.相關產業||'',
+                綜合評分: r.綜合評分, 狀態標註: r.狀態標註,
+                三大法人5日買超: r.三大法人5日買超||0,
+                法人一月買超:   r.法人一月買超||0,
+                投信週買超:     r.投信週買超||0,
+                市值億:         r.市值億||0,
+                營收年增:       r.營收年增||0,
+                法人市值比pct:  r.法人市值比pct||'-',
+                大摩排名:       r.大摩排名||'-',
+                投信排名:       r.投信排名||'-',
+            };
+        }
+        resultPayload.top50     = (resultPayload.top50||[]).map(slimEntry);
+        resultPayload.inv       = (resultPayload.inv||[]).map(slimEntry);
+        resultPayload.top20     = (resultPayload.top20||[]).map(slimEntry);
+        resultPayload.resonance = (resultPayload.resonance||[]).map(slimEntry);
         // 取指定日期（輸入舊資料時可能不是今天）
         const analysisDateKey = getAnalysisDateKey();
         const analysisLabel   = analysisDateKey.slice(0,4)+'/'+analysisDateKey.slice(4,6)+'/'+analysisDateKey.slice(6,8);
         resultPayload.date     = analysisLabel;   // 覆蓋為使用者指定日期
         resultPayload.dateKey  = analysisDateKey;
 
-        // 若指定日期是今天才更新 result.json（最新分析快取）
-        if (analysisDateKey === todayKey()) {
-            saveResult(resultPayload);
+        // ── 同步到 GitHub Repo（顯示狀態）──
+        if (hasRepo()) {
+            updateSyncStatus('分析完成，同步中…', '#facc15');
+            try {
+                // 並行執行：每日存檔 + 今天才更新最新快取
+                const tasks = [saveDailyResult(resultPayload, analysisDateKey)];
+                if (analysisDateKey === todayKey()) tasks.push(saveResult(resultPayload));
+                await Promise.all(tasks);
+                await initHistDateSelect(); // 更新日期清單
+                updateSyncStatus(`✅ 已同步 ${analysisLabel}`, '#4ade80');
+                setTimeout(updateSyncStatus, 4000); // 4秒後回復正常狀態文字
+            } catch(e) {
+                updateSyncStatus(`⚠️ 同步失敗：${e.message}`, '#f87171');
+                console.error('同步失敗詳情:', e);
+            }
+        } else {
+            // 未設定 Token，儲存到 localStorage
+            if (analysisDateKey === todayKey()) saveResult(resultPayload);
         }
-        saveDailyResult(resultPayload, analysisDateKey); // 每日歷史（依指定日期存檔）
 
         // 產出 PDF 按鈕 + 報告尾部
         const pdfDate = analysisLabel + ' ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
@@ -1489,31 +1523,38 @@
         return r.json();
     }
     async function repoPut(url, contentObj, sha, message) {
-        const content = btoa(unescape(encodeURIComponent(JSON.stringify(contentObj, null, 2))));
+        const jsonStr = JSON.stringify(contentObj, null, 2);
+        const sizeKB  = (jsonStr.length / 1024).toFixed(1);
+        console.log(`PUT ${url.split('/').pop()} | size=${sizeKB}KB | sha=${sha?sha.slice(0,7):'new'}`);
+        const content = btoa(unescape(encodeURIComponent(jsonStr)));
         const body = JSON.stringify({ message, content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) });
         const r = await fetch(url, { method:'PUT', headers: repoHeaders(), body });
-        if (!r.ok) throw new Error(await r.text());
+        if (!r.ok) {
+            const errText = await r.text();
+            throw new Error(`HTTP ${r.status}: ${errText.slice(0,200)}`);
+        }
         return r.json();
     }
 
     async function saveDailyResult(payload, dateKey) {
         if (!hasRepo()) return;
-        try {
-            const existing = await repoGet(dailyFileURL(dateKey));
-            await repoPut(dailyFileURL(dateKey), payload, existing?.sha, `analysis ${dateKey}`);
-            // 更新 index
-            const idxData = await repoGet(dailyIndexURL());
-            let idx = [];
-            if (idxData) {
-                try { idx = JSON.parse(atob(idxData.content.split('\n').join('').split('\r').join(''))); } catch {}
+        // 步驟1：存每日分析檔
+        const existing = await repoGet(dailyFileURL(dateKey));
+        await repoPut(dailyFileURL(dateKey), payload, existing?.sha, `analysis ${dateKey}`);
+        console.log(`✅ data/daily/${dateKey}.json 已寫入`);
+
+        // 步驟2：更新索引
+        const idxData = await repoGet(dailyIndexURL());
+        let idx = [];
+        if (idxData) {
+            try { idx = JSON.parse(atob(idxData.content.split('\n').join('').split('\r').join(''))); } catch(e) {
+                console.warn('index 解析失敗，重建:', e.message);
             }
-            if (!idx.includes(dateKey)) { idx.push(dateKey); idx.sort().reverse(); }
-            if (idx.length > 365) idx = idx.slice(0,365); // 最多保留 1 年
-            await repoPut(dailyIndexURL(), idx, idxData?.sha, `update index ${dateKey}`);
-            console.log(`✅ 每日分析 ${dateKey} 已同步`);
-        } catch(e) {
-            console.warn('每日分析同步失敗:', e.message);
         }
+        if (!idx.includes(dateKey)) { idx.unshift(dateKey); idx.sort().reverse(); }
+        if (idx.length > 365) idx = idx.slice(0, 365);
+        await repoPut(dailyIndexURL(), idx, idxData?.sha, `update index ${dateKey}`);
+        console.log(`✅ data/daily/index.json 已更新（${idx.length} 筆）`);
     }
 
     async function loadDailyIndex() {
