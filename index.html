@@ -290,39 +290,84 @@
 </head>
 <body>
 
-<!-- ══ GitHub Token 頂部欄 ══ -->
-<div id="tokenBar" style="
+<!-- ══ 同步狀態列 ══ -->
+<div id="syncBar" style="
     position:sticky; top:0; z-index:999;
     background:#0f172a; border-bottom:1px solid #1e3a5f;
-    padding:8px 16px; display:flex; align-items:center;
-    gap:10px; flex-wrap:wrap; font-size:13px;
+    padding:8px 14px; display:flex; align-items:center;
+    gap:8px; flex-wrap:wrap; font-size:13px;
 ">
-    <span style="color:#60a5fa; font-weight:700; white-space:nowrap">🔑 GitHub Token</span>
-    <input id="tokenInput" type="password"
-        placeholder="貼上 ghp_... Token 啟用跨裝置同步"
-        style="flex:1; min-width:200px; max-width:420px;
-               padding:6px 12px; border-radius:6px; font-size:13px; font-family:monospace;
-               background:#1e293b; color:#e2e8f0; border:1px solid #2a3350;
-               outline:none;"
-        oninput="handleTokenInput(this.value)"
-    />
-    <span id="tokenStatus" style="font-size:12px; white-space:nowrap; color:#64748b">未設定</span>
-    <button onclick="clearToken()"
-        style="background:#dc2626; color:#fff; border:none; padding:5px 12px;
-               border-radius:5px; font-size:12px; cursor:pointer; white-space:nowrap">
-        清除
-    </button>
-    <span style="font-size:11px; color:#475569; flex-basis:100%">
-        Token 僅存在瀏覽器本機，不會上傳。前往
-        <a href="https://github.com/settings/tokens" target="_blank"
-           style="color:#60a5fa">GitHub Settings → Tokens (classic)</a>
-        產生（勾選 repo 權限）
-    </span>
+    <span id="syncStatusDot" style="width:9px;height:9px;border-radius:50%;background:#4b5563;flex-shrink:0;display:inline-block"></span>
+    <span id="syncStatusMsg" style="color:#94a3b8;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">尚未設定同步</span>
+    <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
+    <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
+</div>
+
+<!-- ══ 設定 Modal ══ -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#161b25;border:1px solid #2a3350;border-radius:12px;padding:24px 28px;width:min(480px,92vw);max-height:85vh;overflow-y:auto">
+        <h3 style="margin:0 0 4px;color:#60a5fa;font-size:16px">🔧 設定 GitHub 同步</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 18px;line-height:1.6">
+            資料存在你自己的 GitHub repo。<br>
+            GitHub → 頭像 → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → 勾選 <b style="color:#93c5fd">repo</b> 權限
+        </p>
+        <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">Owner / Repo（格式：帳號/repo名稱）</label>
+            <input id="cfgOwnerRepo" type="text" placeholder="x8806080/stockbuy"
+                style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px;font-family:monospace">
+        </div>
+        <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">分支（通常是 main）</label>
+            <input id="cfgBranch" type="text" placeholder="main"
+                style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px;font-family:monospace">
+        </div>
+        <div style="margin-bottom:20px">
+            <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">Personal Access Token</label>
+            <input id="cfgToken" type="password" placeholder="ghp_..."
+                style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px;font-family:monospace">
+            <div style="font-size:11px;color:#475569;margin-top:4px">Token 僅存在瀏覽器本機，不會上傳。</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button onclick="closeSettings()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">取消</button>
+            <button onclick="saveSettings()" style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700">確認</button>
+        </div>
+    </div>
 </div>
 
 <div class="container">
     <h1>🚀 籌碼先行動能待發 - 量化分析儀 <small style="font-size:14px;color:#7f8c8d">（評分可調版）</small></h1>
 
+
+    <!-- ══ 歷史查詢 & 共振比對 ══ -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">📅 歷史分析查詢 & 共振比對</h2>
+            <button id="histToggleBtn" onclick="toggleHistPanel()"
+                style="background:var(--bg2);color:var(--accent2);border:1px solid var(--border);padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer">
+                ▲ 收折
+            </button>
+        </div>
+        <div id="histPanelInner" style="margin-top:14px">
+            <!-- 選日期 -->
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+                <select id="histDateSelect"
+                    style="padding:7px 12px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:14px;min-width:160px">
+                    <option value="">── 選擇分析日期 ──</option>
+                </select>
+                <button onclick="loadHistoryView()"
+                    style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">
+                    📂 載入
+                </button>
+                <button onclick="loadResonanceAnalysis()"
+                    style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">
+                    🔗 共振比對
+                </button>
+                <span id="histLoadMsg" style="font-size:12px;color:var(--text-dim)"></span>
+            </div>
+            <!-- 歷史結果顯示區 -->
+            <div id="histViewArea"></div>
+        </div>
+    </div>
     <!-- ══════════════ 歷史紀錄區 ══════════════ -->
     <div class="history-panel">
             <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
@@ -1231,8 +1276,11 @@
                            .map(([s,st])=>({代號:s,名稱:masterDict[s]?.名稱||'',共振次數:st.size,ETF清單:[...st].join(' / ')}))
                            .filter(r=>r.共振次數>=(SC.etf?.minCount||2))
                            .sort((a,b)=>b.共振次數-a.共振次數),
+            rise5d: [...rise5dTop40],
+            rise1m: [...rise1mTop40],
         };
-        saveResult(resultPayload); // 非同步，不 block UI
+        saveResult(resultPayload); // 同步最新結果
+        saveDailyResult(resultPayload, todayKey()); // 同步每日歷史
 
         // 產出 PDF 按鈕 + 報告尾部
         const pdfDate = new Date().toLocaleString('zh-TW', {
@@ -1286,15 +1334,22 @@
     // ╔══════════════════════════════════════════════════════╗
     // ║       GitHub Repo 同步設定（只需填入 TOKEN）          ║
     // ╚══════════════════════════════════════════════════════╝
+    // ── GitHub 同步設定（從 localStorage 讀取，透過設定 Modal 修改）──
+    const CFG_KEY = 'gh_sync_config_v1';
+    function getRepoConfig() {
+        try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch { return {}; }
+    }
     const REPO_CONFIG = {
-        OWNER       : 'x8806080',
-        REPO        : 'stockbuy',
-        BRANCH      : 'main',
-        FILE        : 'data/history.json',      // 歷史溫度紀錄
-        RESULT_FILE : 'data/result.json',        // 最新分析結果
-        get TOKEN() { return localStorage.getItem('gh_token') || ''; },
+        get OWNER()  { return getRepoConfig().owner  || 'x8806080'; },
+        get REPO()   { return getRepoConfig().repo   || 'stockbuy'; },
+        get BRANCH() { return getRepoConfig().branch || 'main'; },
+        get TOKEN()  { return getRepoConfig().token  || ''; },
+        FILE        : 'data/history.json',
+        RESULT_FILE : 'data/result.json',
+        HIST_DIR    : 'data/daily',           // 每日分析存放目錄
     };
-    const RESULT_LS_KEY = 'lastAnalysisResult_v1'; // localStorage key
+    const RESULT_LS_KEY = 'lastAnalysisResult_v1';
+    const DAILY_INDEX_FILE = 'data/daily/index.json'; // 每日分析索引
     // ────────────────────────────────────────────────────────
     // TOKEN 取得方式：
     //   GitHub → Settings → Developer Settings
@@ -1355,6 +1410,70 @@
         }
     }
 
+
+
+    // ── 每日分析存檔 ──────────────────────────────────────────
+    function todayKey() {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function dailyFileURL(dateKey) {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/data/daily/${dateKey}.json`;
+    }
+    function dailyIndexURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${DAILY_INDEX_FILE}`;
+    }
+    async function repoGet(url) {
+        const r = await fetch(url, { headers: repoHeaders() });
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+    }
+    async function repoPut(url, contentObj, sha, message) {
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(contentObj, null, 2))));
+        const body = JSON.stringify({ message, content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) });
+        const r = await fetch(url, { method:'PUT', headers: repoHeaders(), body });
+        if (!r.ok) throw new Error(await r.text());
+        return r.json();
+    }
+
+    async function saveDailyResult(payload, dateKey) {
+        if (!hasRepo()) return;
+        try {
+            const existing = await repoGet(dailyFileURL(dateKey));
+            await repoPut(dailyFileURL(dateKey), payload, existing?.sha, `analysis ${dateKey}`);
+            // 更新 index
+            const idxData = await repoGet(dailyIndexURL());
+            let idx = [];
+            if (idxData) {
+                try { idx = JSON.parse(atob(idxData.content.replace(/\\n/g,''))); } catch {}
+            }
+            if (!idx.includes(dateKey)) { idx.push(dateKey); idx.sort().reverse(); }
+            if (idx.length > 365) idx = idx.slice(0,365); // 最多保留 1 年
+            await repoPut(dailyIndexURL(), idx, idxData?.sha, `update index ${dateKey}`);
+            console.log(`✅ 每日分析 ${dateKey} 已同步`);
+        } catch(e) {
+            console.warn('每日分析同步失敗:', e.message);
+        }
+    }
+
+    async function loadDailyIndex() {
+        if (!hasRepo()) return [];
+        try {
+            const data = await repoGet(dailyIndexURL());
+            if (!data) return [];
+            return JSON.parse(atob(data.content.replace(/\\n/g,'')));
+        } catch { return []; }
+    }
+
+    async function loadDailyResult(dateKey) {
+        if (!hasRepo()) return null;
+        try {
+            const data = await repoGet(dailyFileURL(dateKey));
+            if (!data) return null;
+            return JSON.parse(atob(data.content.replace(/\\n/g,'')));
+        } catch { return null; }
+    }
 
     // ── 分析結果 同步 ────────────────────────────────────
     async function saveResult(payload) {
@@ -1690,6 +1809,87 @@
     }
 
 
+    // ── 歷史查詢 & 共振比對 ──────────────────────────────────
+    async function initHistDateSelect() {
+        const idx = await loadDailyIndex();
+        const sel = document.getElementById('histDateSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">── 選擇分析日期 ──</option>';
+        idx.forEach(dateKey => {
+            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            sel.innerHTML += `<option value="${dateKey}">${label}</option>`;
+        });
+    }
+
+    async function loadHistoryView() {
+        const dateKey = document.getElementById('histDateSelect').value;
+        if (!dateKey) { alert('請選擇日期'); return; }
+        const msg = document.getElementById('histLoadMsg');
+        msg.textContent = '載入中…';
+        const payload = await loadDailyResult(dateKey);
+        if (!payload) { msg.textContent = '無此日期資料'; return; }
+        msg.textContent = '';
+        const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+        const { top50=[], thrA, thrB, thrC } = payload;
+        let html = `<div style="background:#1a2540;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#93c5fd;margin-bottom:12px;line-height:1.8">
+            <b>分析日期：${label}</b>&emsp;P70=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;P20=${thrC?(thrC*100).toFixed(3)+'%':'—'}
+        </div>`;
+        html += createSection(
+            'TOP50（'+label+'）', 'TOP50_'+dateKey+'.csv',
+            ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','標註'],
+            top50.slice(0,50).map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
+                r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
+                renderTags(r.狀態標註)])
+        );
+        document.getElementById('histViewArea').innerHTML = html;
+    }
+
+    async function loadResonanceAnalysis() {
+        const dateKey = document.getElementById('histDateSelect').value;
+        if (!dateKey) { alert('請先選擇歷史日期'); return; }
+        const msg = document.getElementById('histLoadMsg');
+        msg.textContent = '比對中…';
+        const payload = await loadDailyResult(dateKey);
+        if (!payload || !payload.top50) { msg.textContent = '無歷史資料'; return; }
+        const latest = await loadResult();
+        msg.textContent = '';
+
+        const histTop50Syms = new Set((payload.top50||[]).map(r=>r.代號));
+        const histTop50Map  = Object.fromEntries((payload.top50||[]).map(r=>[r.代號,r]));
+        const rise5dSyms    = new Set(latest?.rise5d||[]);
+        const rise1mSyms    = new Set(latest?.rise1m||[]);
+        const both   = [...histTop50Syms].filter(s=>rise5dSyms.has(s)&&rise1mSyms.has(s));
+        const only5d = [...histTop50Syms].filter(s=>rise5dSyms.has(s)&&!rise1mSyms.has(s));
+        const only1m = [...histTop50Syms].filter(s=>rise1mSyms.has(s)&&!rise5dSyms.has(s));
+
+        const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+        const headers = ['#','代號','名稱','歷史評分','歷史法人(百萬)','最新評分','最新法人(百萬)','最新標註'];
+        function makeRows(syms) {
+            return syms.map((s,i)=>{
+                const h=histTop50Map[s]||{};
+                const l=(latest?.top50||[]).find(r=>r.代號===s)||{};
+                return [i+1,s,h.名稱||l.名稱||'',h.綜合評分||'-',
+                    (h.三大法人5日買超||0).toLocaleString(),
+                    l.綜合評分||'-',(l.三大法人5日買超||0).toLocaleString(),
+                    renderTags(l.狀態標註||'')];
+            });
+        }
+        let html = `<div style="background:#1a2540;border-left:4px solid #8b5cf6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#c4b5fd;margin-bottom:14px;line-height:1.8">
+            <b>共振比對：${label} 歷史TOP50 vs 最新漲幅排行</b><br>
+            歷史TOP50：${histTop50Syms.size}檔 / 最新5日TOP40：${rise5dSyms.size}檔 / 最新1月TOP40：${rise1mSyms.size}檔<br>
+            <span style="color:#4ade80">5日+1月雙共振：${both.length}檔</span>&emsp;
+            <span style="color:#60a5fa">僅5日：${only5d.length}檔</span>&emsp;
+            <span style="color:#f59e0b">僅1月：${only1m.length}檔</span>
+        </div>`;
+        if (both.length)   html += createSection('5日+1月雙共振（'+both.length+'檔）',   'dual_'+dateKey+'.csv',  headers, makeRows(both));
+        if (only5d.length) html += createSection('僅5日共振（'+only5d.length+'檔）',     '5d_'+dateKey+'.csv',    headers, makeRows(only5d));
+        if (only1m.length) html += createSection('僅1月共振（'+only1m.length+'檔）',     '1m_'+dateKey+'.csv',    headers, makeRows(only1m));
+        if (!both.length && !only5d.length && !only1m.length)
+            html += '<p style="color:var(--text-dim);text-align:center;padding:20px">無共振標的</p>';
+        document.getElementById('histViewArea').innerHTML = html;
+    }
+
+
     // ── PDF 報告產出 ─────────────────────────────────────
     function exportPDF(dateStr) {
         // 設定頁首日期
@@ -1700,151 +1900,86 @@
     }
 
 
-    // ── Token 管理 ───────────────────────────────────────
-    function handleTokenInput(val) {
-        val = val.trim();
-        if (val.startsWith('ghp_') && val.length > 10) {
-            localStorage.setItem('gh_token', val);
-            updateTokenStatus();
-            renderHistory();  // 立即嘗試同步（async，不 block UI）
-        } else if (val === '') {
-            localStorage.removeItem('gh_token');
-            updateTokenStatus();
+    // ── 設定 Modal 管理 ─────────────────────────────────────
+    function openSettings() {
+        const cfg = getRepoConfig();
+        document.getElementById('cfgOwnerRepo').value = cfg.owner && cfg.repo ? `${cfg.owner}/${cfg.repo}` : 'x8806080/stockbuy';
+        document.getElementById('cfgBranch').value    = cfg.branch || 'main';
+        document.getElementById('cfgToken').value     = cfg.token  || '';
+        document.getElementById('settingsModal').style.display = 'flex';
+    }
+    function closeSettings() {
+        document.getElementById('settingsModal').style.display = 'none';
+    }
+    function saveSettings() {
+        const ownerRepo = document.getElementById('cfgOwnerRepo').value.trim();
+        const branch    = document.getElementById('cfgBranch').value.trim() || 'main';
+        const token     = document.getElementById('cfgToken').value.trim();
+        const [owner, repo] = ownerRepo.includes('/') ? ownerRepo.split('/') : [ownerRepo, ''];
+        if (!owner || !repo) { alert('請填入正確格式：帳號/repo名稱'); return; }
+        if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+            if (!confirm('Token 格式看起來不正確，確定要儲存？')) return;
         }
+        localStorage.setItem(CFG_KEY, JSON.stringify({ owner, repo, branch, token }));
+        closeSettings();
+        updateSyncStatus();
+        doSync();
     }
-    function clearToken() {
-        localStorage.removeItem('gh_token');
-        const inp = document.getElementById('tokenInput');
-        if (inp) inp.value = '';
-        updateTokenStatus();
-        renderHistory();
+    // ESC 關閉 modal
+    document.addEventListener('keydown', e => { if(e.key==='Escape') closeSettings(); });
+    document.getElementById('settingsModal').addEventListener('click', e => {
+        if(e.target===e.currentTarget) closeSettings();
+    });
+
+    function hasRepo() {
+        const t = REPO_CONFIG.TOKEN;
+        return !!(t && (t.startsWith('ghp_') || t.startsWith('github_pat_')) && REPO_CONFIG.OWNER && REPO_CONFIG.REPO);
     }
-    function updateTokenStatus() {
-        const t = localStorage.getItem('gh_token') || '';
-        const el = document.getElementById('tokenStatus');
-        const inp = document.getElementById('tokenInput');
-        if (!el) return;
-        if (t && t.startsWith('ghp_')) {
-            el.textContent = '✅ 已設定（' + t.slice(0,12) + '...）';
-            el.style.color = '#4ade80';
-            if (inp && !inp.value) inp.value = t;  // 回填（若空）
+
+    function updateSyncStatus(msg, color) {
+        const dot = document.getElementById('syncStatusDot');
+        const txt = document.getElementById('syncStatusMsg');
+        if (!dot || !txt) return;
+        if (msg) {
+            txt.textContent = msg;
+            dot.style.background = color || '#4ade80';
+        } else if (!hasRepo()) {
+            dot.style.background = '#4b5563';
+            txt.textContent = '尚未設定同步（點 ⚙ 設定）';
         } else {
-            el.textContent = '未設定（本機模式）';
-            el.style.color = '#64748b';
-        }
-    }
-
-
-    // ── 載入並渲染上次分析結果 ───────────────────────────
-    async function loadAndRenderResult() {
-        const payload = await loadResult();
-        if (!payload || !payload.top50 || !payload.top50.length) return;
-
-        // 更新 gistMsg 顯示載入狀態
-        const dot = document.getElementById('gistDot');
-        const msg = document.getElementById('gistMsg');
-
-        // 重建六大輸出 HTML（與 runAnalysis 輸出邏輯一致）
-        let outputHTML = '';
-        const SC = getScoreConfig();
-        const { top50, inv, top20, inds, resonance, etfRes, date, thrA, thrB, thrC } = payload;
-
-        // 門檻說明列
-        outputHTML += `<div style="background:#1a2540;border-left:4px solid #3b82f6;border-radius:0 6px 6px 0;
-            padding:10px 14px;font-size:12px;color:#93c5fd;margin-bottom:14px;line-height:1.8">
-            <b>📊 上次分析 ${date||''}　法人比值門檻</b><br>
-            🔴 P70（+60分）= <b>${thrA?(thrA*100).toFixed(3)+'%':'—'}</b>　
-            🟡 P40 = <b>${thrB?(thrB*100).toFixed(3)+'%':'—'}</b>　
-            🟢 P20（+30分）= <b>${thrC?(thrC*100).toFixed(3)+'%':'—'}</b>
-            <span style="margin-left:16px;color:#64748b">（重新上傳 CSV 可更新分析）</span>
-        </div>`;
-
-        // 輸出1
-        outputHTML += createSection(
-            `輸出 1：整份資料 TOP 50 推薦表`, '輸出1_TOP50.csv',
-            ['排名','代號','名稱','評分','法人市值比','法人5日買超(百萬)','市值(億)','大摩排名','投信排名','標註'],
-            top50.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分,
-                r.法人市值比pct||'-', (r.三大法人5日買超||0).toLocaleString(),
-                r.市值億||'-', r.大摩排名||'-', r.投信排名||'-',
-                renderTags(r.狀態標註)])
-        );
-
-        // 輸出2
-        if (inv && inv.length) {
-            outputHTML += createSection(
-                `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, '輸出2_庫存診斷.csv',
-                ['代號','名稱','評分','法人市值比','法人5日(百萬)','法人一月(百萬)','投信(百萬)','營收年增','標註'],
-                inv.map(r => [r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-',
-                    (r.三大法人5日買超||0).toLocaleString(), (r.法人一月買超||0).toLocaleString(),
-                    (r.投信週買超||0).toLocaleString(),
-                    r.營收年增?`+${r.營收年增.toFixed(1)}%`:'-',
-                    renderTags(r.狀態標註)])
-            );
-        }
-
-        // 輸出3
-        if (top20 && top20.length) {
-            outputHTML += createSection(
-                'Top 20 推薦表（排除庫存）', '輸出3_TOP20排除庫存.csv',
-                ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','大摩排名','投信排名','標註'],
-                top20.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分,
-                    r.法人市值比pct||'-', (r.三大法人5日買超||0).toLocaleString(),
-                    r.大摩排名||'-', r.投信排名||'-', renderTags(r.狀態標註)])
-            );
-        }
-
-        // 輸出4 圓餅圖
-        if (inds && inds.length) {
-            const pieData = inds.filter(d=>d.corp>0).map(d=>({label:d.ind, v:d.corp}));
-            let out4HTML = `<div class="report-section">
-                <h2>輸出 4：今日熱門族群解析（TOP50資金匯聚）</h2>`;
-            if (pieData.length) {
-                out4HTML += `<div class="pie-wrap">${buildPieChart(pieData,240)}`;
-                out4HTML += '<div class="pie-legend">' + pieData.map((d,i) => {
-                    const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
-                    return `<div class="pie-legend-item"><div class="pie-swatch" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div>
-                        <span><b>${d.label}</b>：${(d.v/100).toFixed(1)}億</span></div>`;
-                }).join('') + '</div></div>';
-            }
-            out4HTML += `<div class="tbl-wrap"><table>
-                <tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
-            inds.forEach((d,i) => {
-                out4HTML += `<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`;
-            });
-            out4HTML += '</table></div></div>';
-            outputHTML += out4HTML;
-        }
-
-        // 輸出5
-        if (resonance && resonance.length) {
-            outputHTML += createSection(
-                `輸出 5：五日/一月漲幅多重共振清單（${resonance.length} 檔）`, '輸出5_雙漲幅共振.csv',
-                ['排名','代號','名稱','評分','標註'],
-                resonance.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, renderTags(r.狀態標註)])
-            );
-        }
-
-        // 輸出6
-        if (etfRes && etfRes.length) {
-            outputHTML += createSection(
-                `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`, '輸出6_ETF共振.csv',
-                ['排名','代號','名稱','共振次數','出現清單','評分'],
-                etfRes.map((r,i) => [i+1, r.代號, r.名稱, r.共振次數, r.ETF清單, r.綜合評分])
-            );
-        }
-
-        document.getElementById('outputArea').innerHTML = outputHTML;
-        if (dot && msg && hasRepo()) {
             dot.style.background = '#4ade80';
-            msg.textContent = `✅ 已載入上次分析結果（${date||''}）`;
+            const cfg = getRepoConfig();
+            txt.textContent = `✅ 已設定 ${cfg.owner}/${cfg.repo}`;
         }
     }
 
-    // 頁面載入即渲染歷史
-    updateTokenStatus();
+    async function doSync() {
+        if (!hasRepo()) { openSettings(); return; }
+        updateSyncStatus('同步中…', '#facc15');
+        try {
+            await renderHistory();
+            await loadAndRenderResult();
+            updateSyncStatus();
+        } catch(e) {
+            updateSyncStatus('同步失敗：' + e.message, '#f87171');
+        }
+    }
+
+    // ── 歷史查詢面板切換 ──────────────────────────────────
+    function toggleHistPanel() {
+        const el = document.getElementById('histPanelInner');
+        const btn = document.getElementById('histToggleBtn');
+        if (!el) return;
+        const collapsed = el.style.display === 'none';
+        el.style.display = collapsed ? '' : 'none';
+        btn.textContent = collapsed ? '▲ 收折' : '▼ 展開';
+    }
+
+        // 頁面載入初始化
+    updateSyncStatus();
     renderHistory();
-    // 自動載入上次分析結果
-    loadAndRenderResult();
+    initHistDateSelect();      // 載入歷史日期下拉
+    loadAndRenderResult();     // 自動載入上次分析結果
 </script>
 </body>
 </html>
