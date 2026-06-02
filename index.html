@@ -1547,7 +1547,7 @@
         const idxData = await repoGet(dailyIndexURL());
         let idx = [];
         if (idxData) {
-            try { idx = JSON.parse(atob(idxData.content.split('\n').join('').split('\r').join(''))); } catch(e) {
+            try { idx = JSON.parse(decodeURIComponent(escape(atob(idxData.content.split('\n').join('').split('\r').join(''))))); } catch(e) {
                 console.warn('index 解析失敗，重建:', e.message);
             }
         }
@@ -1562,7 +1562,7 @@
         try {
             const data = await repoGet(dailyIndexURL());
             if (!data) return [];
-            return JSON.parse(atob(data.content.split('\n').join('').split('\r').join('')));
+            return JSON.parse(decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join('')))));
         } catch { return []; }
     }
 
@@ -1571,7 +1571,7 @@
         try {
             const data = await repoGet(dailyFileURL(dateKey));
             if (!data) return null;
-            return JSON.parse(atob(data.content.split('\n').join('').split('\r').join('')));
+            return JSON.parse(decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join('')))));
         } catch { return null; }
     }
 
@@ -1617,7 +1617,7 @@
             if (res.status === 404) return local;
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
-            const content = atob(data.content.split('\n').join('').split('\r').join(''));
+            const content = decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join(''))));
             const remote = JSON.parse(content);
             // 比較日期，取較新的
             if (!local || (remote.date && remote.date >= (local.date || ''))) {
