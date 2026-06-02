@@ -348,24 +348,41 @@
             </button>
         </div>
         <div id="histPanelInner" style="margin-top:14px">
-            <!-- 選日期 -->
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-                <select id="histDateSelect"
-                    style="padding:7px 12px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:14px;min-width:160px">
-                    <option value="">── 選擇分析日期 ──</option>
-                </select>
-                <button onclick="loadHistoryView()"
-                    style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">
-                    📂 載入
-                </button>
-                <button onclick="loadResonanceAnalysis()"
-                    style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">
-                    🔗 共振比對
-                </button>
-                <span id="histLoadMsg" style="font-size:12px;color:var(--text-dim)"></span>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
+                <!-- 日期多選清單 -->
+                <div style="flex:0 0 auto;min-width:180px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                        <span style="font-size:12px;color:var(--text-dim)">選擇分析日期（可多選）</span>
+                        <div style="display:flex;gap:6px">
+                            <button onclick="selectAllDates(true)"
+                                style="background:none;border:1px solid var(--border);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">全選</button>
+                            <button onclick="selectAllDates(false)"
+                                style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">清除</button>
+                        </div>
+                    </div>
+                    <div id="histDateList"
+                        style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:6px">
+                        <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入日期清單…</div>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-dim);margin-top:5px">
+                        共振比對可選多個日期，取聯集後與最新漲幅比對
+                    </div>
+                </div>
+                <!-- 操作按鈕 + 狀態 -->
+                <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:10px">
+                    <button onclick="loadHistoryView()"
+                        style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:10px 18px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700;width:100%">
+                        📂 載入報告（單選→完整六大輸出；多選→比較模式）
+                    </button>
+                    <button onclick="loadResonanceAnalysis()"
+                        style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;border:none;padding:10px 18px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700;width:100%">
+                        🔗 多日期共振比對 vs 最新漲幅
+                    </button>
+                    <span id="histLoadMsg" style="font-size:12px;color:var(--text-dim);min-height:16px"></span>
+                </div>
             </div>
             <!-- 歷史結果顯示區 -->
-            <div id="histViewArea"></div>
+            <div id="histViewArea" style="margin-top:16px"></div>
         </div>
     </div>
     <!-- ══════════════ 歷史紀錄區 ══════════════ -->
@@ -546,9 +563,19 @@
 
     <!-- ══════════════ 主控制面板 ══════════════ -->
     <div class="control-panel">
-        <p>1. 點擊下方按鈕，請 <b>框選或 Ctrl+A 一次選取所有 CSV 檔案</b> (包含 庫存.csv 及各項排行)。</p>
-        <input type="file" id="csvFiles" multiple accept=".csv">
-        <button onclick="runAnalysis()">開始執行大師策略分析</button>
+        <p>1. 選取所有 CSV 檔案（含庫存.csv 及各項排行），並設定分析日期後執行。</p>
+        <div class="upload-row" style="margin-bottom:10px">
+            <input type="file" id="csvFiles" multiple accept=".csv" style="flex:1;min-width:0">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <label style="font-size:13px;color:var(--text-dim);white-space:nowrap">📅 分析日期：</label>
+            <input type="date" id="analysisDate"
+                style="padding:7px 12px;border-radius:6px;border:1px solid var(--border);
+                       background:var(--input-bg);color:var(--text);font-size:14px;cursor:pointer"
+                title="指定此批 CSV 的資料日期（輸入舊資料時請手動改日期）">
+            <span style="font-size:11px;color:var(--text-dim)">（輸入舊資料時請手動更改日期）</span>
+        </div>
+        <button onclick="runAnalysis()">▶ 開始執行大師策略分析</button>
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
 
@@ -1279,14 +1306,20 @@
             rise5d: [...rise5dTop40],
             rise1m: [...rise1mTop40],
         };
-        saveResult(resultPayload); // 同步最新結果
-        saveDailyResult(resultPayload, todayKey()); // 同步每日歷史
+        // 取指定日期（輸入舊資料時可能不是今天）
+        const analysisDateKey = getAnalysisDateKey();
+        const analysisLabel   = analysisDateKey.slice(0,4)+'/'+analysisDateKey.slice(4,6)+'/'+analysisDateKey.slice(6,8);
+        resultPayload.date     = analysisLabel;   // 覆蓋為使用者指定日期
+        resultPayload.dateKey  = analysisDateKey;
+
+        // 若指定日期是今天才更新 result.json（最新分析快取）
+        if (analysisDateKey === todayKey()) {
+            saveResult(resultPayload);
+        }
+        saveDailyResult(resultPayload, analysisDateKey); // 每日歷史（依指定日期存檔）
 
         // 產出 PDF 按鈕 + 報告尾部
-        const pdfDate = new Date().toLocaleString('zh-TW', {
-            year:'numeric', month:'2-digit', day:'2-digit',
-            hour:'2-digit', minute:'2-digit'
-        });
+        const pdfDate = analysisLabel + ' ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
         outputHTML += `
         <div class="report-section" style="text-align:center;padding:28px 0 12px;border-top:1px solid var(--border);margin-top:40px">
             <div style="font-size:12px;color:var(--text-dim);margin-bottom:14px">
@@ -1305,6 +1338,23 @@
         </div>`;
 
         document.getElementById('outputArea').innerHTML = outputHTML;
+
+        // 分析完成後，若是舊日期則提示重置為今天
+        if (analysisDateKey !== todayKey()) {
+            const el = document.getElementById('analysisDate');
+            if (el) {
+                const notice = document.createElement('div');
+                notice.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#1e3a5f;color:#93c5fd;padding:12px 18px;border-radius:8px;font-size:13px;z-index:8888;box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer';
+                notice.innerHTML = `📅 已存入歷史 <b>${analysisLabel}</b>，點此重置為今天`;
+                notice.onclick = () => {
+                    const d=new Date();
+                    el.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    document.body.removeChild(notice);
+                };
+                document.body.appendChild(notice);
+                setTimeout(()=>{ if(document.body.contains(notice)) document.body.removeChild(notice); }, 8000);
+            }
+        }
 
         // 更新 PDF 頁首日期
         const sub = document.getElementById('pdfSubtitle');
@@ -1416,6 +1466,15 @@
     function todayKey() {
         const d = new Date();
         return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    }
+    // 讀取使用者指定的分析日期（若未填則用今天）
+    function getAnalysisDateKey() {
+        const el  = document.getElementById('analysisDate');
+        const val = el ? el.value : '';           // 格式：YYYY-MM-DD
+        if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            return val.replace(/-/g, '');          // 轉為 YYYYMMDD
+        }
+        return todayKey();
     }
     function dailyFileURL(dateKey) {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/data/daily/${dateKey}.json`;
@@ -1812,81 +1871,309 @@
     // ── 歷史查詢 & 共振比對 ──────────────────────────────────
     async function initHistDateSelect() {
         const idx = await loadDailyIndex();
-        const sel = document.getElementById('histDateSelect');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">── 選擇分析日期 ──</option>';
-        idx.forEach(dateKey => {
+        const container = document.getElementById('histDateList');
+        if (!container) return;
+        if (!idx || !idx.length) {
+            container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">尚無歷史資料</div>';
+            return;
+        }
+        container.innerHTML = idx.map(dateKey => {
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-            sel.innerHTML += `<option value="${dateKey}">${label}</option>`;
-        });
+            return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:13px;color:var(--text)"
+                onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="${dateKey}" class="hist-date-cb"
+                    style="width:15px;height:15px;accent-color:#3b82f6;cursor:pointer">
+                ${label}
+            </label>`;
+        }).join('');
+    }
+
+    function getSelectedDates() {
+        return [...document.querySelectorAll('.hist-date-cb:checked')].map(cb=>cb.value);
+    }
+
+    function selectAllDates(checked) {
+        document.querySelectorAll('.hist-date-cb').forEach(cb => cb.checked = checked);
+    }
+
+
+    // ── 把 payload 完整渲染到主輸出區（六大輸出）───────────
+    function renderPayloadToOutput(payload, dateLabel) {
+        const { top50=[], inv=[], top20=[], inds=[], resonance=[], etfRes=[],
+                thrA, thrB, thrC, date } = payload;
+        const SC = getScoreConfig();
+        const label = dateLabel || date || '';
+
+        let outputHTML = '';
+
+        // 日期標題列
+        outputHTML += `<div style="background:#1a2540;border-left:4px solid #3b82f6;
+            padding:10px 16px;border-radius:0 8px 8px 0;font-size:13px;color:#93c5fd;
+            margin-bottom:16px;line-height:1.8">
+            <b>📅 歷史資料：${label}</b>&emsp;
+            P70(+${SC.corp?.scoreA||60}分)=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;
+            P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;
+            P20(+${SC.corp?.scoreC||30}分)=${thrC?(thrC*100).toFixed(3)+'%':'—'}
+            <span style="color:#64748b;font-size:11px;margin-left:12px">（重新上傳 CSV 可更新為最新分析）</span>
+        </div>`;
+
+        // 輸出1
+        outputHTML += createSection(
+            `輸出 1：整份資料 TOP 50 推薦表（${label}）`, `輸出1_TOP50_${label.replace(/\//g,'')}.csv`,
+            ['排名','代號','名稱','評分','法人市值比','法人5日買超(百萬)','市值(億)','大摩排名','投信排名','標註'],
+            top50.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
+                r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
+                r.市值億||'-',r.大摩排名||'-',r.投信排名||'-',
+                renderTags(r.狀態標註)])
+        );
+
+        // 輸出2
+        if (inv.length) {
+            outputHTML += createSection(
+                `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, `輸出2_庫存_${label.replace(/\//g,'')}.csv`,
+                ['代號','名稱','評分','法人市值比','法人5日(百萬)','法人一月(百萬)','投信(百萬)','營收年增','標註'],
+                inv.map(r=>[r.代號,r.名稱,r.綜合評分,r.法人市值比pct||'-',
+                    (r.三大法人5日買超||0).toLocaleString(),(r.法人一月買超||0).toLocaleString(),
+                    (r.投信週買超||0).toLocaleString(),
+                    r.營收年增?`+${Number(r.營收年增).toFixed(1)}%`:'-',
+                    renderTags(r.狀態標註)])
+            );
+        } else {
+            outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2>
+                <p style="color:var(--text-dim)">此日期無庫存資料。</p></div>`;
+        }
+
+        // 輸出3
+        if (top20.length) {
+            outputHTML += createSection(
+                `Top 20 推薦表（排除庫存）（${label}）`, `輸出3_TOP20_${label.replace(/\//g,'')}.csv`,
+                ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','大摩排名','投信排名','標註'],
+                top20.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
+                    r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
+                    r.大摩排名||'-',r.投信排名||'-',renderTags(r.狀態標註)])
+            );
+        }
+
+        // 輸出4
+        if (inds.length) {
+            const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+            const pieData = inds.filter(d=>d.corp>0).map(d=>({label:d.ind,v:d.corp}));
+            let out4 = `<div class="report-section"><h2>輸出 4：今日熱門族群解析</h2>`;
+            if (pieData.length) {
+                out4 += `<div class="pie-wrap">${buildPieChart(pieData,220)}`;
+                out4 += '<div class="pie-legend">'+pieData.map((d,i)=>
+                    `<div class="pie-legend-item"><div class="pie-swatch" style="background:${PIE_COLORS[i%8]}"></div>
+                    <span><b>${d.label}</b>：${(d.v/100).toFixed(1)}億</span></div>`
+                ).join('')+'</div></div>';
+            }
+            out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
+            inds.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
+            out4 += `</table></div></div>`;
+            outputHTML += out4;
+        }
+
+        // 輸出5
+        if (resonance.length) {
+            outputHTML += createSection(
+                `輸出 5：五日/一月漲幅多重共振清單（${resonance.length} 檔）`,
+                `輸出5_共振_${label.replace(/\//g,'')}.csv`,
+                ['排名','代號','名稱','評分','標註'],
+                resonance.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,renderTags(r.狀態標註)])
+            );
+        } else {
+            outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單</h2>
+                <p style="color:var(--text-dim)">本期無雙漲幅共振標的。</p></div>`;
+        }
+
+        // 輸出6
+        if (etfRes.length) {
+            outputHTML += createSection(
+                `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
+                `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
+                ['排名','代號','名稱','共振次數','出現清單','評分'],
+                etfRes.map((r,i)=>[i+1,r.代號,r.名稱,r.共振次數,r.ETF清單,r.綜合評分])
+            );
+        } else {
+            outputHTML += `<div class="report-section"><h2>輸出 6：ETF/大摩共振清單</h2>
+                <p style="color:var(--text-dim)">本期無 ETF 共振標的。</p></div>`;
+        }
+
+        // PDF 按鈕
+        outputHTML += `<div class="report-section" style="text-align:center;padding:20px 0 8px;border-top:1px solid var(--border);margin-top:32px">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+                ${label} 分析　·　TOP50 共 ${top50.length} 檔
+            </div>
+            <button class="btn-pdf" onclick="exportPDF('${label}')"
+                style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border:none;
+                       padding:12px 28px;font-size:15px;border-radius:7px;cursor:pointer;
+                       font-weight:700;display:inline-flex;align-items:center;gap:8px">
+                📄 產出 PDF 報告
+            </button>
+        </div>`;
+
+        document.getElementById('outputArea').innerHTML = outputHTML;
+        // 更新 PDF 頁首
+        const sub = document.getElementById('pdfSubtitle');
+        if (sub) sub.textContent = '分析日期：' + label;
+        // 捲動到輸出區
+        document.getElementById('outputArea').scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+
+    // ── 自動載入上次分析結果到 outputArea ────────────────────
+    async function loadAndRenderResult() {
+        const payload = await loadResult();
+        if (!payload || !payload.top50 || !payload.top50.length) return;
+        const dot = document.getElementById('syncStatusDot');
+        const msg = document.getElementById('syncStatusMsg');
+        renderPayloadToOutput(payload, payload.date || '上次分析');
+        if (dot) dot.style.background = '#4ade80';
+        if (msg) {
+            const cfg = getRepoConfig();
+            msg.textContent = `✅ 已載入上次分析結果${cfg.owner?'（'+cfg.owner+'/'+cfg.repo+'）':''}`;
+        }
     }
 
     async function loadHistoryView() {
-        const dateKey = document.getElementById('histDateSelect').value;
-        if (!dateKey) { alert('請選擇日期'); return; }
+        const dates = getSelectedDates();
+        if (!dates.length) { alert('請勾選至少一個日期'); return; }
         const msg = document.getElementById('histLoadMsg');
-        msg.textContent = '載入中…';
+        msg.textContent = `載入中（${dates.length} 個日期）…`;
+
+        if (dates.length === 1) {
+            // 單選 → 完整六大輸出渲染到主輸出區
+            const dateKey = dates[0];
+            const payload = await loadDailyResult(dateKey);
+            if (!payload) { msg.textContent = '❌ 無此日期資料'; return; }
+            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            renderPayloadToOutput(payload, label);
+            msg.textContent = `已載入 ${label} 完整報告`;
+        } else {
+            // 多選 → 逐日 TOP50 顯示在 histViewArea（比較用）
+            const container = document.getElementById('histViewArea');
+            container.innerHTML = '';
+            for (const dateKey of dates) {
+                const payload = await loadDailyResult(dateKey);
+                if (!payload) continue;
+                const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+                const { top50=[], thrA, thrB, thrC } = payload;
+                let html = `<div style="background:#1a2540;border-left:4px solid #3b82f6;
+                    padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#93c5fd;
+                    margin:16px 0 10px;line-height:1.8">
+                    <b>📅 ${label}</b>&emsp;
+                    P70=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;
+                    P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;
+                    P20=${thrC?(thrC*100).toFixed(3)+'%':'—'}&emsp;
+                    <button onclick="loadSingleDate('${dateKey}')"
+                        style="background:#2563eb;color:#fff;border:none;padding:3px 10px;
+                               border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">
+                        📂 載入完整報告
+                    </button>
+                </div>`;
+                html += createSection(
+                    'TOP50（'+label+'）', 'TOP50_'+dateKey+'.csv',
+                    ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','標註'],
+                    top50.slice(0,50).map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
+                        r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
+                        renderTags(r.狀態標註)])
+                );
+                container.innerHTML += html;
+            }
+            msg.textContent = `已載入 ${dates.length} 個日期（點各日期的「載入完整報告」可切換主輸出區）`;
+        }
+    }
+
+    // 多選時單筆載入到主輸出區
+    async function loadSingleDate(dateKey) {
         const payload = await loadDailyResult(dateKey);
-        if (!payload) { msg.textContent = '無此日期資料'; return; }
-        msg.textContent = '';
+        if (!payload) { alert('無此日期資料'); return; }
         const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-        const { top50=[], thrA, thrB, thrC } = payload;
-        let html = `<div style="background:#1a2540;border-left:4px solid #3b82f6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#93c5fd;margin-bottom:12px;line-height:1.8">
-            <b>分析日期：${label}</b>&emsp;P70=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;P20=${thrC?(thrC*100).toFixed(3)+'%':'—'}
-        </div>`;
-        html += createSection(
-            'TOP50（'+label+'）', 'TOP50_'+dateKey+'.csv',
-            ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','標註'],
-            top50.slice(0,50).map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
-                r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
-                renderTags(r.狀態標註)])
-        );
-        document.getElementById('histViewArea').innerHTML = html;
+        renderPayloadToOutput(payload, label);
     }
 
     async function loadResonanceAnalysis() {
-        const dateKey = document.getElementById('histDateSelect').value;
-        if (!dateKey) { alert('請先選擇歷史日期'); return; }
+        const dates = getSelectedDates();
+        if (!dates.length) { alert('請勾選至少一個日期'); return; }
         const msg = document.getElementById('histLoadMsg');
-        msg.textContent = '比對中…';
-        const payload = await loadDailyResult(dateKey);
-        if (!payload || !payload.top50) { msg.textContent = '無歷史資料'; return; }
-        const latest = await loadResult();
+        msg.textContent = `載入 ${dates.length} 個日期資料中…`;
+
+        // 並行載入所有選取日期的資料
+        const payloads = await Promise.all(dates.map(d => loadDailyResult(d)));
+        const latest   = await loadResult();
         msg.textContent = '';
 
-        const histTop50Syms = new Set((payload.top50||[]).map(r=>r.代號));
-        const histTop50Map  = Object.fromEntries((payload.top50||[]).map(r=>[r.代號,r]));
-        const rise5dSyms    = new Set(latest?.rise5d||[]);
-        const rise1mSyms    = new Set(latest?.rise1m||[]);
-        const both   = [...histTop50Syms].filter(s=>rise5dSyms.has(s)&&rise1mSyms.has(s));
-        const only5d = [...histTop50Syms].filter(s=>rise5dSyms.has(s)&&!rise1mSyms.has(s));
-        const only1m = [...histTop50Syms].filter(s=>rise1mSyms.has(s)&&!rise5dSyms.has(s));
+        // 合併多日期 TOP50（聯集），記錄每支股票出現在幾個日期
+        const symDateCount = {}; // sym → 出現日期數
+        const symBestData  = {}; // sym → 評分最高的那筆歷史資料
+        const symDates     = {}; // sym → 出現的日期標籤陣列
 
-        const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-        const headers = ['#','代號','名稱','歷史評分','歷史法人(百萬)','最新評分','最新法人(百萬)','最新標註'];
+        dates.forEach((dateKey, i) => {
+            const payload = payloads[i];
+            if (!payload || !payload.top50) return;
+            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            (payload.top50 || []).forEach(r => {
+                const s = r.代號;
+                symDateCount[s] = (symDateCount[s] || 0) + 1;
+                if (!symBestData[s] || r.綜合評分 > (symBestData[s].綜合評分||0)) symBestData[s] = r;
+                if (!symDates[s]) symDates[s] = [];
+                symDates[s].push(label);
+            });
+        });
+
+        const allHistSyms = Object.keys(symDateCount);
+        const rise5dSyms  = new Set(latest?.rise5d || []);
+        const rise1mSyms  = new Set(latest?.rise1m  || []);
+
+        // 分組（依是否進入最新漲幅排行）
+        const both   = allHistSyms.filter(s => rise5dSyms.has(s) && rise1mSyms.has(s));
+        const only5d = allHistSyms.filter(s => rise5dSyms.has(s) && !rise1mSyms.has(s));
+        const only1m = allHistSyms.filter(s => rise1mSyms.has(s) && !rise5dSyms.has(s));
+
+        // 各組依「出現日期數」降冪排序，再依最新評分
+        const sortFn = (a,b) =>
+            (symDateCount[b]||0)-(symDateCount[a]||0) ||
+            ((latest?.top50||[]).find(r=>r.代號===b)?.綜合評分||0) -
+            ((latest?.top50||[]).find(r=>r.代號===a)?.綜合評分||0);
+        both.sort(sortFn); only5d.sort(sortFn); only1m.sort(sortFn);
+
+        const dateLabels = dates.map(d=>d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8)).join('、');
+        const headers = ['#','代號','名稱','歷史出現次數','出現日期','最高評分','最新評分','最新法人(百萬)','最新標註'];
+
         function makeRows(syms) {
-            return syms.map((s,i)=>{
-                const h=histTop50Map[s]||{};
-                const l=(latest?.top50||[]).find(r=>r.代號===s)||{};
-                return [i+1,s,h.名稱||l.名稱||'',h.綜合評分||'-',
-                    (h.三大法人5日買超||0).toLocaleString(),
-                    l.綜合評分||'-',(l.三大法人5日買超||0).toLocaleString(),
-                    renderTags(l.狀態標註||'')];
+            return syms.map((s,i) => {
+                const h = symBestData[s] || {};
+                const l = (latest?.top50||[]).find(r=>r.代號===s) || {};
+                return [
+                    i+1, s, h.名稱||l.名稱||'',
+                    `${symDateCount[s]}/${dates.length} 天`,
+                    (symDates[s]||[]).join(' / '),
+                    h.綜合評分||'-',
+                    l.綜合評分||'-',
+                    (l.三大法人5日買超||0).toLocaleString(),
+                    renderTags(l.狀態標註||'')
+                ];
             });
         }
-        let html = `<div style="background:#1a2540;border-left:4px solid #8b5cf6;padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#c4b5fd;margin-bottom:14px;line-height:1.8">
-            <b>共振比對：${label} 歷史TOP50 vs 最新漲幅排行</b><br>
-            歷史TOP50：${histTop50Syms.size}檔 / 最新5日TOP40：${rise5dSyms.size}檔 / 最新1月TOP40：${rise1mSyms.size}檔<br>
-            <span style="color:#4ade80">5日+1月雙共振：${both.length}檔</span>&emsp;
-            <span style="color:#60a5fa">僅5日：${only5d.length}檔</span>&emsp;
-            <span style="color:#f59e0b">僅1月：${only1m.length}檔</span>
+
+        const totalUniq = allHistSyms.length;
+        let html = `<div style="background:#1a2540;border-left:4px solid #8b5cf6;padding:12px 16px;border-radius:0 8px 8px 0;font-size:12px;color:#c4b5fd;margin-bottom:16px;line-height:2">
+            <b>🔗 多日期共振比對</b><br>
+            選取日期：<b>${dateLabels}</b>（共 ${dates.length} 天）<br>
+            歷史TOP50聯集：${totalUniq}檔 / 最新5日TOP40：${rise5dSyms.size}檔 / 最新1月TOP40：${rise1mSyms.size}檔<br>
+            <span style="color:#4ade80;font-weight:700">●</span> 5日+1月雙共振：<b style="color:#4ade80">${both.length}檔</b>&emsp;
+            <span style="color:#60a5fa;font-weight:700">●</span> 僅5日：<b style="color:#60a5fa">${only5d.length}檔</b>&emsp;
+            <span style="color:#f59e0b;font-weight:700">●</span> 僅1月：<b style="color:#f59e0b">${only1m.length}檔</b><br>
+            <span style="color:#94a3b8;font-size:11px">「歷史出現次數」= 在幾個選取日期的 TOP50 中出現過，次數越多代表持續入榜</span>
         </div>`;
-        if (both.length)   html += createSection('5日+1月雙共振（'+both.length+'檔）',   'dual_'+dateKey+'.csv',  headers, makeRows(both));
-        if (only5d.length) html += createSection('僅5日共振（'+only5d.length+'檔）',     '5d_'+dateKey+'.csv',    headers, makeRows(only5d));
-        if (only1m.length) html += createSection('僅1月共振（'+only1m.length+'檔）',     '1m_'+dateKey+'.csv',    headers, makeRows(only1m));
+
+        const csvPrefix = dates.join('_');
+        if (both.length)   html += createSection(`🟢 5日+1月 雙共振（${both.length}檔）`,  `dual_${csvPrefix}.csv`,  headers, makeRows(both));
+        if (only5d.length) html += createSection(`🔵 僅5日共振（${only5d.length}檔）`,      `5d_${csvPrefix}.csv`,    headers, makeRows(only5d));
+        if (only1m.length) html += createSection(`🟡 僅1月共振（${only1m.length}檔）`,      `1m_${csvPrefix}.csv`,    headers, makeRows(only1m));
         if (!both.length && !only5d.length && !only1m.length)
             html += '<p style="color:var(--text-dim);text-align:center;padding:20px">無共振標的</p>';
+
         document.getElementById('histViewArea').innerHTML = html;
+        msg.textContent = `完成（${dates.length} 個日期，聯集 ${totalUniq} 檔）`;
     }
 
 
@@ -1976,6 +2263,15 @@
     }
 
         // 頁面載入初始化
+    // 日期選擇器預設為今天
+    (function() {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth()+1).padStart(2,'0');
+        const dd   = String(d.getDate()).padStart(2,'0');
+        const el   = document.getElementById('analysisDate');
+        if (el) el.value = `${yyyy}-${mm}-${dd}`;
+    })();
     updateSyncStatus();
     renderHistory();
     initHistDateSelect();      // 載入歷史日期下拉
