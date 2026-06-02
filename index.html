@@ -301,6 +301,7 @@
     <span id="syncStatusMsg" style="color:#94a3b8;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">尚未設定同步</span>
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
+    <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1458,7 +1459,14 @@
     }
     function hasRepo() {
         const t = REPO_CONFIG.TOKEN;
-        return t && t.startsWith('ghp_') && t.length > 10;
+        const ok = !!(t && (t.startsWith('ghp_') || t.startsWith('github_pat_')) && t.length > 10);
+        return ok;
+    }
+    function debugConfig() {
+        const cfg = getRepoConfig();
+        console.log('[Config] owner=', cfg.owner, 'repo=', cfg.repo, 'branch=', cfg.branch,
+            'token=', cfg.token ? cfg.token.slice(0,12)+'...' : '(空)');
+        console.log('[hasRepo]', hasRepo());
     }
     function repoFileURL() {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${REPO_CONFIG.FILE}`;
@@ -1567,12 +1575,26 @@
     }
 
     async function loadDailyResult(dateKey) {
-        if (!hasRepo()) return null;
+        console.log('[loadDailyResult] dateKey=', dateKey, 'hasRepo=', hasRepo());
+        if (!hasRepo()) {
+            console.warn('[loadDailyResult] hasRepo() = false，Token 未設定');
+            return null;
+        }
+        const url = dailyFileURL(dateKey);
+        console.log('[loadDailyResult] URL=', url);
         try {
-            const data = await repoGet(dailyFileURL(dateKey));
+            const data = await repoGet(url);
+            console.log('[loadDailyResult] repoGet result=', data ? '有資料' : 'null/404');
             if (!data) return null;
-            return JSON.parse(decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join('')))));
-        } catch { return null; }
+            const raw = data.content.split('\n').join('').split('\r').join('');
+            const decoded = decodeURIComponent(escape(atob(raw)));
+            const parsed = JSON.parse(decoded);
+            console.log('[loadDailyResult] 解析成功, top50筆數=', parsed?.top50?.length);
+            return parsed;
+        } catch(e) {
+            console.error('[loadDailyResult] 失敗:', e.message, e.stack?.split('\n')[0]);
+            return null;
+        }
     }
 
     // ── 分析結果 同步 ────────────────────────────────────
@@ -2079,12 +2101,16 @@
         if (!dates.length) { alert('請勾選至少一個日期'); return; }
         const msg = document.getElementById('histLoadMsg');
         msg.textContent = `載入中（${dates.length} 個日期）…`;
+        console.log('[loadHistoryView] 選取日期:', dates, 'hasRepo:', hasRepo());
 
+        try {
         if (dates.length === 1) {
             // 單選 → 完整六大輸出渲染到主輸出區
             const dateKey = dates[0];
+            console.log('[loadHistoryView] 載入單一日期:', dateKey);
             const payload = await loadDailyResult(dateKey);
-            if (!payload) { msg.textContent = '❌ 無此日期資料'; return; }
+            console.log('[loadHistoryView] payload:', payload ? '有資料' : 'null');
+            if (!payload) { msg.textContent = `❌ 無此日期資料（${dateKey}）`; return; }
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
             renderPayloadToOutput(payload, label);
             msg.textContent = `已載入 ${label} 完整報告`;
@@ -2120,6 +2146,10 @@
                 container.innerHTML += html;
             }
             msg.textContent = `已載入 ${dates.length} 個日期（點各日期的「載入完整報告」可切換主輸出區）`;
+        }
+        } catch(e) {
+            console.error('[loadHistoryView] 錯誤:', e);
+            msg.textContent = `❌ 載入失敗：${e.message}`;
         }
     }
 
@@ -2230,6 +2260,7 @@
 
     // ── 設定 Modal 管理 ─────────────────────────────────────
     function openSettings() {
+        debugConfig();
         const cfg = getRepoConfig();
         document.getElementById('cfgOwnerRepo').value = cfg.owner && cfg.repo ? `${cfg.owner}/${cfg.repo}` : 'x8806080/stockbuy';
         document.getElementById('cfgBranch').value    = cfg.branch || 'main';
