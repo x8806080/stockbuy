@@ -1449,7 +1449,7 @@
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
             // content 是 Base64 編碼
-            const content = atob(data.content.replace(/\\n/g,'').replace(/\\r/g,''));
+            const content = atob(data.content.split('\n').join('').split('\r').join('').replace(/\\r/g,''));
             const remote = JSON.parse(content);
             // 同步到 localStorage 作快取
             localStorage.setItem(HIST_KEY, JSON.stringify(remote));
@@ -1505,7 +1505,7 @@
             const idxData = await repoGet(dailyIndexURL());
             let idx = [];
             if (idxData) {
-                try { idx = JSON.parse(atob(idxData.content.replace(/\\n/g,''))); } catch {}
+                try { idx = JSON.parse(atob(idxData.content.split('\n').join('').split('\r').join(''))); } catch {}
             }
             if (!idx.includes(dateKey)) { idx.push(dateKey); idx.sort().reverse(); }
             if (idx.length > 365) idx = idx.slice(0,365); // 最多保留 1 年
@@ -1521,7 +1521,7 @@
         try {
             const data = await repoGet(dailyIndexURL());
             if (!data) return [];
-            return JSON.parse(atob(data.content.replace(/\\n/g,'')));
+            return JSON.parse(atob(data.content.split('\n').join('').split('\r').join('')));
         } catch { return []; }
     }
 
@@ -1530,7 +1530,7 @@
         try {
             const data = await repoGet(dailyFileURL(dateKey));
             if (!data) return null;
-            return JSON.parse(atob(data.content.replace(/\\n/g,'')));
+            return JSON.parse(atob(data.content.split('\n').join('').split('\r').join('')));
         } catch { return null; }
     }
 
@@ -1576,7 +1576,7 @@
             if (res.status === 404) return local;
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
-            const content = atob(data.content.replace(/\\n/g,''));
+            const content = atob(data.content.split('\n').join('').split('\r').join(''));
             const remote = JSON.parse(content);
             // 比較日期，取較新的
             if (!local || (remote.date && remote.date >= (local.date || ''))) {
@@ -2244,8 +2244,11 @@
         if (!hasRepo()) { openSettings(); return; }
         updateSyncStatus('同步中…', '#facc15');
         try {
-            await renderHistory();
-            await loadAndRenderResult();
+            await Promise.all([
+                renderHistory(),
+                initHistDateSelect(),   // 重新載入歷史日期清單
+                loadAndRenderResult(),
+            ]);
             updateSyncStatus();
         } catch(e) {
             updateSyncStatus('同步失敗：' + e.message, '#f87171');
@@ -2274,8 +2277,10 @@
     })();
     updateSyncStatus();
     renderHistory();
-    initHistDateSelect();      // 載入歷史日期下拉
-    loadAndRenderResult();     // 自動載入上次分析結果
+    if (hasRepo()) {
+        initHistDateSelect();  // 有設定才載入歷史日期
+        loadAndRenderResult(); // 自動載入上次分析結果
+    }
 </script>
 </body>
 </html>
