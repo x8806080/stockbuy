@@ -2378,42 +2378,90 @@
 
     // 從 TWSE 抓取當日全市場收盤價
     // 使用 allorigins.win CORS proxy → TWSE STOCK_DAY_ALL
-    async function fetchTWSEPrices(dateStr) {
-        // dateStr: YYYYMMDD，空白=今天
-        const d = dateStr || (() => {
-            const n=new Date();
+    // ── TWSE 收盤價抓取（今日 / 歷史兩模式）──────────────────
+    // dateStr: YYYYMMDD，空白=今天
+    // symbols: 若為歷史日期，只抓這些代號（避免50次全抓）
+    // onProgress(done, total, sym): 進度回呼
+    async function fetchTWSEPrices(dateStr, symbols, onProgress) {
+        const todayStr = (() => {
+            const n = new Date();
             return `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
         })();
+        const targetDate = dateStr || todayStr;
+        const isToday    = targetDate === todayStr;
+        const priceMap   = {};
 
-        // 方法1：TWSE afterTrading STOCK_DAY_ALL（全市場當日收盤，有 CORS header）
-        const twseUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`;
-
-        const priceMap = {};
-
-        try {
-            const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
-            if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-            const wrapper = await res.json();
-            const data = JSON.parse(wrapper.contents);
-            // TWSE 回傳格式：data.data = [[代號, 名稱, 成交股數, 成交筆數, 成交金額, 開盤, 最高, 最低, 收盤, 漲跌, 漲跌幅], ...]
-            if (data?.data) {
-                data.data.forEach(row => {
-                    const sym = (row[0]||'').trim();
-                    const price = parseFloat((row[8]||'0').replace(/,/g,''));
-                    if (sym && price > 0) priceMap[sym] = price;
-                });
-                console.log(`✅ TWSE 收盤價載入 ${Object.keys(priceMap).length} 檔`);
-                return priceMap;
+        // ── 模式 A：今日 → STOCK_DAY_ALL（全市場，5秒完成）──
+        if (isToday) {
+            const twseUrl  = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
+            const proxy    = `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`;
+            try {
+                const res  = await fetch(proxy, { signal: AbortSignal.timeout(20000) });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const wrap = await res.json();
+                const data = JSON.parse(wrap.contents);
+                if (data?.data) {
+                    data.data.forEach(row => {
+                        const sym   = (row[0]||'').trim();
+                        const price = parseFloat((row[8]||'0').replace(/,/g,''));
+                        if (sym && price > 0) priceMap[sym] = price;
+                    });
+                    console.log(`✅ TWSE STOCK_DAY_ALL: ${Object.keys(priceMap).length} 檔`);
+                    return priceMap;
+                }
+                throw new Error('TWSE 無資料欄位');
+            } catch(e) {
+                console.warn('STOCK_DAY_ALL 失敗:', e.message);
+                throw new Error(`今日收盤抓取失敗：${e.message}`);
             }
-            throw new Error('TWSE 無資料');
-        } catch(e1) {
-            console.warn('TWSE 方法1 失敗:', e1.message, '，嘗試方法2…');
         }
 
-        // 方法2：TWSE 個股即時行情（mis.twse.com.tw，透過 allorigins proxy）
-        // 批次查詢（每批最多 30 支）
-        return priceMap; // 方法1失敗時先回空的，讓 UI 顯示錯誤
+        // ── 模式 B：歷史日期 → 逐支查 STOCK_DAY（批次，有延遲）──
+        // TWSE API：傳入月份第一天即可取得整個月資料，再找目標日
+        const yyyymm   = targetDate.slice(0,6) + '01'; // e.g. 20260601
+        // 目標日的民國格式（用於比對 TWSE 回傳的日期欄）
+        const twYear   = parseInt(targetDate.slice(0,4)) - 1911;
+        const twMonth  = targetDate.slice(4,6);
+        const twDay    = targetDate.slice(6,8);
+        const twDateRE = new RegExp(`^${twYear}/${twMonth}/${twDay}$`);
+
+        const syms    = symbols || [];
+        const total   = syms.length;
+        const BATCH   = 5;    // 每批 5 支
+        const DELAY   = 1200; // 每批間隔 1.2 秒（TWSE 限制每 5 秒 3 次）
+        const proxy   = 'https://api.allorigins.win/get?url=';
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        let done = 0;
+        for (let i = 0; i < syms.length; i += BATCH) {
+            const batch = syms.slice(i, i + BATCH);
+            await Promise.all(batch.map(async sym => {
+                try {
+                    const url    = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${yyyymm}&stockNo=${sym}&response=json`;
+                    const pUrl   = proxy + encodeURIComponent(url);
+                    const res    = await fetch(pUrl, { signal: AbortSignal.timeout(10000) });
+                    if (!res.ok) return;
+                    const wrap   = await res.json();
+                    const data   = JSON.parse(wrap.contents);
+                    if (!data?.data) return;
+                    // 找目標日（TWSE 日期格式：民國 YYY/MM/DD）
+                    const row = data.data.find(r => twDateRE.test((r[0]||'').trim()));
+                    if (row) {
+                        const price = parseFloat((row[6]||'0').replace(/,/g,''));
+                        if (price > 0) priceMap[sym] = price;
+                    }
+                } catch(e) {
+                    console.warn(`${sym} 抓取失敗:`, e.message);
+                }
+                done++;
+                if (onProgress) onProgress(done, total, sym);
+            }));
+            if (i + BATCH < syms.length) await sleep(DELAY);
+        }
+
+        console.log(`✅ 歷史收盤（${targetDate}）抓取完成：${Object.keys(priceMap).length}/${total} 檔`);
+        return priceMap;
     }
 
     // 初始化回測日期清單（與歷史查詢共用 index.json）
@@ -2448,6 +2496,7 @@
         const dateKey = getBacktestDate();
         if (!dateKey) { alert('請選擇入場日期'); return; }
 
+        let goto_result = false;
         const msg = document.getElementById('backtestMsg');
         const result = document.getElementById('backtestResult');
         msg.textContent = '載入歷史資料中…';
@@ -2488,14 +2537,56 @@
         let todayPrices = {};
 
         if (priceSource === 'twse') {
-            msg.textContent = '從 TWSE 抓取收盤價中（約 5-10 秒）…';
-            todayPrices = await fetchTWSEPrices(priceDateStr);
+            const isToday = (() => {
+                const n = new Date();
+                const t = `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
+                return !priceDateStr || priceDateStr === t;
+            })();
+
+            if (isToday) {
+                msg.textContent = '從 TWSE 抓取今日收盤價（約 5-10 秒）…';
+            } else {
+                const syms = entryPayload.top50.map(r => r.代號);
+                msg.innerHTML = `逐支查詢歷史收盤（${priceDateStr}）共 ${syms.length} 支，約 ${Math.ceil(syms.length/5)*1.2|0} 秒…<br>
+                    <div id="btProgress" style="background:var(--border);border-radius:4px;height:8px;margin-top:6px;overflow:hidden">
+                        <div id="btProgressBar" style="background:#10b981;height:100%;width:0;transition:width .3s"></div>
+                    </div>
+                    <span id="btProgressText" style="font-size:11px;color:var(--text-dim)">0 / ${syms.length}</span>`;
+
+                const onProgress = (done, total, sym) => {
+                    const pct = (done/total*100).toFixed(0);
+                    const bar = document.getElementById('btProgressBar');
+                    const txt = document.getElementById('btProgressText');
+                    if (bar) bar.style.width = pct + '%';
+                    if (txt) txt.textContent = `${done} / ${total}（${sym}）`;
+                };
+
+                try {
+                    todayPrices = await fetchTWSEPrices(priceDateStr, syms, onProgress);
+                } catch(e) {
+                    msg.textContent = `❌ ${e.message}`;
+                    return;
+                }
+                const loaded = Object.keys(todayPrices).length;
+                msg.textContent = `✅ 已取得 ${loaded}/${syms.length} 支歷史收盤，比對中…`;
+                goto_result = true;
+            }
+
+            if (isToday) {
+                try {
+                    todayPrices = await fetchTWSEPrices(priceDateStr, null, null);
+                } catch(e) {
+                    msg.textContent = `❌ ${e.message}，請改用 CSV 上傳`;
+                    return;
+                }
+            }
+
             const loaded = Object.keys(todayPrices).length;
             if (loaded === 0) {
                 msg.textContent = '❌ TWSE 抓取失敗，請改用 CSV 上傳，或確認網路連線';
                 return;
             }
-            msg.textContent = `✅ 已載入 ${loaded} 檔收盤價，比對中…`;
+            if (isToday) msg.textContent = `✅ 已載入 ${loaded} 檔收盤價，比對中…`;
         } else {
             const fileEl = document.getElementById('backtestPriceFile');
             if (!fileEl?.files.length) { alert('請上傳 CSV 檔案'); return; }
