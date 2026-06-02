@@ -1276,6 +1276,12 @@
                 法人市值比pct:  r.法人市值比pct||'-',
                 大摩排名:       r.大摩排名||'-',
                 投信排名:       r.投信排名||'-',
+                ETF來源:        r.ETF來源||'',
+                布林σ位置:      r.布林σ位置||null,
+                布林上軌:       r.布林上軌||null,
+                布林中軌:       r.布林中軌||null,
+                布林下軌:       r.布林下軌||null,
+                收盤價:         r.收盤價||null,
             };
         }
         resultPayload.top50     = (resultPayload.top50||[]).map(slimEntry);
@@ -2007,23 +2013,22 @@
         // 輸出1
         outputHTML += createSection(
             `輸出 1：整份資料 TOP 50 推薦表（${label}）`, `輸出1_TOP50_${label.replace(/\//g,'')}.csv`,
-            ['排名','代號','名稱','評分','法人市值比','法人5日買超(百萬)','市值(億)','大摩排名','投信排名','標註'],
+            ['排名','代號','名稱','綜合評分','狀態標註','週K布林位置'],
             top50.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
-                r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
-                r.市值億||'-',r.大摩排名||'-',r.投信排名||'-',
-                renderTags(r.狀態標註)])
+                renderTags(r.狀態標註), renderBoll(r)])
         );
 
         // 輸出2
         if (inv.length) {
             outputHTML += createSection(
                 `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, `輸出2_庫存_${label.replace(/\//g,'')}.csv`,
-                ['代號','名稱','評分','法人市值比','法人5日(百萬)','法人一月(百萬)','投信(百萬)','營收年增','標註'],
-                inv.map(r=>[r.代號,r.名稱,r.綜合評分,r.法人市值比pct||'-',
-                    (r.三大法人5日買超||0).toLocaleString(),(r.法人一月買超||0).toLocaleString(),
-                    (r.投信週買超||0).toLocaleString(),
+                ['代號','名稱','綜合評分','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
+                inv.map(r=>[r.代號,r.名稱,r.綜合評分,
+                    r.三大法人5日買超!==0?r.三大法人5日買超:'⚠️ 0（未讀到）',
+                    r.法人一月買超!==0?r.法人一月買超:'⚠️ 0（未讀到）',
+                    r.投信週買超!==0?r.投信週買超:'⚠️ 0（未讀到）',
                     r.營收年增?`+${Number(r.營收年增).toFixed(1)}%`:'-',
-                    renderTags(r.狀態標註)])
+                    renderTags(r.狀態標註), renderBoll(r)])
             );
         } else {
             outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2>
@@ -2034,10 +2039,9 @@
         if (top20.length) {
             outputHTML += createSection(
                 `Top 20 推薦表（排除庫存）（${label}）`, `輸出3_TOP20_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','大摩排名','投信排名','標註'],
+                ['排名','代號','名稱','綜合評分','籌碼狀態標註','週K布林位置'],
                 top20.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
-                    r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
-                    r.大摩排名||'-',r.投信排名||'-',renderTags(r.狀態標註)])
+                    renderTags(r.狀態標註), renderBoll(r)])
             );
         }
 
@@ -2231,7 +2235,7 @@
         both.sort(sortFn); only5d.sort(sortFn); only1m.sort(sortFn);
 
         const dateLabels = dates.map(d=>d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8)).join('、');
-        const headers = ['#','代號','名稱','歷史出現次數','出現日期','最高評分','最新評分','最新法人(百萬)','最新標註'];
+        const headers = ['#','代號','名稱','歷史出現次數','出現日期','歷史最高評分','最新評分','最新5日法人買超(百萬)','最新1月法人買超(百萬)','最新投信買超(百萬)','最新標註'];
 
         function makeRows(syms) {
             return syms.map((s,i) => {
@@ -2244,6 +2248,8 @@
                     h.綜合評分||'-',
                     l.綜合評分||'-',
                     (l.三大法人5日買超||0).toLocaleString(),
+                    (l.法人一月買超||0).toLocaleString(),
+                    (l.投信週買超||0).toLocaleString(),
                     renderTags(l.狀態標註||'')
                 ];
             });
