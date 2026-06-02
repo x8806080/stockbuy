@@ -387,6 +387,75 @@
             <div id="histViewArea" style="margin-top:16px"></div>
         </div>
     </div>
+
+    <!-- ══ 績效回測追蹤 ══ -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">
+                📈 TOP50 績效回測追蹤
+            </h2>
+            <button id="backtestToggleBtn" onclick="toggleBacktest()"
+                style="background:var(--bg2);color:var(--accent2);border:1px solid var(--border);padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer">
+                ▲ 收折
+            </button>
+        </div>
+        <div id="backtestPanelInner" style="margin-top:14px">
+            <!-- Step 1：選入場日 -->
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px">
+                <div style="flex:0 0 auto;min-width:180px">
+                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">① 選擇入場日期</div>
+                    <div id="backtestDateList"
+                        style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:6px">
+                        <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入…</div>
+                    </div>
+                </div>
+                <div style="flex:1;min-width:220px">
+                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">② 選擇現價來源</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
+                            <input type="radio" name="priceSource" value="twse" checked style="accent-color:#10b981"> 自動抓取（TWSE 當日收盤）
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
+                            <input type="radio" name="priceSource" value="csv" style="accent-color:#10b981"> 上傳 CSV
+                        </label>
+                    </div>
+                    <div id="backtestCsvRow" style="display:none;margin-bottom:8px">
+                        <input type="file" id="backtestPriceFile" accept=".csv"
+                            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);font-size:13px">
+                        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">上傳含「代號」與「成交/收盤價」的 CSV</div>
+                    </div>
+                    <div id="backtestPriceDate" style="margin-bottom:8px;font-size:12px;color:var(--text-dim)">
+                        現價日期：<input type="date" id="btPriceDate"
+                            style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                        <span style="margin-left:4px;color:#64748b">（空白=今日）</span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                        <button onclick="runBacktest()"
+                            style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
+                            📊 執行回測
+                        </button>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
+                            <label>持有天數篩選：</label>
+                            <select id="btHoldDays" style="padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                                <option value="0">全部</option>
+                                <option value="5">≥ 5 日</option>
+                                <option value="10">≥ 10 日</option>
+                                <option value="20" selected>≥ 20 日</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
+                            <label>最低評分：</label>
+                            <input type="number" id="btMinScore" value="70" min="0" max="200"
+                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                        </div>
+                    </div>
+                    <div id="backtestMsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:16px"></div>
+                </div>
+            </div>
+            <!-- 回測結果 -->
+            <div id="backtestResult"></div>
+        </div>
+    </div>
     <!-- ══════════════ 歷史紀錄區 ══════════════ -->
     <div class="history-panel">
             <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
@@ -2278,6 +2347,280 @@
     }
 
 
+
+    // ══════════════════════════════════════════════════════
+    // 績效回測追蹤
+    // ══════════════════════════════════════════════════════
+    function toggleBacktest() {
+        const el  = document.getElementById('backtestPanelInner');
+        const btn = document.getElementById('backtestToggleBtn');
+        if (!el) return;
+        const collapsed = el.style.display === 'none';
+        el.style.display = collapsed ? '' : 'none';
+        btn.textContent = collapsed ? '▲ 收折' : '▼ 展開';
+    }
+
+    // 切換 CSV/自動抓取
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('input[name="priceSource"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const csvRow = document.getElementById('backtestCsvRow');
+                if (csvRow) csvRow.style.display = r.value==='csv'?'':'none';
+            });
+        });
+        // 設定現價日期預設為今天
+        const el = document.getElementById('btPriceDate');
+        if (el) {
+            const d=new Date();
+            el.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+    });
+
+    // 從 TWSE 抓取當日全市場收盤價
+    // 使用 allorigins.win CORS proxy → TWSE STOCK_DAY_ALL
+    async function fetchTWSEPrices(dateStr) {
+        // dateStr: YYYYMMDD，空白=今天
+        const d = dateStr || (() => {
+            const n=new Date();
+            return `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
+        })();
+
+        // 方法1：TWSE afterTrading STOCK_DAY_ALL（全市場當日收盤，有 CORS header）
+        const twseUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`;
+
+        const priceMap = {};
+
+        try {
+            const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+            if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+            const wrapper = await res.json();
+            const data = JSON.parse(wrapper.contents);
+            // TWSE 回傳格式：data.data = [[代號, 名稱, 成交股數, 成交筆數, 成交金額, 開盤, 最高, 最低, 收盤, 漲跌, 漲跌幅], ...]
+            if (data?.data) {
+                data.data.forEach(row => {
+                    const sym = (row[0]||'').trim();
+                    const price = parseFloat((row[8]||'0').replace(/,/g,''));
+                    if (sym && price > 0) priceMap[sym] = price;
+                });
+                console.log(`✅ TWSE 收盤價載入 ${Object.keys(priceMap).length} 檔`);
+                return priceMap;
+            }
+            throw new Error('TWSE 無資料');
+        } catch(e1) {
+            console.warn('TWSE 方法1 失敗:', e1.message, '，嘗試方法2…');
+        }
+
+        // 方法2：TWSE 個股即時行情（mis.twse.com.tw，透過 allorigins proxy）
+        // 批次查詢（每批最多 30 支）
+        return priceMap; // 方法1失敗時先回空的，讓 UI 顯示錯誤
+    }
+
+    // 初始化回測日期清單（與歷史查詢共用 index.json）
+    async function initBacktestDateList() {
+        const idx = await loadDailyIndex();
+        const container = document.getElementById('backtestDateList');
+        if (!container) return;
+        if (!idx || !idx.length) {
+            container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">尚無歷史資料</div>';
+            return;
+        }
+        container.innerHTML = idx.map(dateKey => {
+            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:13px;color:var(--text)"
+                onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background=''">
+                <input type="radio" name="btDate" value="${dateKey}" class="bt-date-rb"
+                    style="accent-color:#10b981;cursor:pointer">
+                ${label}
+            </label>`;
+        }).join('');
+        // 預設選第一個
+        const first = container.querySelector('.bt-date-rb');
+        if (first) first.checked = true;
+    }
+
+    function getBacktestDate() {
+        const el = document.querySelector('.bt-date-rb:checked');
+        return el ? el.value : null;
+    }
+
+    async function runBacktest() {
+        const dateKey = getBacktestDate();
+        if (!dateKey) { alert('請選擇入場日期'); return; }
+
+        const msg = document.getElementById('backtestMsg');
+        const result = document.getElementById('backtestResult');
+        msg.textContent = '載入歷史資料中…';
+        result.innerHTML = '';
+
+        // 載入入場日資料
+        let entryPayload;
+        try {
+            entryPayload = await loadDailyResult(dateKey);
+        } catch(e) {
+            msg.textContent = `❌ 載入失敗：${e.message}`;
+            return;
+        }
+        if (!entryPayload?.top50?.length) {
+            msg.textContent = '❌ 無此日期資料';
+            return;
+        }
+
+        // 計算持有天數
+        const priceDateEl = document.getElementById('btPriceDate');
+        const priceDateStr = priceDateEl?.value ? priceDateEl.value.replace(/-/g,'') : null;
+        const priceDate = priceDateStr ? new Date(
+            parseInt(priceDateStr.slice(0,4)),
+            parseInt(priceDateStr.slice(4,6))-1,
+            parseInt(priceDateStr.slice(6,8))
+        ) : new Date();
+        const entryDate = new Date(
+            parseInt(dateKey.slice(0,4)),
+            parseInt(dateKey.slice(4,6))-1,
+            parseInt(dateKey.slice(6,8))
+        );
+        const holdDays = Math.round((priceDate - entryDate) / (1000*60*60*24));
+        const minHold = parseInt(document.getElementById('btHoldDays').value) || 0;
+        const minScore = parseInt(document.getElementById('btMinScore').value) || 0;
+
+        // 取得現價
+        const priceSource = document.querySelector('input[name="priceSource"]:checked')?.value || 'twse';
+        let todayPrices = {};
+
+        if (priceSource === 'twse') {
+            msg.textContent = '從 TWSE 抓取收盤價中（約 5-10 秒）…';
+            todayPrices = await fetchTWSEPrices(priceDateStr);
+            const loaded = Object.keys(todayPrices).length;
+            if (loaded === 0) {
+                msg.textContent = '❌ TWSE 抓取失敗，請改用 CSV 上傳，或確認網路連線';
+                return;
+            }
+            msg.textContent = `✅ 已載入 ${loaded} 檔收盤價，比對中…`;
+        } else {
+            const fileEl = document.getElementById('backtestPriceFile');
+            if (!fileEl?.files.length) { alert('請上傳 CSV 檔案'); return; }
+            msg.textContent = '解析 CSV 中…';
+            todayPrices = await new Promise(resolve => {
+                Papa.parse(fileEl.files[0], {
+                    header: true, skipEmptyLines: true, encoding: 'Big5',
+                    complete: results => {
+                        const priceMap = {};
+                        results.data.forEach(row => {
+                            const sym = (row['代號']||row['股票代號']||row['Code']||'').trim();
+                            const price = parseFloat(
+                                (row['成交']||row['收盤價']||row['收盤']||'0')
+                                .replace(/,/g,'').replace(/[+%▼↗]/g,'').trim()
+                            );
+                            if (sym && price > 0) priceMap[sym] = price;
+                        });
+                        resolve(priceMap);
+                    }
+                });
+            });
+        }
+
+        const label    = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+        const nowLabel = priceDateStr
+            ? priceDateStr.slice(0,4)+'/'+priceDateStr.slice(4,6)+'/'+priceDateStr.slice(6,8)
+            : new Date().toLocaleDateString('zh-TW');
+
+        // 過濾 + 計算報酬率
+        const records = entryPayload.top50
+            .filter(r => (r.綜合評分||0) >= minScore)
+            .map(r => {
+                const entryPrice  = r.收盤價 || null;
+                const currentPrice = todayPrices[r.代號] || null;
+                const returnPct = (entryPrice && currentPrice)
+                    ? ((currentPrice - entryPrice) / entryPrice * 100)
+                    : null;
+                return {
+                    代號: r.代號, 名稱: r.名稱,
+                    入場評分: r.綜合評分,
+                    入場收盤: entryPrice,
+                    現在收盤: currentPrice,
+                    報酬率: returnPct,
+                    狀態標註: r.狀態標註,
+                };
+            })
+            .filter(r => minHold === 0 || holdDays >= minHold)
+            .sort((a,b) => (b.報酬率||0) - (a.報酬率||0));
+
+        const withPrice = records.filter(r => r.報酬率 !== null);
+        const noPrice   = records.filter(r => r.報酬率 === null);
+
+        // 統計
+        const wins    = withPrice.filter(r => r.報酬率 > 0);
+        const loses   = withPrice.filter(r => r.報酬率 <= 0);
+        const avgRet  = withPrice.length ? withPrice.reduce((s,r)=>s+r.報酬率,0)/withPrice.length : 0;
+        const maxWin  = withPrice.length ? Math.max(...withPrice.map(r=>r.報酬率)) : 0;
+        const maxLoss = withPrice.length ? Math.min(...withPrice.map(r=>r.報酬率)) : 0;
+        const winRate = withPrice.length ? wins.length/withPrice.length*100 : 0;
+
+        // 統計列
+        const summaryColor = avgRet >= 0 ? '#4ade80' : '#f87171';
+        let html = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+            ${[
+                ['入場日期', label, '#60a5fa'],
+                ['現價日期', nowLabel, '#60a5fa'],
+                ['持有天數', `${holdDays} 天`, '#94a3b8'],
+                ['有效樣本', `${withPrice.length} 檔`, '#94a3b8'],
+                ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
+                ['平均報酬', `${avgRet>=0?'+':''}${avgRet.toFixed(2)}%`, summaryColor],
+                ['最大獲利', `+${maxWin.toFixed(2)}%`, '#4ade80'],
+                ['最大虧損', `${maxLoss.toFixed(2)}%`, '#f87171'],
+                ['上漲', `${wins.length} 檔`, '#4ade80'],
+                ['下跌', `${loses.length} 檔`, '#f87171'],
+            ].map(([k,v,col]) => `
+                <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+                    <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${k}</div>
+                    <div style="font-size:18px;font-weight:700;color:${col}">${v}</div>
+                </div>`).join('')}
+        </div>`;
+
+        // 明細表
+        const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
+        const csvHeaders = ['代號','名稱','入場評分','入場收盤','現在收盤','報酬率(%)','狀態標註'];
+        const csvRows = [csvHeaders, ...withPrice.map(r=>[
+            r.代號, r.名稱, r.入場評分,
+            r.入場收盤||'-', r.現在收盤||'-',
+            r.報酬率!==null?r.報酬率.toFixed(2):'-',
+            stripHtml(r.狀態標註||'')
+        ])];
+
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+            <span style="font-size:13px;color:var(--text-dim)">共 ${withPrice.length} 檔有現價，${noPrice.length} 檔無現價（未在CSV中）</span>
+            <button class="btn-dl" onclick='downloadCSV("回測_${label.replace(/\//g,"")}.csv",${JSON.stringify(csvRows)})'>⬇ 下載 CSV</button>
+        </div>`;
+
+        html += `<div class="tbl-wrap"><table>
+            <tr><th>代號</th><th>名稱</th><th>入場評分</th><th>入場收盤</th><th>現在收盤</th><th>報酬率</th><th>標註</th></tr>`;
+        withPrice.forEach(r => {
+            const retColor = r.報酬率>0?'#4ade80':r.報酬率<0?'#f87171':'#94a3b8';
+            const retStr = r.報酬率!==null?(r.報酬率>=0?'+':'')+r.報酬率.toFixed(2)+'%':'-';
+            html += `<tr>
+                <td><b>${r.代號}</b></td>
+                <td>${r.名稱}</td>
+                <td>${r.入場評分}</td>
+                <td>${r.入場收盤||'-'}</td>
+                <td>${r.現在收盤||'-'}</td>
+                <td style="color:${retColor};font-weight:700">${retStr}</td>
+                <td>${renderTags(r.狀態標註||'')}</td>
+            </tr>`;
+        });
+        html += `</table></div>`;
+
+        if (noPrice.length > 0) {
+            html += `<details style="margin-top:10px;font-size:12px;color:var(--text-dim)">
+                <summary style="cursor:pointer">⚠️ ${noPrice.length} 檔無現價（CSV 未包含這些代號）</summary>
+                <div style="margin-top:6px">${noPrice.map(r=>r.代號+' '+r.名稱).join('、')}</div>
+            </details>`;
+        }
+
+        result.innerHTML = html;
+        msg.textContent = `回測完成（持有 ${holdDays} 天）`;
+    }
+
     // ── PDF 報告產出 ─────────────────────────────────────
     function exportPDF(dateStr) {
         // 設定頁首日期
@@ -2356,6 +2699,7 @@
             await Promise.all([
                 renderHistory(),
                 initHistDateSelect(),   // 重新載入歷史日期清單
+                initBacktestDateList(), // 回測日期清單
                 loadAndRenderResult(),
             ]);
             updateSyncStatus();
@@ -2387,8 +2731,9 @@
     updateSyncStatus();
     renderHistory();
     if (hasRepo()) {
-        initHistDateSelect();  // 有設定才載入歷史日期
-        loadAndRenderResult(); // 自動載入上次分析結果
+        initHistDateSelect();   // 歷史查詢日期
+        initBacktestDateList(); // 回測日期
+        loadAndRenderResult();  // 自動載入上次分析結果
     }
 </script>
 </body>
