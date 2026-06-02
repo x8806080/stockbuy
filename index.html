@@ -1115,60 +1115,14 @@
 
 
         // 將狀態標註字串轉為彩色 TAG HTML
-        function renderTags(str) {
-            if (!str) return '';
-            return str.split(' / ').filter(Boolean).map(t => {
-                let cls = 'blue';
-                if (t.includes('🏆') || t.includes('比值'))          cls = 'gold';
-                else if (t.includes('🐉') || t.includes('潛龍'))     cls = 'red';
-                else if (t.includes('⚡') || t.includes('超級基本面')) cls = 'orange';
-                else if (t.includes('💎') || t.includes('合買'))      cls = 'teal';
-                else if (t.includes('🔥') || t.includes('族群'))      cls = 'purple';
-                else if (t.includes('🎯') || t.includes('ETF'))       cls = 'green';
-                else if (t.includes('雙動能') || t.includes('動能'))  cls = 'navy';
-                else if (t.includes('月續買') || t.includes('法人'))  cls = 'blue';
-                else if (t.includes('投信'))                           cls = 'lime';
-                else if (t.includes('營收'))                           cls = 'pink';
-                return `<span class="s-tag ${cls}">${t}</span>`;
-            }).join('');
-        }
+
 
 
         // 週K布林通道位置渲染
-        function renderBoll(r) {
-            if (r.布林σ位置 === null || r.布林σ位置 === undefined) {
-                return '<span style="color:#444;font-size:11px">— 無資料</span>';
-            }
-            const s = r.布林σ位置;
-            const sFixed = s.toFixed(2);
 
-            if (s > 3) {
-                // 超過3σ：紅色警示
-                return `<span class="s-tag" style="background:#b91c1c;color:#fff;font-size:12px">🔥 過熱 ${sFixed}σ</span>`;
-            } else if (s > 2) {
-                return `<span class="s-tag" style="background:#d97706;color:#fff;font-size:12px">⚠️ 強勢 ${sFixed}σ</span>`;
-            } else if (s > 1) {
-                return `<span class="s-tag" style="background:#1d4ed8;color:#fff;font-size:12px">↑ 偏上 ${sFixed}σ</span>`;
-            } else if (s >= -1) {
-                return `<span class="s-tag" style="background:#1e3a2f;color:#4ade80;font-size:12px">— 中性 ${sFixed}σ</span>`;
-            } else if (s >= -2) {
-                return `<span class="s-tag" style="background:#1e2d4a;color:#93c5fd;font-size:12px">↓ 偏下 ${sFixed}σ</span>`;
-            } else {
-                return `<span class="s-tag" style="background:#1a1a2e;color:#a78bfa;font-size:12px">↓↓ 弱勢 ${sFixed}σ</span>`;
-            }
-        }
 
-        function createSection(title, filename, headers, dataRows) {
-            // CSV下載用純文字（去除 HTML）
-            const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
-            const csvRows = dataRows.map(row => row.map(stripHtml));
-            let html = `<div class="report-section">
-                <h2>${title} <button class="btn-download" onclick='downloadCSV("${filename}", ${JSON.stringify([headers, ...csvRows])})'>下載 CSV</button></h2>
-                <div class="tbl-wrap"><table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-            dataRows.forEach(row => { html += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`; });
-            html += `</table></div></div>`;
-            return html;
-        }
+
+
 
         // 輸出 1
         outputHTML += createSection(
@@ -1976,6 +1930,59 @@
         document.querySelectorAll('.hist-date-cb').forEach(cb => cb.checked = checked);
     }
 
+
+    function createSection(title, filename, headers, dataRows) {
+        // CSV下載用純文字（去除 HTML）
+        const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
+        const csvRows = dataRows.map(row => row.map(stripHtml));
+        let html = `<div class="report-section">
+            <h2>${title} <button class="btn-download" onclick='downloadCSV("${filename}", ${JSON.stringify([headers, ...csvRows])})'>下載 CSV</button></h2>
+            <div class="tbl-wrap"><table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        dataRows.forEach(row => { html += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`; });
+        html += `</table></div></div>`;
+        return html;
+    }
+
+    function renderTags(str) {
+        if (!str) return '';
+        return str.split(' / ').filter(Boolean).map(t => {
+            let cls = 'blue';
+            if (t.includes('🏆') || t.includes('比值'))          cls = 'gold';
+            else if (t.includes('🐉') || t.includes('潛龍'))     cls = 'red';
+            else if (t.includes('⚡') || t.includes('超級基本面')) cls = 'orange';
+            else if (t.includes('💎') || t.includes('合買'))      cls = 'teal';
+            else if (t.includes('🔥') || t.includes('族群'))      cls = 'purple';
+            else if (t.includes('🎯') || t.includes('ETF'))       cls = 'green';
+            else if (t.includes('雙動能') || t.includes('動能'))  cls = 'navy';
+            else if (t.includes('月續買') || t.includes('法人'))  cls = 'blue';
+            else if (t.includes('投信'))                           cls = 'lime';
+            else if (t.includes('營收'))                           cls = 'pink';
+            return `<span class="s-tag ${cls}">${t}</span>`;
+        }).join('');
+    }
+
+    function renderBoll(r) {
+        if (r.布林σ位置 === null || r.布林σ位置 === undefined) {
+            return '<span style="color:#444;font-size:11px">— 無資料</span>';
+        }
+        const s = r.布林σ位置;
+        const sFixed = s.toFixed(2);
+
+        if (s > 3) {
+            // 超過3σ：紅色警示
+            return `<span class="s-tag" style="background:#b91c1c;color:#fff;font-size:12px">🔥 過熱 ${sFixed}σ</span>`;
+        } else if (s > 2) {
+            return `<span class="s-tag" style="background:#d97706;color:#fff;font-size:12px">⚠️ 強勢 ${sFixed}σ</span>`;
+        } else if (s > 1) {
+            return `<span class="s-tag" style="background:#1d4ed8;color:#fff;font-size:12px">↑ 偏上 ${sFixed}σ</span>`;
+        } else if (s >= -1) {
+            return `<span class="s-tag" style="background:#1e3a2f;color:#4ade80;font-size:12px">— 中性 ${sFixed}σ</span>`;
+        } else if (s >= -2) {
+            return `<span class="s-tag" style="background:#1e2d4a;color:#93c5fd;font-size:12px">↓ 偏下 ${sFixed}σ</span>`;
+        } else {
+            return `<span class="s-tag" style="background:#1a1a2e;color:#a78bfa;font-size:12px">↓↓ 弱勢 ${sFixed}σ</span>`;
+        }
+    }
 
     // ── 把 payload 完整渲染到主輸出區（六大輸出）───────────
     function renderPayloadToOutput(payload, dateLabel) {
