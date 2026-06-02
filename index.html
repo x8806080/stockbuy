@@ -1555,7 +1555,7 @@
         const idxData = await repoGet(dailyIndexURL());
         let idx = [];
         if (idxData) {
-            try { idx = JSON.parse(decodeURIComponent(escape(atob(idxData.content.split('\n').join('').split('\r').join(''))))); } catch(e) {
+            try { idx = decodeGitHubContent(idxData.content); } catch(e) {
                 console.warn('index 解析失敗，重建:', e.message);
             }
         }
@@ -1570,29 +1570,48 @@
         try {
             const data = await repoGet(dailyIndexURL());
             if (!data) return [];
-            return JSON.parse(decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join('')))));
-        } catch { return []; }
+            return decodeGitHubContent(data.content);
+        } catch(e) {
+            console.warn('[loadDailyIndex] 失敗:', e.message);
+            return [];
+        }
+    }
+
+
+    // GitHub Contents API 回傳的 content 欄位一律是 Base64
+    // 但內容本身可能是：
+    //   (A) btoa(unescape(encodeURIComponent(json)))  ← 新版程式存法
+    //   (B) 直接 Base64 encode 純 JSON 文字           ← GitHub API 標準存法 / 舊版
+    function decodeGitHubContent(content) {
+        // 先移除換行（GitHub API 會在 Base64 中插入換行）
+        const b64 = content.split('\n').join('').split('\r').join('');
+        // atob 解碼
+        const raw = atob(b64);
+        // 嘗試方式A：decodeURIComponent(escape(raw))（處理 btoa(unescape(encodeURIComponent(json))) 的結果）
+        try {
+            const decoded = decodeURIComponent(escape(raw));
+            return JSON.parse(decoded);
+        } catch(e1) {
+            // 方式A失敗，嘗試方式B：raw 本身就是 UTF-8 JSON 文字
+            try {
+                // 用 TextDecoder 正確處理 UTF-8
+                const bytes = new Uint8Array(raw.split('').map(ch => ch.charCodeAt(0)));
+                const decoded = new TextDecoder('utf-8').decode(bytes);
+                return JSON.parse(decoded);
+            } catch(e2) {
+                throw new Error('無法解碼：' + e1.message + ' / ' + e2.message);
+            }
+        }
     }
 
     async function loadDailyResult(dateKey) {
-        console.log('[loadDailyResult] dateKey=', dateKey, 'hasRepo=', hasRepo());
-        if (!hasRepo()) {
-            console.warn('[loadDailyResult] hasRepo() = false，Token 未設定');
-            return null;
-        }
-        const url = dailyFileURL(dateKey);
-        console.log('[loadDailyResult] URL=', url);
+        if (!hasRepo()) return null;
         try {
-            const data = await repoGet(url);
-            console.log('[loadDailyResult] repoGet result=', data ? '有資料' : 'null/404');
+            const data = await repoGet(dailyFileURL(dateKey));
             if (!data) return null;
-            const raw = data.content.split('\n').join('').split('\r').join('');
-            const decoded = decodeURIComponent(escape(atob(raw)));
-            const parsed = JSON.parse(decoded);
-            console.log('[loadDailyResult] 解析成功, top50筆數=', parsed?.top50?.length);
-            return parsed;
+            return decodeGitHubContent(data.content);
         } catch(e) {
-            console.error('[loadDailyResult] 失敗:', e.message, e.stack?.split('\n')[0]);
+            console.error('[loadDailyResult]', dateKey, '失敗:', e.message);
             return null;
         }
     }
@@ -1639,8 +1658,7 @@
             if (res.status === 404) return local;
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
-            const content = decodeURIComponent(escape(atob(data.content.split('\n').join('').split('\r').join(''))));
-            const remote = JSON.parse(content);
+            const remote = decodeGitHubContent(data.content);
             // 比較日期，取較新的
             if (!local || (remote.date && remote.date >= (local.date || ''))) {
                 localStorage.setItem(RESULT_LS_KEY, JSON.stringify(remote));
@@ -2101,15 +2119,10 @@
         if (!dates.length) { alert('請勾選至少一個日期'); return; }
         const msg = document.getElementById('histLoadMsg');
         msg.textContent = `載入中（${dates.length} 個日期）…`;
-        console.log('[loadHistoryView] 選取日期:', dates, 'hasRepo:', hasRepo());
-
         try {
         if (dates.length === 1) {
-            // 單選 → 完整六大輸出渲染到主輸出區
             const dateKey = dates[0];
-            console.log('[loadHistoryView] 載入單一日期:', dateKey);
             const payload = await loadDailyResult(dateKey);
-            console.log('[loadHistoryView] payload:', payload ? '有資料' : 'null');
             if (!payload) { msg.textContent = `❌ 無此日期資料（${dateKey}）`; return; }
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
             renderPayloadToOutput(payload, label);
