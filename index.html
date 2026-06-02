@@ -329,6 +329,7 @@
             <div style="font-size:11px;color:#475569;margin-top:4px">Token 僅存在瀏覽器本機，不會上傳。</div>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button onclick="clearAllStoredConfig()" style="background:#450a0a;color:#f87171;border:none;padding:9px 16px;border-radius:7px;cursor:pointer;font-size:13px">🗑 清除設定</button>
             <button onclick="closeSettings()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">取消</button>
             <button onclick="saveSettings()" style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700">確認</button>
         </div>
@@ -1527,7 +1528,10 @@
     async function repoGet(url) {
         const r = await fetch(url, { headers: repoHeaders() });
         if (r.status === 404) return null;
-        if (!r.ok) throw new Error(r.status);
+        if (r.status === 401 || r.status === 403) {
+            throw new Error(`Token 無效或權限不足（HTTP ${r.status}），請重新設定`);
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
     }
     async function repoPut(url, contentObj, sha, message) {
@@ -1605,15 +1609,10 @@
     }
 
     async function loadDailyResult(dateKey) {
-        if (!hasRepo()) return null;
-        try {
-            const data = await repoGet(dailyFileURL(dateKey));
-            if (!data) return null;
-            return decodeGitHubContent(data.content);
-        } catch(e) {
-            console.error('[loadDailyResult]', dateKey, '失敗:', e.message);
-            return null;
-        }
+        if (!hasRepo()) throw new Error('Token 未設定，請點 ⚙ 設定');
+        const data = await repoGet(dailyFileURL(dateKey));
+        if (!data) throw new Error(`找不到 ${dateKey} 的資料（404）`);
+        return decodeGitHubContent(data.content);
     }
 
     // ── 分析結果 同步 ────────────────────────────────────
@@ -2123,7 +2122,6 @@
         if (dates.length === 1) {
             const dateKey = dates[0];
             const payload = await loadDailyResult(dateKey);
-            if (!payload) { msg.textContent = `❌ 無此日期資料（${dateKey}）`; return; }
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
             renderPayloadToOutput(payload, label);
             msg.textContent = `已載入 ${label} 完整報告`;
@@ -2168,10 +2166,16 @@
 
     // 多選時單筆載入到主輸出區
     async function loadSingleDate(dateKey) {
-        const payload = await loadDailyResult(dateKey);
-        if (!payload) { alert('無此日期資料'); return; }
-        const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-        renderPayloadToOutput(payload, label);
+        const msg = document.getElementById('histLoadMsg');
+        try {
+            msg.textContent = '載入中…';
+            const payload = await loadDailyResult(dateKey);
+            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            renderPayloadToOutput(payload, label);
+            msg.textContent = `已載入 ${label}`;
+        } catch(e) {
+            msg.textContent = `❌ ${e.message}`;
+        }
     }
 
     async function loadResonanceAnalysis() {
@@ -2282,6 +2286,13 @@
     }
     function closeSettings() {
         document.getElementById('settingsModal').style.display = 'none';
+    }
+    function clearAllStoredConfig() {
+        // 清除所有可能的舊 key
+        ['gh_sync_config_v1','gh_token','ghToken','github_token'].forEach(k => localStorage.removeItem(k));
+        document.getElementById('cfgToken').value = '';
+        document.getElementById('cfgOwnerRepo').value = '';
+        alert('設定已清除，請重新填入');
     }
     function saveSettings() {
         const ownerRepo = document.getElementById('cfgOwnerRepo').value.trim();
