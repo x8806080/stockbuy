@@ -303,7 +303,7 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.03</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1199,6 +1199,7 @@
 
         // 標記新入選（前次沒有、本次有）
         let newEntryCount = 0;
+        let newEntryDebug = '';
         if (prevTop50Syms.size > 0) {
             top50.forEach(r => {
                 if (!prevTop50Syms.has(r.代號)) {
@@ -1208,12 +1209,15 @@
                     newEntryCount++;
                 }
             });
-            console.log(`[新入選比對] 本次新入選: ${newEntryCount} 檔`);
+            newEntryDebug = `✅ 與前次比對（前次 ${prevTop50Syms.size} 檔），本次新入選 <b style="color:#22d3ee">${newEntryCount}</b> 檔`;
         } else {
-            console.log('[新入選比對] 無前次資料，跳過標記（首次分析）');
+            newEntryDebug = `⚠️ 無前次資料（首次分析或快取遺失），下次分析才會標記新入選`;
         }
 
         outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
+        outputHTML += `<div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:6px;padding:8px 14px;font-size:12px;color:#93c5fd;margin-bottom:8px">
+            🆕 <b>新入選比對：</b>${newEntryDebug}
+        </div>`;
 
 
         // 將狀態標註字串轉為彩色 TAG HTML
