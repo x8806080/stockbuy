@@ -217,6 +217,7 @@
         .s-tag.pink   { background: #881337; color: #fecdd3; }
         .s-tag.navy   { background: #1e3a5f; color: #bfdbfe; }
         .s-tag.lime   { background: #14532d; color: #d9f99d; }
+        .s-tag.new    { background: #0891b2; color: #fff; font-weight:800; letter-spacing:.5px; border: 1px solid #22d3ee; }
 
         /* ══ RWD：平板 ══ */
         @media (max-width: 900px) {
@@ -441,6 +442,8 @@
                                 <option value="5">≥ 5 日</option>
                                 <option value="10">≥ 10 日</option>
                                 <option value="20" selected>≥ 20 日</option>
+                                <option value="30">≥ 1 個月（30日）</option>
+                                <option value="60">≥ 60 日</option>
                             </select>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
@@ -1179,6 +1182,30 @@
         // ── 輸出 ──
         let outputHTML = '';
         const top50 = finalData.slice(0, 50);
+
+        // ── 比對昨日 TOP50，標記新入選 ──
+        // 從 localStorage 快取讀昨日結果（不打 API，只用本地）
+        let prevTop50Syms = new Set();
+        try {
+            const prevRaw = localStorage.getItem(RESULT_LS_KEY);
+            if (prevRaw) {
+                const prev = JSON.parse(prevRaw);
+                if (prev?.top50?.length) {
+                    prev.top50.forEach(r => prevTop50Syms.add(r.代號));
+                }
+            }
+        } catch(e) {}
+        // 標記新入選（前次沒有、本次有）
+        if (prevTop50Syms.size > 0) {
+            top50.forEach(r => {
+                if (!prevTop50Syms.has(r.代號)) {
+                    // 在狀態標註最前方加入「🆕新入選」
+                    r.狀態標註 = r.狀態標註
+                        ? '🆕新入選 / ' + r.狀態標註
+                        : '🆕新入選';
+                }
+            });
+        }
 
         outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
 
@@ -2022,16 +2049,17 @@
         if (!str) return '';
         return str.split(' / ').filter(Boolean).map(t => {
             let cls = 'blue';
-            if (t.includes('🏆') || t.includes('比值'))          cls = 'gold';
-            else if (t.includes('🐉') || t.includes('潛龍'))     cls = 'red';
+            if (t.includes('🆕') || t.includes('新入選'))         cls = 'new';
+            else if (t.includes('🏆') || t.includes('比值'))      cls = 'gold';
+            else if (t.includes('🐉') || t.includes('潛龍'))      cls = 'red';
             else if (t.includes('⚡') || t.includes('超級基本面')) cls = 'orange';
-            else if (t.includes('💎') || t.includes('合買'))      cls = 'teal';
-            else if (t.includes('🔥') || t.includes('族群'))      cls = 'purple';
-            else if (t.includes('🎯') || t.includes('ETF'))       cls = 'green';
-            else if (t.includes('雙動能') || t.includes('動能'))  cls = 'navy';
-            else if (t.includes('月續買') || t.includes('法人'))  cls = 'blue';
-            else if (t.includes('投信'))                           cls = 'lime';
-            else if (t.includes('營收'))                           cls = 'pink';
+            else if (t.includes('💎') || t.includes('合買'))       cls = 'teal';
+            else if (t.includes('🔥') || t.includes('族群'))       cls = 'purple';
+            else if (t.includes('🎯') || t.includes('ETF'))        cls = 'green';
+            else if (t.includes('雙動能') || t.includes('動能'))   cls = 'navy';
+            else if (t.includes('月續買') || t.includes('法人'))   cls = 'blue';
+            else if (t.includes('投信'))                            cls = 'lime';
+            else if (t.includes('營收'))                            cls = 'pink';
             return `<span class="s-tag ${cls}">${t}</span>`;
         }).join('');
     }
@@ -2536,7 +2564,28 @@
         const priceSource = document.querySelector('input[name="priceSource"]:checked')?.value || 'twse';
         let todayPrices = {};
 
-        if (priceSource === 'twse') {
+        // ── 優先：若現價日期與某個歷史分析日期吻合，直接從 repo 讀收盤價（免打 TWSE）──
+        if (priceSource === 'twse' && priceDateStr && hasRepo()) {
+            const allDates = await loadDailyIndex();
+            if (allDates.includes(priceDateStr)) {
+                msg.textContent = `📦 找到 ${nowLabel} 的本地分析資料，直接讀取收盤價…`;
+                try {
+                    const cached = await loadDailyResult(priceDateStr);
+                    if (cached?.top50?.length) {
+                        cached.top50.forEach(r => {
+                            if (r.代號 && r.收盤價) todayPrices[r.代號] = r.收盤價;
+                        });
+                        console.log(`✅ 從 repo 讀取 ${nowLabel} 收盤價：${Object.keys(todayPrices).length} 筆`);
+                        msg.textContent = `✅ 從本地資料讀取 ${Object.keys(todayPrices).length} 支收盤價（${nowLabel}），比對中…`;
+                    }
+                } catch(e) {
+                    console.warn('本地讀取失敗，改用 TWSE:', e.message);
+                }
+            }
+        }
+
+        // 若本地沒有（或日期不符），才去 TWSE 抓
+        if (priceSource === 'twse' && Object.keys(todayPrices).length === 0) {
             const isToday = (() => {
                 const n = new Date();
                 const t = `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
@@ -2587,7 +2636,7 @@
                 return;
             }
             if (isToday) msg.textContent = `✅ 已載入 ${loaded} 檔收盤價，比對中…`;
-        } else {
+        } else if (priceSource === 'csv') {
             const fileEl = document.getElementById('backtestPriceFile');
             if (!fileEl?.files.length) { alert('請上傳 CSV 檔案'); return; }
             msg.textContent = '解析 CSV 中…';
