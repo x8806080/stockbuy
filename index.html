@@ -303,7 +303,7 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04b</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1402,10 +1402,18 @@
 
         // ── 永遠先更新 localStorage 快取 ──
         try { localStorage.setItem(RESULT_LS_KEY, JSON.stringify(resultPayload)); } catch(e) {}
-        // 獨立存一份「本次 TOP50 代號」供下次比對新入選（不被 loadResult 覆蓋）
+        // 獨立存一份「本次 TOP50 代號」供下次比對新入選
+        // 只在「跨日」時才更新（同一天重跑不覆蓋，確保比對的是不同日的資料）
         try {
-            const prevSnap = { date: analysisLabel, syms: top50.map(r=>r.代號) };
-            localStorage.setItem(PREV_TOP50_KEY, JSON.stringify(prevSnap));
+            const existingSnap = JSON.parse(localStorage.getItem(PREV_TOP50_KEY) || 'null');
+            const shouldUpdate = !existingSnap || existingSnap.date !== analysisLabel;
+            if (shouldUpdate) {
+                const prevSnap = { date: analysisLabel, syms: top50.map(r=>r.代號) };
+                localStorage.setItem(PREV_TOP50_KEY, JSON.stringify(prevSnap));
+                console.log(`[PREV_TOP50_KEY] 已更新為 ${analysisLabel}（${prevSnap.syms.length} 檔）`);
+            } else {
+                console.log(`[PREV_TOP50_KEY] 同日（${analysisLabel}）重跑，不覆蓋前次快取（保持比對基準）`);
+            }
         } catch(e) {}
 
         // ── 同步到 GitHub Repo（顯示狀態）──
