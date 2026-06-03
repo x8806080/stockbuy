@@ -304,7 +304,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05c</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1634,6 +1634,18 @@
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
     }
+
+    // raw.githubusercontent.com 直接讀 JSON（直接回傳 JSON，不需 Base64 解碼）
+    async function rawFetch(path) {
+        const cfg = getRepoConfig();
+        const url = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch || 'main'}/${path}`;
+        // 帶 Token header（私有 repo 需要）
+        const headers = hasRepo() ? { 'Authorization': `token ${REPO_CONFIG.TOKEN}` } : {};
+        const r = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`rawFetch HTTP ${r.status}`);
+        return r.json();
+    }
     async function repoPut(url, contentObj, sha, message) {
         const jsonStr = JSON.stringify(contentObj, null, 2);
         const sizeKB  = (jsonStr.length / 1024).toFixed(1);
@@ -1671,6 +1683,13 @@
 
     async function loadDailyIndex() {
         if (!hasRepo()) return [];
+        try {
+            // 優先用 raw URL（不需 Base64 解碼，更可靠）
+            const data = await rawFetch(REPO_CONFIG.HIST_DIR + '/index.json');
+            if (data) return data;
+        } catch(e) {
+            console.warn('[loadDailyIndex] rawFetch 失敗，改用 Contents API:', e.message);
+        }
         try {
             const data = await repoGet(dailyIndexURL());
             if (!data) return [];
@@ -1710,6 +1729,14 @@
 
     async function loadDailyResult(dateKey) {
         if (!hasRepo()) throw new Error('Token 未設定，請點 ⚙ 設定');
+        // 優先用 rawFetch（直接讀 JSON，不需 Base64 解碼）
+        try {
+            const data = await rawFetch(REPO_CONFIG.HIST_DIR + '/' + dateKey + '.json');
+            if (data) return data;
+        } catch(e) {
+            console.warn('[loadDailyResult] rawFetch 失敗，改用 Contents API:', e.message);
+        }
+        // fallback：Contents API
         const data = await repoGet(dailyFileURL(dateKey));
         if (!data) throw new Error(`找不到 ${dateKey} 的資料（404）`);
         return decodeGitHubContent(data.content);
@@ -1753,11 +1780,20 @@
         if (!hasRepo()) return local;
 
         try {
-            const res = await fetch(resultFileURL(), { headers: repoHeaders() });
-            if (res.status === 404) return local;
-            if (!res.ok) throw new Error(res.status);
-            const data = await res.json();
-            const remote = decodeGitHubContent(data.content);
+            // 優先用 raw URL
+            let remote = null;
+            try {
+                remote = await rawFetch(REPO_CONFIG.RESULT_FILE);
+            } catch(e) {
+                console.warn('loadResult rawFetch 失敗，改用 Contents API:', e.message);
+            }
+            if (!remote) {
+                const res = await fetch(resultFileURL(), { headers: repoHeaders() });
+                if (res.status === 404) return local;
+                if (!res.ok) throw new Error(res.status);
+                const data = await res.json();
+                remote = decodeGitHubContent(data.content);
+            }
             // 比較日期，取較新的
             if (!local || (remote.date && remote.date >= (local.date || ''))) {
                 localStorage.setItem(RESULT_LS_KEY, JSON.stringify(remote));
