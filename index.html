@@ -303,7 +303,8 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04b</span>
+    <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1183,23 +1184,44 @@
         let outputHTML = '';
         const top50 = finalData.slice(0, 50);
 
-        // ── 比對前一次 TOP50，標記新入選 ──
-        // 永遠從 localStorage 快取讀前一次結果（分析「前」讀，分析「後」才寫入）
+        // ── 比對前一個歷史日期的 TOP50，標記新入選 ──
+        // 優先從 repo 讀前一個分析日，這樣今天跑就能和昨天比對
         let prevTop50Syms = new Set();
-        try {
-            const prevRaw = localStorage.getItem(PREV_TOP50_KEY);
-            if (prevRaw) {
-                const prev = JSON.parse(prevRaw);
-                if (prev?.syms?.length) {
-                    prev.syms.forEach(sym => prevTop50Syms.add(sym));
-                    console.log(`[新入選比對] 前次TOP50: ${prev.syms.length} 檔（${prev.date||'未知日期'}）`);
-                }
-            }
-        } catch(e) { console.warn('讀取前次快取失敗:', e.message); }
-
-        // 標記新入選（前次沒有、本次有）
+        let prevDateLabel = '';
         let newEntryCount = 0;
         let newEntryDebug = '';
+
+        try {
+            // 從 index.json 找前一個日期（排除今天）
+            const allDates  = await loadDailyIndex();
+            const todayK    = analysisDateKey;
+            const prevDates = allDates.filter(d => d < todayK).sort().reverse();
+            const prevDate  = prevDates[0] || null;
+
+            if (prevDate && hasRepo()) {
+                // 從 repo 載入前一日資料
+                const prevPayload = await loadDailyResult(prevDate);
+                if (prevPayload?.top50?.length) {
+                    prevPayload.top50.forEach(r => prevTop50Syms.add(r.代號));
+                    prevDateLabel = prevDate.slice(0,4)+'/'+prevDate.slice(4,6)+'/'+prevDate.slice(6,8);
+                    console.log(`[新入選比對] 前一日 ${prevDateLabel}：${prevTop50Syms.size} 檔`);
+                }
+            } else if (!hasRepo()) {
+                // 無 repo，fallback 用 localStorage
+                const prevRaw = localStorage.getItem(PREV_TOP50_KEY);
+                if (prevRaw) {
+                    const prev = JSON.parse(prevRaw);
+                    if (prev?.syms?.length && prev.date !== analysisLabel) {
+                        prev.syms.forEach(sym => prevTop50Syms.add(sym));
+                        prevDateLabel = prev.date;
+                    }
+                }
+            }
+        } catch(e) {
+            console.warn('[新入選比對] 載入前次資料失敗:', e.message);
+        }
+
+        // 標記新入選
         if (prevTop50Syms.size > 0) {
             top50.forEach(r => {
                 if (!prevTop50Syms.has(r.代號)) {
@@ -1209,9 +1231,9 @@
                     newEntryCount++;
                 }
             });
-            newEntryDebug = `✅ 與前次比對（前次 ${prevTop50Syms.size} 檔），本次新入選 <b style="color:#22d3ee">${newEntryCount}</b> 檔`;
+            newEntryDebug = `✅ 與 ${prevDateLabel} 比對（${prevTop50Syms.size} 檔），本次新入選 <b style="color:#22d3ee">${newEntryCount}</b> 檔`;
         } else {
-            newEntryDebug = `⚠️ 無前次資料（首次分析或快取遺失），下次分析才會標記新入選`;
+            newEntryDebug = `⚠️ 無前日資料可比對${hasRepo() ? '（尚無歷史紀錄，需先累積至少兩天）' : '（未設定同步）'}`;
         }
 
         outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
@@ -1402,18 +1424,10 @@
 
         // ── 永遠先更新 localStorage 快取 ──
         try { localStorage.setItem(RESULT_LS_KEY, JSON.stringify(resultPayload)); } catch(e) {}
-        // 獨立存一份「本次 TOP50 代號」供下次比對新入選
-        // 只在「跨日」時才更新（同一天重跑不覆蓋，確保比對的是不同日的資料）
+        // localStorage fallback 備份（無 repo 時使用）
         try {
-            const existingSnap = JSON.parse(localStorage.getItem(PREV_TOP50_KEY) || 'null');
-            const shouldUpdate = !existingSnap || existingSnap.date !== analysisLabel;
-            if (shouldUpdate) {
-                const prevSnap = { date: analysisLabel, syms: top50.map(r=>r.代號) };
-                localStorage.setItem(PREV_TOP50_KEY, JSON.stringify(prevSnap));
-                console.log(`[PREV_TOP50_KEY] 已更新為 ${analysisLabel}（${prevSnap.syms.length} 檔）`);
-            } else {
-                console.log(`[PREV_TOP50_KEY] 同日（${analysisLabel}）重跑，不覆蓋前次快取（保持比對基準）`);
-            }
+            const prevSnap = { date: analysisLabel, syms: top50.map(r=>r.代號) };
+            localStorage.setItem(PREV_TOP50_KEY, JSON.stringify(prevSnap));
         } catch(e) {}
 
         // ── 同步到 GitHub Repo（顯示狀態）──
@@ -1544,6 +1558,11 @@
         const ok = !!(t && (t.startsWith('ghp_') || t.startsWith('github_pat_')) && t.length > 10);
         return ok;
     }
+    function resetPrevTop50() {
+        localStorage.removeItem(PREV_TOP50_KEY);
+        alert('✅ localStorage 快取已清除！\n（使用 repo 模式時不影響功能，\n程式會直接從 repo 前一日比對）');
+    }
+
     function debugConfig() {
         const cfg = getRepoConfig();
         console.log('[Config] owner=', cfg.owner, 'repo=', cfg.repo, 'branch=', cfg.branch,
