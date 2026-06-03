@@ -442,7 +442,6 @@
                                 <option value="5">≥ 5 日</option>
                                 <option value="10">≥ 10 日</option>
                                 <option value="20" selected>≥ 20 日</option>
-                                <option value="30">≥ 1 個月（30日）</option>
                                 <option value="60">≥ 60 日</option>
                             </select>
                         </div>
@@ -1183,8 +1182,8 @@
         let outputHTML = '';
         const top50 = finalData.slice(0, 50);
 
-        // ── 比對昨日 TOP50，標記新入選 ──
-        // 從 localStorage 快取讀昨日結果（不打 API，只用本地）
+        // ── 比對前一次 TOP50，標記新入選 ──
+        // 永遠從 localStorage 快取讀前一次結果（分析「前」讀，分析「後」才寫入）
         let prevTop50Syms = new Set();
         try {
             const prevRaw = localStorage.getItem(RESULT_LS_KEY);
@@ -1192,19 +1191,25 @@
                 const prev = JSON.parse(prevRaw);
                 if (prev?.top50?.length) {
                     prev.top50.forEach(r => prevTop50Syms.add(r.代號));
+                    console.log(`[新入選比對] 前次TOP50: ${prev.top50.length} 檔（${prev.date||'未知日期'}）`);
                 }
             }
-        } catch(e) {}
+        } catch(e) { console.warn('讀取前次快取失敗:', e.message); }
+
         // 標記新入選（前次沒有、本次有）
+        let newEntryCount = 0;
         if (prevTop50Syms.size > 0) {
             top50.forEach(r => {
                 if (!prevTop50Syms.has(r.代號)) {
-                    // 在狀態標註最前方加入「🆕新入選」
                     r.狀態標註 = r.狀態標註
                         ? '🆕新入選 / ' + r.狀態標註
                         : '🆕新入選';
+                    newEntryCount++;
                 }
             });
+            console.log(`[新入選比對] 本次新入選: ${newEntryCount} 檔`);
+        } else {
+            console.log('[新入選比對] 無前次資料，跳過標記（首次分析）');
         }
 
         outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
@@ -1390,24 +1395,25 @@
         resultPayload.date     = analysisLabel;   // 覆蓋為使用者指定日期
         resultPayload.dateKey  = analysisDateKey;
 
+        // ── 永遠先更新 localStorage 快取（供下次分析「新入選」比對用）──
+        try { localStorage.setItem(RESULT_LS_KEY, JSON.stringify(resultPayload)); } catch(e) {}
+
         // ── 同步到 GitHub Repo（顯示狀態）──
         if (hasRepo()) {
             updateSyncStatus('分析完成，同步中…', '#facc15');
             try {
-                // 並行執行：每日存檔 + 今天才更新最新快取
-                const tasks = [saveDailyResult(resultPayload, analysisDateKey)];
-                if (analysisDateKey === todayKey()) tasks.push(saveResult(resultPayload));
-                await Promise.all(tasks);
+                // 序列執行：先存每日檔，確認成功後再更新 index 和 result
+                await saveDailyResult(resultPayload, analysisDateKey);
+                if (analysisDateKey === todayKey()) {
+                    await saveResult(resultPayload);
+                }
                 await initHistDateSelect(); // 更新日期清單
                 updateSyncStatus(`✅ 已同步 ${analysisLabel}`, '#4ade80');
-                setTimeout(updateSyncStatus, 4000); // 4秒後回復正常狀態文字
+                setTimeout(updateSyncStatus, 4000);
             } catch(e) {
                 updateSyncStatus(`⚠️ 同步失敗：${e.message}`, '#f87171');
                 console.error('同步失敗詳情:', e);
             }
-        } else {
-            // 未設定 Token，儲存到 localStorage
-            if (analysisDateKey === todayKey()) saveResult(resultPayload);
         }
 
         // 產出 PDF 按鈕 + 報告尾部
