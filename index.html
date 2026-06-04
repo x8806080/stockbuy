@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.06b</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.07</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1209,11 +1209,13 @@
             const prevDate  = prevDates[0] || null;
 
             if (prevDate && hasRepo()) {
-                // 從 repo 載入前一日資料
+                // 從 repo 載入前一日完整資料
                 const prevPayload = await loadDailyResult(prevDate);
                 if (prevPayload?.top50?.length) {
                     prevPayload.top50.forEach(r => prevTop50Syms.add(r.代號));
                     prevDateLabel = prevDate.slice(0,4)+'/'+prevDate.slice(4,6)+'/'+prevDate.slice(6,8);
+                    // 存完整 payload 供後續聯集/交集/差集分析
+                    window._prevDayPayload = { dateKey: prevDate, label: prevDateLabel, payload: prevPayload };
                     console.log(`[新入選比對] 前一日 ${prevDateLabel}：${prevTop50Syms.size} 檔`);
                 }
             } else if (!hasRepo()) {
@@ -1382,6 +1384,67 @@
             );
         } else {
             outputHTML += `<div class="report-section"><h2>輸出 6：大摩與指定 ETF 共振清單</h2><p>本期無標的在指定名單中重疊出現兩次以上。</p></div>`;
+        }
+
+        // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
+        if (window._prevDayPayload && prevTop50Syms.size > 0) {
+            const pd = window._prevDayPayload;
+            const prevMap   = Object.fromEntries((pd.payload.top50||[]).map(r=>[r.代號,r]));
+            const todayMap  = Object.fromEntries(top50.map(r=>[r.代號,r]));
+            const todaySyms = new Set(top50.map(r=>r.代號));
+
+            // 聯集（今天或昨天出現）
+            const unionSyms    = new Set([...todaySyms, ...prevTop50Syms]);
+            // 交集（兩天都有）
+            const intersectSyms = [...todaySyms].filter(s => prevTop50Syms.has(s));
+            // 新入選（今天有昨天沒有）
+            const newEntrySyms  = [...todaySyms].filter(s => !prevTop50Syms.has(s));
+            // 退出（昨天有今天沒有）
+            const droppedSyms   = [...prevTop50Syms].filter(s => !todaySyms.has(s));
+
+            const compHeaders = ['排名','代號','名稱','今日評分','今日5日法人(百萬)','今日1月法人(百萬)','昨日評分','昨日5日法人(百萬)','今日標註'];
+
+            function makeCompRows(syms) {
+                return syms.map((sym,i) => {
+                    const t = todayMap[sym]||{};
+                    const p = prevMap[sym]||{};
+                    return [
+                        i+1, sym, t.名稱||p.名稱||'',
+                        t.綜合評分||'-',
+                        (t.三大法人5日買超||0).toLocaleString(),
+                        (t.法人一月買超||0).toLocaleString(),
+                        p.綜合評分||'-',
+                        (p.三大法人5日買超||0).toLocaleString(),
+                        renderTags(t.狀態標註||''),
+                    ];
+                });
+            }
+
+            const dateRange = `${pd.label} → ${analysisLabel}`;
+            outputHTML += `<div style="background:#1a2540;border-left:4px solid #22d3ee;padding:10px 16px;
+                border-radius:0 8px 8px 0;font-size:12px;color:#a5f3fc;margin-top:32px;margin-bottom:14px;line-height:2">
+                <b>📊 輸出 7：與前日比對分析（${dateRange}）</b><br>
+                今日 TOP50：${todaySyms.size} 檔 ／ 前日 TOP50：${prevTop50Syms.size} 檔<br>
+                🔵 兩日交集（持續入榜）：<b>${intersectSyms.length}</b> 檔 ／
+                🆕 新入選：<b style="color:#22d3ee">${newEntrySyms.length}</b> 檔 ／
+                ⚠️ 退出：<b style="color:#fb923c">${droppedSyms.length}</b> 檔
+            </div>`;
+
+            if (intersectSyms.length) {
+                outputHTML += createSection(
+                    `🔵 兩日交集：${pd.label} & ${analysisLabel} 都在 TOP50（${intersectSyms.length} 檔）`,
+                    `交集_${pd.dateKey}_${analysisDateKey}.csv`, compHeaders, makeCompRows(intersectSyms));
+            }
+            if (newEntrySyms.length) {
+                outputHTML += createSection(
+                    `🆕 ${analysisLabel} 新入選（${newEntrySyms.length} 檔，前日未出現）`,
+                    `新入選_${analysisDateKey}.csv`, compHeaders, makeCompRows(newEntrySyms));
+            }
+            if (droppedSyms.length) {
+                outputHTML += createSection(
+                    `⚠️ ${pd.label} 退出（${droppedSyms.length} 檔，今日不在 TOP50）`,
+                    `退出_${pd.dateKey}.csv`, compHeaders, makeCompRows(droppedSyms));
+            }
         }
 
         document.getElementById('loadingStatus').style.display = 'none';
@@ -1562,7 +1625,8 @@
     const HIST_KEY = 'momentumAnalyzerHistory_v1';
 
     // 全域：最後一次分析結果（PDF按鈕、外部存取用）
-    let _lastAnalysis = { masterDict:{}, top50:[], total:0 }; // localStorage 備用 key
+    let _lastAnalysis   = { masterDict:{}, top50:[], total:0 };
+    window._prevDayPayload = null; // 前一日完整資料 // localStorage 備用 key
 
     // ── GitHub Repo Contents API 工具 ──────────────────
     function repoHeaders() {
