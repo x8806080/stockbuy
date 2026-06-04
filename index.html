@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.06</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.06b</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2418,8 +2418,7 @@
         if (!dates.length) { alert('請勾選至少一個日期'); return; }
         const msg = document.getElementById('histLoadMsg');
         msg.textContent = `載入中（${dates.length} 個日期）…`;
-        try {
-        if (dates.length === 1) {
+        try { if (dates.length === 1) {
             const dateKey = dates[0];
             const payload = await loadDailyResult(dateKey);
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
@@ -2549,8 +2548,7 @@
         } catch(e) {
             console.error('[loadHistoryView] 錯誤:', e);
             msg.textContent = `❌ 載入失敗：${e.message}`;
-        }
-    }
+        } }
 
     // 多選時單筆載入到主輸出區
     // 全域：記錄上一次從歷史載入的 payload（供新入選比對用）
@@ -2705,27 +2703,41 @@
 
         // ── 模式 A：今日 → STOCK_DAY_ALL（全市場，5秒完成）──
         if (isToday) {
-            const twseUrl  = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
-            const proxy    = `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`;
-            try {
-                const res  = await fetch(proxy, { signal: AbortSignal.timeout(20000) });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const wrap = await res.json();
-                const data = JSON.parse(wrap.contents);
-                if (data?.data) {
-                    data.data.forEach(row => {
-                        const sym   = (row[0]||'').trim();
-                        const price = parseFloat((row[8]||'0').replace(/,/g,''));
-                        if (sym && price > 0) priceMap[sym] = price;
-                    });
-                    console.log(`✅ TWSE STOCK_DAY_ALL: ${Object.keys(priceMap).length} 檔`);
-                    return priceMap;
+            const twseUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
+            // 多個備用 proxy，依序嘗試
+            const proxies = [
+                `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`,
+                `https://corsproxy.io/?${encodeURIComponent(twseUrl)}`,
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(twseUrl)}`,
+            ];
+            let lastErr = '';
+            for (const proxy of proxies) {
+                try {
+                    const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
+                    if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
+                    const text = await res.text();
+                    // allorigins 回傳 {contents:...}，其他直接回傳 JSON
+                    let data;
+                    try { const wrap = JSON.parse(text); data = typeof wrap.contents === 'string' ? JSON.parse(wrap.contents) : wrap; }
+                    catch { data = JSON.parse(text); }
+                    if (data?.data) {
+                        data.data.forEach(row => {
+                            const sym   = (row[0]||'').trim();
+                            const price = parseFloat((row[8]||'0').replace(/,/g,''));
+                            if (sym && price > 0) priceMap[sym] = price;
+                        });
+                        if (Object.keys(priceMap).length > 0) {
+                            console.log(`✅ TWSE STOCK_DAY_ALL (${proxy.split('?')[0].split('/').pop()}): ${Object.keys(priceMap).length} 檔`);
+                            return priceMap;
+                        }
+                    }
+                    lastErr = 'TWSE 無資料';
+                } catch(e) {
+                    lastErr = e.message;
+                    console.warn('proxy 失敗:', proxy.split('?')[0], e.message);
                 }
-                throw new Error('TWSE 無資料欄位');
-            } catch(e) {
-                console.warn('STOCK_DAY_ALL 失敗:', e.message);
-                throw new Error(`今日收盤抓取失敗：${e.message}`);
             }
+            throw new Error(`今日收盤抓取失敗（所有 proxy 均失敗）：${lastErr}`);
         }
 
         // ── 模式 B：歷史日期 → 逐支查 STOCK_DAY（批次，有延遲）──
@@ -2741,7 +2753,12 @@
         const total   = syms.length;
         const BATCH   = 5;    // 每批 5 支
         const DELAY   = 1200; // 每批間隔 1.2 秒（TWSE 限制每 5 秒 3 次）
-        const proxy   = 'https://api.allorigins.win/get?url=';
+        const PROXIES = [
+            'https://api.allorigins.win/get?url=',
+            'https://corsproxy.io/?',
+        ];
+        let proxyIdx = 0;
+        const getProxy = () => PROXIES[proxyIdx % PROXIES.length];
 
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -2751,11 +2768,13 @@
             await Promise.all(batch.map(async sym => {
                 try {
                     const url    = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${yyyymm}&stockNo=${sym}&response=json`;
-                    const pUrl   = proxy + encodeURIComponent(url);
+                    const pUrl   = getProxy() + encodeURIComponent(url);
                     const res    = await fetch(pUrl, { signal: AbortSignal.timeout(10000) });
-                    if (!res.ok) return;
-                    const wrap   = await res.json();
-                    const data   = JSON.parse(wrap.contents);
+                    if (!res.ok) { proxyIdx++; return; }
+                    const text   = await res.text();
+                    let data;
+                    try { const wrap=JSON.parse(text); data=typeof wrap.contents==='string'?JSON.parse(wrap.contents):wrap; }
+                    catch { data=JSON.parse(text); }
                     if (!data?.data) return;
                     // 找目標日（TWSE 日期格式：民國 YYY/MM/DD）
                     const row = data.data.find(r => twDateRE.test((r[0]||'').trim()));
