@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04a</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04b</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2555,6 +2555,8 @@
             // 多選 → 並行載入，做聯集/交集/差集分析 + 連續出現天數標記
             const container = document.getElementById('histViewArea');
             container.innerHTML = '<div style="color:var(--text-dim);padding:12px">載入中…</div>';
+            // 先排序（由舊到新），確保「已退出」用最新日判斷
+            dates.sort();
             const payloads = await Promise.all(dates.map(d => loadDailyResult(d).catch(()=>null)));
             const labels   = dates.map(d => d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8));
 
@@ -2590,10 +2592,10 @@
             const lastSet   = dailySets[dailySets.length-1];
             const prevSet   = new Set(dailySets.slice(0,-1).flatMap(d=>[...d.syms]));
             const newEntry  = [...lastSet.syms].filter(s=>!prevSet.has(s));
-            // 只出現第一日沒有之後（退出）
-            const firstSet  = dailySets[0];
-            const laterSet  = new Set(dailySets.slice(1).flatMap(d=>[...d.syms]));
-            const dropped   = [...firstSet.syms].filter(s=>!laterSet.has(s));
+            // 已退出：最新日（最後一個）沒出現，但之前的歷史日有出現
+            const latestSet  = dailySets[dailySets.length-1].syms;
+            const earlierSet = new Set(dailySets.slice(0,-1).flatMap(d=>[...d.syms]));
+            const dropped    = [...earlierSet].filter(s => !latestSet.has(s));
 
             // 連續天數標記 helper
             function continuousTag(count, total) {
@@ -2647,9 +2649,9 @@
                     headers, makeRows(newEntry));
             }
 
-            // 已退出（只在第一日，之後消失）
+            // 已退出（歷史日有，最新日消失）
             if (dropped.length) {
-                html += createSection(`⚠️ 已退出（${dropped.length} 檔，${labels[0]} 有但之後消失）`, `退出_${csvFn}.csv`,
+                html += createSection(`⚠️ 已退出（${dropped.length} 檔，最新日 ${labels[labels.length-1]} 已不在 TOP50）`, `退出_${csvFn}.csv`,
                     headers, makeRows(dropped));
             }
 
@@ -2990,26 +2992,46 @@
         const minHold = parseInt(document.getElementById('btHoldDays').value) || 0;
         const minScore = parseInt(document.getElementById('btMinScore').value) || 0;
 
+        // 提前定義 label / nowLabel（供下方訊息使用，避免 TDZ）
+        const label    = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+        const nowLabel = priceDateStr
+            ? priceDateStr.slice(0,4)+'/'+priceDateStr.slice(4,6)+'/'+priceDateStr.slice(6,8)
+            : new Date().toLocaleDateString('zh-TW');
+
         // 取得現價
         const priceSource = document.querySelector('input[name="priceSource"]:checked')?.value || 'twse';
         let todayPrices = {};
 
-        // ── 優先：若現價日期與某個歷史分析日期吻合，直接從 repo 讀收盤價（免打 TWSE）──
-        if (priceSource === 'twse' && priceDateStr && hasRepo()) {
-            const allDates = await loadDailyIndex();
-            if (allDates.includes(priceDateStr)) {
-                msg.textContent = `📦 找到 ${nowLabel} 的本地分析資料，直接讀取收盤價…`;
+        // ── 優先從 repo 資料庫讀收盤價（免打 TWSE）──
+        let usedRepoDate = '';
+        if (priceSource === 'twse' && hasRepo()) {
+            const allDates = await loadDailyIndex(); // 已排序（新到舊）
+            // 決定要讀哪一天：有指定就用指定，沒指定用 repo 最新一筆（排除入場日當天）
+            let targetDate = null;
+            if (priceDateStr && allDates.includes(priceDateStr)) {
+                targetDate = priceDateStr;
+            } else if (!priceDateStr) {
+                // 未指定 → 用 repo 最新一筆（且要比入場日新）
+                targetDate = allDates.filter(d => d > dateKey).sort().reverse()[0]
+                          || allDates.sort().reverse()[0] || null;
+            }
+            if (targetDate) {
+                const tLabel = targetDate.slice(0,4)+'/'+targetDate.slice(4,6)+'/'+targetDate.slice(6,8);
+                msg.textContent = `📦 從資料庫讀取 ${tLabel} 收盤價…`;
                 try {
-                    const cached = await loadDailyResult(priceDateStr);
+                    const cached = await loadDailyResult(targetDate);
                     if (cached?.top50?.length) {
                         cached.top50.forEach(r => {
                             if (r.代號 && r.收盤價) todayPrices[r.代號] = r.收盤價;
                         });
-                        console.log(`✅ 從 repo 讀取 ${nowLabel} 收盤價：${Object.keys(todayPrices).length} 筆`);
-                        msg.textContent = `✅ 從本地資料讀取 ${Object.keys(todayPrices).length} 支收盤價（${nowLabel}），比對中…`;
+                        if (Object.keys(todayPrices).length > 0) {
+                            usedRepoDate = tLabel;
+                            console.log(`✅ 從 repo 讀取 ${tLabel} 收盤價：${Object.keys(todayPrices).length} 筆`);
+                            msg.textContent = `✅ 從資料庫讀取 ${Object.keys(todayPrices).length} 支收盤價（${tLabel}），比對中…`;
+                        }
                     }
                 } catch(e) {
-                    console.warn('本地讀取失敗，改用 TWSE:', e.message);
+                    console.warn('資料庫讀取失敗，改用 TWSE:', e.message);
                 }
             }
         }
@@ -3089,10 +3111,7 @@
             });
         }
 
-        const label    = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-        const nowLabel = priceDateStr
-            ? priceDateStr.slice(0,4)+'/'+priceDateStr.slice(4,6)+'/'+priceDateStr.slice(6,8)
-            : new Date().toLocaleDateString('zh-TW');
+        // label / nowLabel 已在前面定義
 
         // 過濾 + 計算報酬率
         const records = entryPayload.top50
@@ -3132,7 +3151,7 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
             ${[
                 ['入場日期', label, '#60a5fa'],
-                ['現價日期', nowLabel, '#60a5fa'],
+                ['現價日期', usedRepoDate || nowLabel, '#60a5fa'],
                 ['持有天數', `${holdDays} 天`, '#94a3b8'],
                 ['有效樣本', `${withPrice.length} 檔`, '#94a3b8'],
                 ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
