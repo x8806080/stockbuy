@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.08b</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04a</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -345,6 +345,30 @@
             <button onclick="clearAllStoredConfig()" style="background:#450a0a;color:#f87171;border:none;padding:9px 16px;border-radius:7px;cursor:pointer;font-size:13px">🗑 清除設定</button>
             <button onclick="closeSettings()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">取消</button>
             <button onclick="saveSettings()" style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ 自訂族群 Modal ══ -->
+<div id="industryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#161b25;border:1px solid #2a3350;border-radius:12px;padding:24px 28px;width:min(560px,94vw);max-height:88vh;overflow-y:auto">
+        <h3 style="margin:0 0 4px;color:#a78bfa;font-size:16px">🏷️ 自訂族群對應</h3>
+        <p style="font-size:12px;color:#64748b;margin:0 0 16px;line-height:1.6">
+            為個股指定正確族群（覆蓋 CSV 的相關產業）。一支股票可設多個族群，用逗號分隔。<br>
+            設定會存在本機，並隨分析同步到 repo（所有裝置共用）。
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <input id="indStockInput" type="text" placeholder="股票代號（如 2347）"
+                style="flex:0 0 130px;padding:8px 10px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px;font-family:monospace">
+            <input id="indNameInput" type="text" placeholder="族群名稱（如 PCB,銅箔基板）"
+                style="flex:1;min-width:160px;padding:8px 10px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px">
+            <button onclick="addIndustryMapping()" style="background:#5b21b6;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">＋ 新增</button>
+        </div>
+        <div id="indMappingList" style="max-height:300px;overflow-y:auto;border:1px solid #2a3350;border-radius:8px;background:#0d1220;padding:8px;margin-bottom:16px">
+            <div style="color:#64748b;font-size:12px;padding:8px;text-align:center">尚無自訂族群</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button onclick="closeIndustryEditor()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">關閉</button>
         </div>
     </div>
 </div>
@@ -660,7 +684,10 @@
                 title="指定此批 CSV 的資料日期（輸入舊資料時請手動改日期）">
             <span style="font-size:11px;color:var(--text-dim)">（輸入舊資料時請手動更改日期）</span>
         </div>
-        <button onclick="runAnalysis()">▶ 開始執行大師策略分析</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button onclick="runAnalysis()">▶ 開始執行大師策略分析</button>
+            <button onclick="openIndustryEditor()" style="background:#5b21b6;color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">🏷️ 自訂族群</button>
+        </div>
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
 
@@ -1273,6 +1300,15 @@
 
 
         // 輸出 1
+                // ── 套用自訂族群（覆蓋 CSV 相關產業）──
+        const customInd = getCustomIndustry();
+        top50.forEach(r => {
+            if (customInd[r.代號]) r.相關產業 = customInd[r.代號];
+        });
+        finalData.forEach(r => {
+            if (customInd[r.代號]) r.相關產業 = customInd[r.代號];
+        });
+
         // ── 族群統計（供輸出1標籤 + 輸出4使用）──
         let indMap = {};
         top50.forEach(r => {
@@ -3165,6 +3201,80 @@
     }
 
 
+
+    // ── 自訂族群對應 ──────────────────────────────────────
+    const CUSTOM_IND_KEY = 'customIndustryMap_v1';
+    function getCustomIndustry() {
+        try { return JSON.parse(localStorage.getItem(CUSTOM_IND_KEY)) || {}; } catch { return {}; }
+    }
+    function saveCustomIndustry(map) {
+        localStorage.setItem(CUSTOM_IND_KEY, JSON.stringify(map));
+    }
+    function openIndustryEditor() {
+        renderIndustryList();
+        document.getElementById('industryModal').style.display = 'flex';
+    }
+    function closeIndustryEditor() {
+        document.getElementById('industryModal').style.display = 'none';
+    }
+    function addIndustryMapping() {
+        const sym  = document.getElementById('indStockInput').value.trim();
+        const inds = document.getElementById('indNameInput').value.trim();
+        if (!sym || !inds) { alert('請填入股票代號和族群名稱'); return; }
+        const map = getCustomIndustry();
+        map[sym] = inds;
+        saveCustomIndustry(map);
+        document.getElementById('indStockInput').value = '';
+        document.getElementById('indNameInput').value = '';
+        renderIndustryList();
+        // 同步到 repo
+        syncCustomIndustry();
+    }
+    function delIndustryMapping(sym) {
+        const map = getCustomIndustry();
+        delete map[sym];
+        saveCustomIndustry(map);
+        renderIndustryList();
+        syncCustomIndustry();
+    }
+    function renderIndustryList() {
+        const map = getCustomIndustry();
+        const container = document.getElementById('indMappingList');
+        const keys = Object.keys(map);
+        if (!keys.length) {
+            container.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px;text-align:center">尚無自訂族群</div>';
+            return;
+        }
+        container.innerHTML = keys.map(sym => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #1e2535;font-size:13px">
+                <span style="font-family:monospace;color:#60a5fa;flex:0 0 60px">${sym}</span>
+                <span style="flex:1;color:#cbd5e1">${(map[sym]||'').split(/[,，]/).map(t=>`<span class="s-tag teal">${t.trim()}</span>`).join('')}</span>
+                <button onclick="delIndustryMapping('${sym}')" style="background:none;border:1px solid #450a0a;color:#f87171;padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">刪除</button>
+            </div>`).join('');
+    }
+    // 同步自訂族群到 repo（存成 data/custom_industry.json）
+    async function syncCustomIndustry() {
+        if (!hasRepo()) return;
+        try {
+            const map = getCustomIndustry();
+            const url = `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/data/custom_industry.json`;
+            const existing = await repoGet(url);
+            await repoPut(url, map, existing?.sha, 'update custom industry');
+            console.log('✅ 自訂族群已同步');
+        } catch(e) { console.warn('自訂族群同步失敗:', e.message); }
+    }
+    // 從 repo 載入自訂族群
+    async function loadCustomIndustry() {
+        if (!hasRepo()) return;
+        try {
+            const remote = await rawFetch('data/custom_industry.json');
+            if (remote && typeof remote === 'object') {
+                saveCustomIndustry(remote);
+                console.log('✅ 自訂族群已從 repo 載入:', Object.keys(remote).length, '檔');
+            }
+        } catch(e) { console.warn('自訂族群載入失敗:', e.message); }
+    }
+
     // ── 設定 Modal 管理 ─────────────────────────────────────
     function openSettings() {
         debugConfig();
@@ -3267,8 +3377,13 @@
     if (hasRepo()) {
         initHistDateSelect();   // 歷史查詢日期
         initBacktestDateList(); // 回測日期
+        loadCustomIndustry();   // 載入自訂族群
         loadAndRenderResult();  // 自動載入上次分析結果
     }
+    // 自訂族群 Modal ESC / 點背景關閉
+    document.getElementById('industryModal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeIndustryEditor();
+    });
 </script>
 </body>
 </html>
