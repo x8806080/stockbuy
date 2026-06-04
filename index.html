@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04b</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04c</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1536,6 +1536,12 @@
                            .sort((a,b)=>b.共振次數-a.共振次數),
             rise5d: [...rise5dTop40],
             rise1m: [...rise1mTop40],
+            // 全部分析股票的收盤價對照（供回測調價，不限 TOP50）
+            priceMap: Object.fromEntries(
+                Object.values(masterDict)
+                    .filter(e => e.收盤價 && e.收盤價 > 0)
+                    .map(e => [e.代號, e.收盤價])
+            ),
         };
 
         // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
@@ -3020,10 +3026,15 @@
                 msg.textContent = `📦 從資料庫讀取 ${tLabel} 收盤價…`;
                 try {
                     const cached = await loadDailyResult(targetDate);
-                    if (cached?.top50?.length) {
-                        cached.top50.forEach(r => {
-                            if (r.代號 && r.收盤價) todayPrices[r.代號] = r.收盤價;
-                        });
+                    if (cached) {
+                        // 優先用 priceMap（全市場），舊資料無此欄位則 fallback 用 top50
+                        if (cached.priceMap && Object.keys(cached.priceMap).length) {
+                            Object.assign(todayPrices, cached.priceMap);
+                        } else if (cached.top50?.length) {
+                            cached.top50.forEach(r => {
+                                if (r.代號 && r.收盤價) todayPrices[r.代號] = r.收盤價;
+                            });
+                        }
                         if (Object.keys(todayPrices).length > 0) {
                             usedRepoDate = tLabel;
                             console.log(`✅ 從 repo 讀取 ${tLabel} 收盤價：${Object.keys(todayPrices).length} 筆`);
@@ -3114,10 +3125,12 @@
         // label / nowLabel 已在前面定義
 
         // 過濾 + 計算報酬率
+        // 入場價對照（優先用 priceMap）
+        const entryPriceMap = entryPayload.priceMap || {};
         const records = entryPayload.top50
             .filter(r => (r.綜合評分||0) >= minScore)
             .map(r => {
-                const entryPrice  = r.收盤價 || null;
+                const entryPrice  = r.收盤價 || entryPriceMap[r.代號] || null;
                 const currentPrice = todayPrices[r.代號] || null;
                 const returnPct = (entryPrice && currentPrice)
                     ? ((currentPrice - entryPrice) / entryPrice * 100)
