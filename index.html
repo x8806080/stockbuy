@@ -219,6 +219,16 @@
         .s-tag.lime   { background: #14532d; color: #d9f99d; }
         .s-tag.new    { background: #0891b2; color: #fff; font-weight:800; letter-spacing:.5px; border: 1px solid #22d3ee; }
 
+        /* ── TAG 篩選列 ── */
+        .tag-filter-bar { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 10px; border-bottom:1px solid var(--border); margin-bottom:8px; align-items:center; }
+        .tag-filter-bar .filter-label { font-size:11px; color:var(--text-dim); margin-right:4px; white-space:nowrap; }
+        .tag-filter-bar .f-tag { cursor:pointer; opacity:.65; transition:opacity .15s, outline .15s; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; user-select:none; white-space:nowrap; }
+        .tag-filter-bar .f-tag:hover { opacity:1; }
+        .tag-filter-bar .f-tag.active { opacity:1; outline:2px solid #fff; outline-offset:1px; }
+        .tag-filter-bar .f-clear { background:none; border:1px solid var(--border); color:var(--text-dim); padding:2px 10px; border-radius:4px; font-size:11px; cursor:pointer; }
+        .tag-filter-bar .f-clear:hover { border-color:var(--accent); color:var(--accent); }
+        tr.tag-hidden { display:none; }
+
         /* ══ RWD：平板 ══ */
         @media (max-width: 900px) {
             .editor-grid { grid-template-columns: 1fr; }
@@ -304,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05c</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.06</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1359,7 +1369,16 @@
                 `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
                 '輸出6_特定ETF大摩共振.csv',
                 ['排名','代號','名稱','共振次數','出現清單'],
-                etfResonanceData.map((r,i) => [i+1, r.代號, r.名稱, r.共振次數, r.出現清單])
+                etfResonanceData.map((r,i) => {
+                    // ETF 來源改為彩色 TAG
+                    const etfTags = (r.出現清單||'').split(' / ').filter(Boolean)
+                        .map(t => {
+                            const cls = t.includes('大摩')?'navy':t.includes('投信')?'lime':
+                                        t.startsWith('00')?'teal':'blue';
+                            return `<span class="s-tag ${cls}">${t}</span>`;
+                        }).join('');
+                    return [i+1, r.代號, r.名稱, r.共振次數, etfTags];
+                })
             );
         } else {
             outputHTML += `<div class="report-section"><h2>輸出 6：大摩與指定 ETF 共振清單</h2><p>本期無標的在指定名單中重疊出現兩次以上。</p></div>`;
@@ -2113,16 +2132,98 @@
     }
 
 
+    // 唯一 ID 計數器（每個 section 有不同的 id）
+    let _sectionCount = 0;
+
     function createSection(title, filename, headers, dataRows) {
+        const secId = 'sec' + (++_sectionCount);
         // CSV下載用純文字（去除 HTML）
         const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
         const csvRows = dataRows.map(row => row.map(stripHtml));
-        let html = `<div class="report-section">
+
+        // 收集所有 TAG（從每列資料中找 s-tag）
+        const tagSet = new Map(); // tag文字 → class
+        dataRows.forEach(row => {
+            row.forEach(cell => {
+                if (typeof cell !== 'string') return;
+                const matches = cell.matchAll(/<span class="s-tag ([^"]+)">([^<]+)<\/span>/g);
+                for (const m of matches) {
+                    const cls = m[1].trim().split(' ').find(x => x !== 's-tag') || 'blue';
+                    const txt = m[2].trim();
+                    if (!tagSet.has(txt)) tagSet.set(txt, cls);
+                }
+            });
+        });
+
+        // 篩選列 HTML
+        let filterHtml = '';
+        if (tagSet.size > 0) {
+            filterHtml = `<div class="tag-filter-bar" id="${secId}-bar">
+                <span class="filter-label">篩選：</span>`;
+            tagSet.forEach((cls, txt) => {
+                filterHtml += `<span class="s-tag f-tag ${cls}" onclick="toggleTagFilter('${secId}','${txt.replace(/'/g,"\'")}')">${txt}</span>`;
+            });
+            filterHtml += `<button class="f-clear" onclick="clearTagFilter('${secId}')">✕ 清除</button>
+            </div>`;
+        }
+
+        // 表格列（每列加 data-tags 屬性）
+        let tableRows = '';
+        dataRows.forEach(row => {
+            const tags = [];
+            row.forEach(cell => {
+                if (typeof cell !== 'string') return;
+                const matches = cell.matchAll(/<span class="s-tag ([^"]+)">([^<]+)<\/span>/g);
+                for (const m of matches) tags.push(m[2].trim());
+            });
+            const tagAttr = tags.length ? ` data-tags="${tags.map(t=>t.replace(/"/g,'&quot;')).join('|')}"` : '';
+            tableRows += `<tr${tagAttr}>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`;
+        });
+
+        return `<div class="report-section" id="${secId}">
             <h2>${title} <button class="btn-download" onclick='downloadCSV("${filename}", ${JSON.stringify([headers, ...csvRows])})'>下載 CSV</button></h2>
-            <div class="tbl-wrap"><table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-        dataRows.forEach(row => { html += `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`; });
-        html += `</table></div></div>`;
-        return html;
+            ${filterHtml}
+            <div class="tbl-wrap"><table><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>
+            ${tableRows}</table></div>
+        </div>`;
+    }
+
+    // TAG 篩選函式
+    function toggleTagFilter(secId, tag) {
+        const bar  = document.getElementById(secId + '-bar');
+        const sec  = document.getElementById(secId);
+        if (!bar || !sec) return;
+
+        // 切換 active
+        const btn = [...bar.querySelectorAll('.f-tag')].find(el => el.textContent.trim() === tag);
+        if (btn) btn.classList.toggle('active');
+
+        applyTagFilter(secId);
+    }
+
+    function applyTagFilter(secId) {
+        const bar = document.getElementById(secId + '-bar');
+        const sec = document.getElementById(secId);
+        if (!bar || !sec) return;
+
+        const activeTags = [...bar.querySelectorAll('.f-tag.active')].map(el => el.textContent.trim());
+        sec.querySelectorAll('table tr[data-tags]').forEach(tr => {
+            if (activeTags.length === 0) {
+                tr.classList.remove('tag-hidden');
+            } else {
+                const rowTags = (tr.dataset.tags || '').split('|');
+                // 複選：列須包含所有選中 TAG（AND 邏輯）
+                const match = activeTags.every(t => rowTags.includes(t));
+                tr.classList.toggle('tag-hidden', !match);
+            }
+        });
+    }
+
+    function clearTagFilter(secId) {
+        const bar = document.getElementById(secId + '-bar');
+        if (!bar) return;
+        bar.querySelectorAll('.f-tag.active').forEach(el => el.classList.remove('active'));
+        applyTagFilter(secId);
     }
 
     function renderTags(str) {
@@ -2130,6 +2231,9 @@
         return str.split(' / ').filter(Boolean).map(t => {
             let cls = 'blue';
             if (t.includes('🆕') || t.includes('新入選'))         cls = 'new';
+            else if (t.includes('🔥') && t.includes('連續'))      cls = 'red';
+            else if (t.includes('📌') && t.includes('連續'))      cls = 'purple';
+            else if (t.includes('⚠️') && t.includes('退出'))      cls = 'orange';
             else if (t.includes('🏆') || t.includes('比值'))      cls = 'gold';
             else if (t.includes('🐉') || t.includes('潛龍'))      cls = 'red';
             else if (t.includes('⚡') || t.includes('超級基本面')) cls = 'orange';
@@ -2259,7 +2363,15 @@
                 `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
                 `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
                 ['排名','代號','名稱','共振次數','出現清單','評分'],
-                etfRes.map((r,i)=>[i+1,r.代號,r.名稱,r.共振次數,r.ETF清單,r.綜合評分])
+                etfRes.map((r,i)=>{
+                    const etfTags = (r.ETF清單||'').split(' / ').filter(Boolean)
+                        .map(t => {
+                            const cls = t.includes('大摩')?'navy':t.includes('投信')?'lime':
+                                        t.startsWith('00')?'teal':'blue';
+                            return `<span class="s-tag ${cls}">${t}</span>`;
+                        }).join('');
+                    return [i+1,r.代號,r.名稱,r.共振次數,etfTags,r.綜合評分];
+                })
             );
         } else {
             outputHTML += `<div class="report-section"><h2>輸出 6：ETF/大摩共振清單</h2>
@@ -2314,37 +2426,125 @@
             renderPayloadToOutput(payload, label);
             msg.textContent = `已載入 ${label} 完整報告`;
         } else {
-            // 多選 → 逐日 TOP50 顯示在 histViewArea（比較用）
+            // 多選 → 並行載入，做聯集/交集/差集分析 + 連續出現天數標記
             const container = document.getElementById('histViewArea');
-            container.innerHTML = '';
-            for (const dateKey of dates) {
-                const payload = await loadDailyResult(dateKey);
-                if (!payload) continue;
-                const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-                const { top50=[], thrA, thrB, thrC } = payload;
-                let html = `<div style="background:#1a2540;border-left:4px solid #3b82f6;
-                    padding:10px 14px;border-radius:0 6px 6px 0;font-size:12px;color:#93c5fd;
-                    margin:16px 0 10px;line-height:1.8">
-                    <b>📅 ${label}</b>&emsp;
-                    P70=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;
-                    P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;
-                    P20=${thrC?(thrC*100).toFixed(3)+'%':'—'}&emsp;
-                    <button onclick="loadSingleDate('${dateKey}')"
-                        style="background:#2563eb;color:#fff;border:none;padding:3px 10px;
-                               border-radius:4px;font-size:11px;cursor:pointer;font-weight:600">
-                        📂 載入完整報告
-                    </button>
-                </div>`;
-                html += createSection(
-                    'TOP50（'+label+'）', 'TOP50_'+dateKey+'.csv',
-                    ['排名','代號','名稱','評分','法人市值比','法人5日(百萬)','標註'],
-                    top50.slice(0,50).map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
-                        r.法人市值比pct||'-',(r.三大法人5日買超||0).toLocaleString(),
-                        renderTags(r.狀態標註)])
-                );
-                container.innerHTML += html;
+            container.innerHTML = '<div style="color:var(--text-dim);padding:12px">載入中…</div>';
+            const payloads = await Promise.all(dates.map(d => loadDailyResult(d).catch(()=>null)));
+            const labels   = dates.map(d => d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8));
+
+            // 建立每日 TOP50 集合
+            const dailySets = payloads.map((p,i) => ({
+                label: labels[i],
+                dateKey: dates[i],
+                syms: new Set((p?.top50||[]).map(r=>r.代號)),
+                map:  Object.fromEntries((p?.top50||[]).map(r=>[r.代號,r])),
+            })).filter(d => d.syms.size > 0);
+
+            if (!dailySets.length) { msg.textContent='❌ 無法載入資料'; return; }
+
+            // 聯集（出現過至少一次）
+            const unionMap = {}; // sym → { count, dates[], bestScore, bestEntry }
+            dailySets.forEach(({label,syms,map}) => {
+                syms.forEach(sym => {
+                    if (!unionMap[sym]) unionMap[sym] = { count:0, dates:[], bestScore:0, bestEntry:null };
+                    unionMap[sym].count++;
+                    unionMap[sym].dates.push(label);
+                    const r = map[sym];
+                    if (r && (r.綜合評分||0) > unionMap[sym].bestScore) {
+                        unionMap[sym].bestScore = r.綜合評分||0;
+                        unionMap[sym].bestEntry = r;
+                    }
+                });
+            });
+
+            // 交集（每日都出現）
+            const total    = dailySets.length;
+            const intersect = Object.entries(unionMap).filter(([,v])=>v.count===total).map(([k])=>k);
+            // 只出現最後一日（新入選）
+            const lastSet   = dailySets[dailySets.length-1];
+            const prevSet   = new Set(dailySets.slice(0,-1).flatMap(d=>[...d.syms]));
+            const newEntry  = [...lastSet.syms].filter(s=>!prevSet.has(s));
+            // 只出現第一日沒有之後（退出）
+            const firstSet  = dailySets[0];
+            const laterSet  = new Set(dailySets.slice(1).flatMap(d=>[...d.syms]));
+            const dropped   = [...firstSet.syms].filter(s=>!laterSet.has(s));
+
+            // 連續天數標記 helper
+            function continuousTag(count, total) {
+                if (count === total) return renderTags(`🔥連續${count}日`);
+                if (count >= 3)      return renderTags(`📌連續${count}日`);
+                return '';
             }
-            msg.textContent = `已載入 ${dates.length} 個日期（點各日期的「載入完整報告」可切換主輸出區）`;
+
+            // 整合標註（加入連續天數）
+            function makeRows(syms) {
+                return syms.sort((a,b)=>(unionMap[b]?.count||0)-(unionMap[a]?.count||0)||(unionMap[b]?.bestScore||0)-(unionMap[a]?.bestScore||0))
+                    .map((sym,i)=>{
+                        const u = unionMap[sym]||{};
+                        const r = u.bestEntry||{};
+                        const contTag = continuousTag(u.count, total);
+                        const extraTag = newEntry.includes(sym)  ? renderTags('🆕新入選') :
+                                         dropped.includes(sym)   ? renderTags('⚠️已退出') : '';
+                        const tagHtml = [contTag, extraTag, renderTags(r.狀態標註||'')].filter(Boolean).join('');
+                        return [i+1, sym, r.名稱||'', `${u.count}/${total}日`, u.dates.join(' · '),
+                                u.bestScore||'-', (r.三大法人5日買超||0).toLocaleString(),
+                                (r.法人一月買超||0).toLocaleString(), tagHtml];
+                    });
+            }
+
+            const headers = ['排名','代號','名稱','出現天數','出現日期','最高評分','5日法人(百萬)','1月法人(百萬)','標註'];
+            const csvFn   = dates.join('_');
+            const dateRange = `${labels[0]} ～ ${labels[labels.length-1]}（共${total}日）`;
+
+            let html = `<div style="background:#1a2540;border-left:4px solid #8b5cf6;padding:10px 16px;
+                border-radius:0 8px 8px 0;font-size:12px;color:#c4b5fd;margin-bottom:14px;line-height:2">
+                <b>📊 多日分析：${dateRange}</b><br>
+                聯集共 ${Object.keys(unionMap).length} 檔 ／
+                🔴 每日交集：${intersect.length} 檔 ／
+                🆕 最後一日新入選：${newEntry.length} 檔 ／
+                ⚠️ 已退出：${dropped.length} 檔
+            </div>`;
+
+            // 聯集總表（含連續天數）
+            html += createSection(`📋 聯集總表（${Object.keys(unionMap).length} 檔，依出現天數排序）`, `聯集_${csvFn}.csv`,
+                headers, makeRows(Object.keys(unionMap)));
+
+            // 每日交集
+            if (intersect.length) {
+                html += createSection(`🔴 每日交集 ── 連續 ${total} 日都在 TOP50（${intersect.length} 檔）`, `交集_${csvFn}.csv`,
+                    headers, makeRows(intersect));
+            }
+
+            // 最後一日新入選
+            if (newEntry.length) {
+                html += createSection(`🆕 ${labels[labels.length-1]} 新入選（${newEntry.length} 檔，前幾日未出現）`, `新入選_${csvFn}.csv`,
+                    headers, makeRows(newEntry));
+            }
+
+            // 已退出（只在第一日，之後消失）
+            if (dropped.length) {
+                html += createSection(`⚠️ 已退出（${dropped.length} 檔，${labels[0]} 有但之後消失）`, `退出_${csvFn}.csv`,
+                    headers, makeRows(dropped));
+            }
+
+            // 各日 TOP50 並排（可點「載入完整報告」）
+            html += `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+                <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px">── 各日詳細 TOP50 ──</div>`;
+            dailySets.forEach(({label,dateKey,map}) => {
+                const rows = Object.entries(map).slice(0,50).map(([sym,r],i)=>[
+                    i+1, sym, r.名稱||'', r.綜合評分||'-', renderTags(r.狀態標註||'')]);
+                html += `<div style="font-size:12px;color:#93c5fd;margin:12px 0 4px">
+                    <b>📅 ${label}</b>
+                    <button onclick="loadSingleDate('${dateKey}')" style="background:#2563eb;color:#fff;
+                        border:none;padding:2px 10px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:8px">
+                        📂 載入完整報告</button></div>`;
+                html += createSection('TOP50（'+label+'）','TOP50_'+dateKey+'.csv',
+                    ['排名','代號','名稱','評分','標註'], rows);
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+            msg.textContent = `完成（${total} 日，聯集 ${Object.keys(unionMap).length} 檔）`;
         }
         } catch(e) {
             console.error('[loadHistoryView] 錯誤:', e);
@@ -2353,6 +2553,10 @@
     }
 
     // 多選時單筆載入到主輸出區
+    // 全域：記錄上一次從歷史載入的 payload（供新入選比對用）
+    let _prevHistPayload = null;
+    let _prevHistLabel   = '';
+
     async function loadSingleDate(dateKey) {
         const msg = document.getElementById('histLoadMsg');
         try {
