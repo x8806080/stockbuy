@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04d</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04e</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3125,7 +3125,36 @@
             }
         }
 
-        // 若本地沒有（或日期不符），才去 TWSE 抓
+        // 檢查入場 TOP50 有哪些股票在 todayPrices 缺漏
+        const neededSyms = entryPayload.top50
+            .filter(r => (r.綜合評分||0) >= (parseInt(document.getElementById('btMinScore').value)||0))
+            .map(r => r.代號);
+        const missingSyms = neededSyms.filter(s => !todayPrices[s]);
+
+        // 資料庫已有部分，但仍缺漏 → 用 TWSE 補抓缺的部分
+        if (priceSource === 'twse' && Object.keys(todayPrices).length > 0 && missingSyms.length > 0 && priceDateStr) {
+            msg.innerHTML = `資料庫已有 ${Object.keys(todayPrices).length} 檔，TWSE 補抓缺漏 ${missingSyms.length} 檔…<br>
+                <div style="background:var(--border);border-radius:4px;height:8px;margin-top:6px;overflow:hidden">
+                    <div id="btProgressBar" style="background:#10b981;height:100%;width:0;transition:width .3s"></div>
+                </div>
+                <span id="btProgressText" style="font-size:11px;color:var(--text-dim)">0 / ${missingSyms.length}</span>`;
+            const onProg = (done,total,sym) => {
+                const bar=document.getElementById('btProgressBar');
+                const txt=document.getElementById('btProgressText');
+                if(bar)bar.style.width=(done/total*100).toFixed(0)+'%';
+                if(txt)txt.textContent=`${done} / ${total}（${sym}）`;
+            };
+            try {
+                const fetched = await fetchTWSEPrices(priceDateStr, missingSyms, onProg);
+                Object.assign(todayPrices, fetched);
+                console.log(`✅ TWSE 補抓 ${Object.keys(fetched).length} 檔`);
+                msg.textContent = `✅ 資料庫+TWSE 共 ${Object.keys(todayPrices).length} 支收盤價，比對中…`;
+            } catch(e) {
+                console.warn('TWSE 補抓失敗:', e.message);
+            }
+        }
+
+        // 若本地完全沒有，才去 TWSE 全抓
         if (priceSource === 'twse' && Object.keys(todayPrices).length === 0) {
             const isToday = (() => {
                 const n = new Date();
