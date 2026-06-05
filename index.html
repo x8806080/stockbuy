@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04e</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04f</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2387,13 +2387,15 @@
         if (!bar || !sec) return;
 
         const activeTags = [...bar.querySelectorAll('.f-tag.active')].map(el => el.textContent.trim());
-        sec.querySelectorAll('table tr[data-tags]').forEach(tr => {
+        // 選所有資料列（排除標題列 th）
+        sec.querySelectorAll('table tr').forEach(tr => {
+            if (tr.querySelector('th')) return; // 跳過標題列
             if (activeTags.length === 0) {
                 tr.classList.remove('tag-hidden');
             } else {
-                const rowTags = (tr.dataset.tags || '').split('|');
-                // 複選：列須包含所有選中 TAG（AND 邏輯）
-                const match = activeTags.every(t => rowTags.includes(t));
+                // 無 data-tags（無標註）的列：有篩選時一律隱藏
+                const rowTags = (tr.dataset.tags || '').split('|').filter(Boolean);
+                const match = rowTags.length > 0 && activeTags.every(t => rowTags.includes(t));
                 tr.classList.toggle('tag-hidden', !match);
             }
         });
