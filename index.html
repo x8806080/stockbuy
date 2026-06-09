@@ -40,6 +40,8 @@
             margin: 0;
             padding: 12px;
             min-height: 100vh;
+            font-size: 16px;
+            -webkit-text-size-adjust: 100%;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -124,7 +126,7 @@
 
         /* ══ 表格 ══ */
         .tbl-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 6px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; min-width: 480px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; min-width: 480px; }
         th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: middle; }
         th { background: var(--th-bg); color: var(--accent2); border-bottom: 2px solid var(--accent); white-space: nowrap; font-size: 12px; position: sticky; top: 0; z-index: 1; }
         tr:nth-child(even) { background: var(--row-even); }
@@ -231,20 +233,32 @@
 
         /* ══ RWD：平板 ══ */
         @media (max-width: 900px) {
+            /* iPad：整體字體放大 */
+            body { font-size: 17px; }
             .editor-grid { grid-template-columns: 1fr; }
-            table { font-size: 12px; }
-            th, td { padding: 6px 8px; }
+            table { font-size: 15px; }
+            th, td { padding: 9px 11px; }
+            h2 { font-size: 17px; }
+            .s-tag { font-size: 13px; }
+            button { font-size: 15px; }
+            input, select { font-size: 16px; }  /* 16px 防 iOS 自動放大 */
         }
 
         /* ══ RWD：手機 ══ */
         @media (max-width: 600px) {
-            body { padding: 6px; }
+            /* 手機：放大主要字體，表格維持可讀 */
+            body { padding: 6px; font-size: 16px; }
             .container { padding: 12px 10px; border-radius: 8px; }
-            h1 { font-size: 15px; }
-            button { padding: 10px 16px; font-size: 14px; width: 100%; }
+            h1 { font-size: 19px; }
+            h2 { font-size: 16px; }
+            table { font-size: 14px; }
+            th, td { padding: 8px 9px; }
+            .s-tag { font-size: 12px; }
+            button { padding: 11px 16px; font-size: 15px; width: 100%; }
             .btn-download { width: auto; margin-left: 0; margin-top: 6px; }
             .upload-row { flex-direction: column; }
-            input[type="file"] { font-size: 13px; }
+            input[type="file"] { font-size: 14px; }
+            input, select { font-size: 16px; }
             .score-row label { min-width: 120px; font-size: 11px; }
             .score-row input[type=number] { width: 54px; font-size: 12px; }
             .report-section h2 { font-size: 13px; }
@@ -260,10 +274,13 @@
 
         /* ══ RWD：iPhone SE / 小手機 ══ */
         @media (max-width: 390px) {
+            /* 小手機：表格不要太小 */
             .container { padding: 8px 6px; }
-            table { font-size: 10px; min-width: 300px; }
-            th, td { padding: 4px 5px; }
-            h1 { font-size: 13px; }
+            table { font-size: 13px; min-width: 320px; }
+            th, td { padding: 6px 6px; }
+            h1 { font-size: 17px; }
+            h2 { font-size: 15px; }
+            .s-tag { font-size: 11px; }
         }
 
         /* ══ 列印 / PDF 樣式 ══ */
@@ -314,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04h</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04i</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
