@@ -314,7 +314,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04f</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04g</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -931,8 +931,10 @@
             const headers  = fileObj.meta ? fileObj.meta.fields || [] : [];
 
             const isInventory  = fileName.includes('庫存');
-            const is5dRankFile = !isInventory && fileName.includes('5日');
-            const is1mRankFile = !isInventory && !is5dRankFile && (fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月'));
+            // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
+            const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
+            const is1mRankFile = !isInventory && has1m;
+            const is5dRankFile = !isInventory && !is1mRankFile && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -968,7 +970,8 @@
                 isEtfOrMorgan ? 'ETF/大摩' : '',
                 isInventory   ? '庫存'     : '',
             ].filter(Boolean).join('+');
-            fileTypeLog.push(`${fileName} → 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
+            const rankType = is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
+            fileTypeLog.push(`${fileName} → 判定:【${rankType}】 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
             fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
 
             data.forEach((row, rowIdx) => {
