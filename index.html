@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04i</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04k</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -534,7 +534,7 @@
         <div class="editor-grid">
 
             <div class="editor-section-title">① 基礎權重 — 法人超級力道（三大法人5日買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
-            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用漲幅排行TOP40標的的 P70/P40/P20 比值分位數；填入小數可手動覆蓋（如 0.03 = 3%）</div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用漲幅排行TOP40標的的 P90/P70/P50 比值分位數；填入小數可手動覆蓋（如 0.03 = 3%）</div>
 
             <div class="score-row">
                 <label>門檻 A：比值 ≥</label>
@@ -543,7 +543,7 @@
             </div>
             <div class="score-row">
                 <label>門檻 B 起（線性起點）</label>
-                <input type="number" id="corp_thrB_lo" value="0" step="0.001"> <span class="unit">（0=自動P40，得分起）</span>
+                <input type="number" id="corp_thrB_lo" value="0" step="0.001"> <span class="unit">（0=自動P70，得分起）</span>
                 <input type="number" id="corp_scoreB_lo" value="40">
             </div>
             <div class="score-row">
@@ -1100,6 +1100,7 @@
             if (e.市值            === null) e.市值 = 0;
             // 買超/市值比值
             e.法人市值比 = e.市值 > 0 ? e.三大法人5日買超 / e.市值 : 0;
+            e.投信市值比 = e.市值 > 0 ? e.投信週買超 / e.市值 : 0;
 
             // 週K布林通道位置計算（120日均線，2σ上軌）
             // σ = (上軌 - 中軌) / 2  → 3σ上軌 = 中軌 + 3σ = 中軌 + 1.5×(上軌-中軌)
@@ -1129,12 +1130,22 @@
             if (!arr.length) return 0;
             return arr[Math.max(0, Math.floor(arr.length * p / 100) - 1)];
         }
-        const autoRatioThrA = pct(benchmarkRatios, 70);
-        const autoRatioThrB = pct(benchmarkRatios, 40);
-        const autoRatioThrC = pct(benchmarkRatios, 20);
+        const autoRatioThrA = pct(benchmarkRatios, 90);  // 最高分：前10%
+        const autoRatioThrB = pct(benchmarkRatios, 70);  // 中分起點
+        const autoRatioThrC = pct(benchmarkRatios, 50);  // 低分起點
+
+        // 投信市值比門檻（同樣用漲幅TOP40標的的投信比值分位）
+        const benchmarkTrustRatios = [...benchmarkSymbols]
+            .map(s => masterDict[s])
+            .filter(e => e && e.市值 > 0 && e.投信週買超 > 0)
+            .map(e => e.投信週買超 / e.市值)
+            .sort((a,b) => a-b);
+        const autoTrustThrA = pct(benchmarkTrustRatios, 90);
+        const autoTrustThrB = pct(benchmarkTrustRatios, 70);
+        const autoTrustThrC = pct(benchmarkTrustRatios, 50);
         fileTypeLog.push('');
         fileTypeLog.push('📊 買超/市值比值門檻（基於漲幅TOP40 ' + benchmarkRatios.length + ' 筆樣本）');
-        fileTypeLog.push('　P20(C)=' + autoRatioThrC.toFixed(4) + ' | P40(B起)=' + autoRatioThrB.toFixed(4) + ' | P70(A)=' + autoRatioThrA.toFixed(4));
+        fileTypeLog.push('　P50(C)=' + autoRatioThrC.toFixed(4) + ' | P70(B起)=' + autoRatioThrB.toFixed(4) + ' | P90(A)=' + autoRatioThrA.toFixed(4));
 
         // 族群共振預處理
         let industryCountIn5d = {};
@@ -1175,12 +1186,12 @@
             if (row.市值 > 0) {
                 // 有市值 → 比值計分
                 if (ratio >= tA && tA > 0) {
-                    score += c.scoreA; tags.push('🏆P70');
+                    score += c.scoreA; tags.push('🏆P90');
                 } else if (ratio >= tBlo && ratio < tBhi && tBlo > 0) {
                     const s = Math.round(c.scoreB_lo + (ratio - tBlo) / Math.max(tBhi - tBlo, 1e-9) * (c.scoreB_hi - c.scoreB_lo));
-                    score += s; tags.push('P40');
+                    score += s; tags.push('P70');
                 } else if (ratio >= tC && tC > 0) {
-                    score += c.scoreC; tags.push('P30');
+                    score += c.scoreC; tags.push('P50');
                 }
             } else if (corp > 0) {
                 // 市值缺漏 → 退回絕對金額保底
@@ -1204,11 +1215,21 @@
             else if (corp1m >= c1.thrB) { score += c1.scoreB; }
             else if (corp1m >= c1.thrC) { score += c1.scoreC; }
 
-            // ④ 投信
+            // ④ 投信排名
             const t = SC.trust;
             if      (trustWeekRank < t.rankA) { score += t.scoreA; tags.push(`投信Top${t.rankA}`); }
             else if (trustWeekRank < t.rankB) { score += t.scoreB; tags.push(`投信Top${t.rankB}`); }
             else if (trust > 0)               { score += t.scoreC; }
+
+            // ④b 投信市值比評分（投信週買超/市值，同樣分位門檻）
+            const trustRatio = row.投信市值比 || 0;
+            row.投信市值比pct = row.市值 > 0 ? (trustRatio*100).toFixed(3) + '%' : '-';
+            if (row.市值 > 0 && trustRatio > 0) {
+                const ttA = autoTrustThrA, ttB = autoTrustThrB, ttC = autoTrustThrC;
+                if      (trustRatio >= ttA && ttA > 0) { score += 30; tags.push('🏦投信P90'); }
+                else if (trustRatio >= ttB && ttB > 0) { score += 15; tags.push('投信比P70'); }
+                else if (trustRatio >= ttC && ttC > 0) { score += 8;  tags.push('投信比P50'); }
+            }
 
             // ⑤ 基本面
             const rv = SC.rev;
@@ -1367,8 +1388,8 @@
         }
         outputHTML += createSection(
             '輸出 1：整份資料 TOP 50 推薦表', '輸出1_TOP50.csv',
-            ['排名','代號','名稱','綜合評分','法人市值比','狀態標註','週K布林位置'],
-            top50.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-', addIndTag(r), renderBoll(r)])
+            ['排名','代號','名稱','綜合評分','法人市值比','投信市值比','狀態標註','週K布林位置'],
+            top50.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-', addIndTag(r), renderBoll(r)])
         );
 
         // 輸出 2
@@ -1485,11 +1506,11 @@
         if (rise5dArr.length) {
             outputHTML += createSection(
                 '輸出 5b：5日漲幅排行 TOP 40', '輸出5b_5日漲幅.csv',
-                ['排名','代號','名稱','5日漲幅(%)','綜合評分','法人市值比','狀態標註'],
+                ['排名','代號','名稱','5日漲幅(%)','綜合評分','法人市值比','投信市值比','狀態標註'],
                 rise5dArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
                     return [i+1, sym, r.名稱||'', chg.toFixed(2), r.綜合評分||'-',
-                            r.法人市值比pct||'-', renderTags(r.狀態標註||'')];
+                            r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註||'')];
                 })
             );
         }
@@ -1502,11 +1523,11 @@
         if (rise1mArr.length) {
             outputHTML += createSection(
                 '輸出 5c：1個月漲幅排行 TOP 40', '輸出5c_1月漲幅.csv',
-                ['排名','代號','名稱','1月漲幅(%)','綜合評分','法人市值比','狀態標註'],
+                ['排名','代號','名稱','1月漲幅(%)','綜合評分','法人市值比','投信市值比','狀態標註'],
                 rise1mArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
                     return [i+1, sym, r.名稱||'', chg.toFixed(2), r.綜合評分||'-',
-                            r.法人市值比pct||'-', renderTags(r.狀態標註||'')];
+                            r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註||'')];
                 })
             );
         }
@@ -1612,9 +1633,9 @@
             ),
             // 5日/1月漲幅排行前40（含完整資料，供歷史載入顯示）
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',狀態標註:r.狀態標註||''};}),
         };
 
         // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
@@ -1628,6 +1649,7 @@
                 市值億:         r.市值億||0,
                 營收年增:       r.營收年增||0,
                 法人市值比pct:  r.法人市值比pct||'-',
+                投信市值比pct:  r.投信市值比pct||'-',
                 大摩排名:       r.大摩排名||'-',
                 投信排名:       r.投信排名||'-',
                 ETF來源:        r.ETF來源||'',
@@ -2395,7 +2417,7 @@
             </h2>
             <div id="${secId}-body">
                 ${filterHtml}
-                <div class="tbl-wrap"><table><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>
+                <div class="tbl-wrap"><table id="${secId}-table"><tr>${headers.map((h,hi)=>`<th onclick="sortTable('${secId}',${hi})" style="cursor:pointer;user-select:none" title="點擊排序">${h} <span style="opacity:.4;font-size:10px">⇅</span></th>`).join('')}</tr>
                 ${tableRows}</table></div>
             </div>
         </div>`;
@@ -2451,14 +2473,53 @@
         if (arrow) arrow.textContent = collapsed ? '▼' : '▶';
     }
 
+    // 表格排序（點欄位標題）
+    const _sortState = {}; // secId+col → asc/desc
+    function sortTable(secId, colIdx) {
+        const table = document.getElementById(secId + '-table');
+        if (!table) return;
+        const rows = [...table.querySelectorAll('tr')].filter(tr => !tr.querySelector('th'));
+        const key = secId + '_' + colIdx;
+        const asc = _sortState[key] = !_sortState[key];
+
+        // 取儲存格純文字（去 HTML、去逗號、解析數字/百分比）
+        const cellVal = (tr) => {
+            const td = tr.children[colIdx];
+            if (!td) return '';
+            const txt = td.textContent.trim().replace(/,/g,'').replace(/%/g,'');
+            const num = parseFloat(txt);
+            return isNaN(num) ? td.textContent.trim() : num;
+        };
+
+        rows.sort((a,b) => {
+            const va = cellVal(a), vb = cellVal(b);
+            if (typeof va === 'number' && typeof vb === 'number') return asc ? va-vb : vb-va;
+            return asc ? String(va).localeCompare(String(vb),'zh-Hant') : String(vb).localeCompare(String(va),'zh-Hant');
+        });
+
+        // 重新插入排序後的列
+        const tbody = rows[0]?.parentNode;
+        if (tbody) rows.forEach(tr => tbody.appendChild(tr));
+
+        // 更新標題箭頭
+        table.querySelectorAll('th').forEach((th,i) => {
+            const span = th.querySelector('span');
+            if (span) span.textContent = i===colIdx ? (asc?'▲':'▼') : '⇅';
+            if (span) span.style.opacity = i===colIdx ? '1' : '.4';
+        });
+    }
+
     function renderTags(str) {
         if (!str) return '';
         return str.split(' / ').filter(Boolean).map(t => {
             let cls = 'blue';
             if (t.includes('🆕') || t.includes('新入選'))         cls = 'new';
-            else if (t === '🏆P70' || t === 'P70')                cls = 'gold';
-            else if (t === 'P40')                                  cls = 'orange';
-            else if (t === 'P30')                                  cls = 'teal';
+            else if (t === '🏆P90')                                cls = 'gold';
+            else if (t === 'P70')                                  cls = 'orange';
+            else if (t === 'P50')                                  cls = 'teal';
+            else if (t === '🏦投信P90')                            cls = 'lime';
+            else if (t === '投信比P70')                            cls = 'lime';
+            else if (t === '投信比P50')                            cls = 'lime';
             else if (t.includes('🔥') && t.includes('連續'))      cls = 'red';
             else if (t.includes('📌') && t.includes('連續'))      cls = 'purple';
             else if (t.includes('⚠️') && t.includes('退出'))      cls = 'orange';
@@ -2513,17 +2574,17 @@
             padding:10px 16px;border-radius:0 8px 8px 0;font-size:13px;color:#93c5fd;
             margin-bottom:16px;line-height:1.8">
             <b>📅 歷史資料：${label}</b>&emsp;
-            P70(+${SC.corp?.scoreA||60}分)=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;
-            P40=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;
-            P20(+${SC.corp?.scoreC||30}分)=${thrC?(thrC*100).toFixed(3)+'%':'—'}
+            P90(+${SC.corp?.scoreA||60}分)=${thrA?(thrA*100).toFixed(3)+'%':'—'}&emsp;
+            P70=${thrB?(thrB*100).toFixed(3)+'%':'—'}&emsp;
+            P50(+${SC.corp?.scoreC||30}分)=${thrC?(thrC*100).toFixed(3)+'%':'—'}
             <span style="color:#64748b;font-size:11px;margin-left:12px">（重新上傳 CSV 可更新為最新分析）</span>
         </div>`;
 
         // 輸出1
         outputHTML += createSection(
             `輸出 1：整份資料 TOP 50 推薦表（${label}）`, `輸出1_TOP50_${label.replace(/\//g,'')}.csv`,
-            ['排名','代號','名稱','綜合評分','法人市值比','狀態標註','週K布林位置'],
-            top50.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分, r.法人市值比pct||'-',
+            ['排名','代號','名稱','綜合評分','法人市值比','投信市值比','狀態標註','週K布林位置'],
+            top50.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-',
                 renderTags(r.狀態標註), renderBoll(r)])
         );
 
@@ -2623,17 +2684,17 @@
         if (payload.rise5dRank?.length) {
             outputHTML += createSection(
                 `輸出 5b：5日漲幅排行 TOP 40（${label}）`, `輸出5b_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','5日漲幅(%)','綜合評分','法人市值比','狀態標註'],
+                ['排名','代號','名稱','5日漲幅(%)','綜合評分','法人市值比','投信市值比','狀態標註'],
                 payload.rise5dRank.map((r,i)=>[i+1,r.代號,r.名稱,(r.漲幅||0).toFixed(2),
-                    r.綜合評分, r.法人市值比pct||'-', renderTags(r.狀態標註||'')])
+                    r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註||'')])
             );
         }
         if (payload.rise1mRank?.length) {
             outputHTML += createSection(
                 `輸出 5c：1個月漲幅排行 TOP 40（${label}）`, `輸出5c_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','1月漲幅(%)','綜合評分','法人市值比','狀態標註'],
+                ['排名','代號','名稱','1月漲幅(%)','綜合評分','法人市值比','投信市值比','狀態標註'],
                 payload.rise1mRank.map((r,i)=>[i+1,r.代號,r.名稱,(r.漲幅||0).toFixed(2),
-                    r.綜合評分, r.法人市值比pct||'-', renderTags(r.狀態標註||'')])
+                    r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註||'')])
             );
         }
 
