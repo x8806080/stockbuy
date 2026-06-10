@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04o</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04p</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1159,6 +1159,16 @@
         const autoTrustThrA = pct(benchmarkTrustRatios, 90);
         const autoTrustThrB = pct(benchmarkTrustRatios, 70);
         const autoTrustThrC = pct(benchmarkTrustRatios, 50);
+
+        // 法人一月買超市值比門檻
+        const benchmark1mRatios = [...benchmarkSymbols]
+            .map(s => masterDict[s])
+            .filter(e => e && e.市值 > 0 && e.法人一月買超 > 0)
+            .map(e => e.法人一月買超 / e.市值)
+            .sort((a,b) => a-b);
+        const auto1mThrA = pct(benchmark1mRatios, 90);
+        const auto1mThrB = pct(benchmark1mRatios, 70);
+        const auto1mThrC = pct(benchmark1mRatios, 50);
         fileTypeLog.push('');
         fileTypeLog.push('📊 買超/市值比值門檻（基於漲幅TOP40 ' + benchmarkRatios.length + ' 筆樣本）');
         fileTypeLog.push('　P50(C)=' + autoRatioThrC.toFixed(4) + ' | P70(B起)=' + autoRatioThrB.toFixed(4) + ' | P90(A)=' + autoRatioThrA.toFixed(4));
@@ -1225,19 +1235,16 @@
             else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
 
-            // ③ 中期法人
-            const c1 = SC.corp1m;
-            if (corp1m > c1.thrA)      { score += c1.scoreA; tags.push('法人月續買'); }
-            else if (corp1m >= c1.thrB) { score += c1.scoreB; }
-            else if (corp1m >= c1.thrC) { score += c1.scoreC; }
+            // ③ 中期法人（法人一月買超/市值 比值，P90/P70/P50）
+            const ratio1m = row.市值 > 0 ? (corp1m / row.市值) : 0;
+            row.法人月市值比pct = row.市值 > 0 ? (ratio1m*100).toFixed(3) + '%' : '-';
+            if (row.市值 > 0 && ratio1m > 0) {
+                if      (ratio1m >= auto1mThrA && auto1mThrA > 0) { score += 40; tags.push('🏛️月P90'); }
+                else if (ratio1m >= auto1mThrB && auto1mThrB > 0) { score += 20; tags.push('月比P70'); }
+                else if (ratio1m >= auto1mThrC && auto1mThrC > 0) { score += 10; tags.push('月比P50'); }
+            }
 
-            // ④ 投信排名
-            const t = SC.trust;
-            if      (trustWeekRank < t.rankA) { score += t.scoreA; tags.push(`投信Top${t.rankA}`); }
-            else if (trustWeekRank < t.rankB) { score += t.scoreB; tags.push(`投信Top${t.rankB}`); }
-            else if (trust > 0)               { score += t.scoreC; }
-
-            // ④b 投信市值比評分（投信週買超/市值，同樣分位門檻）
+            // ④ 投信市值比評分（投信週買超/市值，P90/P70/P50）
             const trustRatio = row.投信市值比 || 0;
             row.投信市值比pct = row.市值 > 0 ? (trustRatio*100).toFixed(3) + '%' : '-';
             if (row.市值 > 0 && trustRatio > 0) {
@@ -1655,6 +1662,7 @@
                 營收年增:       r.營收年增||0,
                 法人市值比pct:  r.法人市值比pct||'-',
                 投信市值比pct:  r.投信市值比pct||'-',
+                法人月市值比pct: r.法人月市值比pct||'-',
                 大摩排名:       r.大摩排名||'-',
                 投信排名:       r.投信排名||'-',
                 ETF來源:        r.ETF來源||'',
@@ -2525,6 +2533,9 @@
             else if (t === '🏦投信P90')                            cls = 'lime';
             else if (t === '投信比P70')                            cls = 'lime';
             else if (t === '投信比P50')                            cls = 'lime';
+            else if (t === '🏛️月P90')                             cls = 'navy';
+            else if (t === '月比P70')                              cls = 'navy';
+            else if (t === '月比P50')                              cls = 'navy';
             else if (t.includes('🔥') && t.includes('連續'))      cls = 'red';
             else if (t.includes('📌') && t.includes('連續'))      cls = 'purple';
             else if (t.includes('⚠️') && t.includes('退出'))      cls = 'orange';
