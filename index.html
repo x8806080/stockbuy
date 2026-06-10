@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04m</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04n</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1414,8 +1414,8 @@
             if (invData.length > 0) {
                 outputHTML += createSection(
                     '輸出 2：庫存標的診斷報告', '輸出2_庫存診斷.csv',
-                    ['代號','名稱','綜合評分','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
-                    invData.map(r => [r.代號, r.名稱, r.綜合評分,
+                    ['代號','名稱','綜合評分','法人市值比','投信市值比','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
+                    invData.map(r => [r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-',
                         r.三大法人5日買超 !== 0 ? r.三大法人5日買超 : '⚠️ 0（未讀到）',
                         r.法人一月買超    !== 0 ? r.法人一月買超    : '⚠️ 0（未讀到）',
                         r.投信週買超      !== 0 ? r.投信週買超      : '⚠️ 0（未讀到）',
@@ -1433,8 +1433,8 @@
         const top20NoInv = top50.filter(r => !inventorySymbols.has(r.代號)).slice(0, 20);
         outputHTML += createSection(
             'Top 20 推薦表 (排除庫存)', '輸出3_TOP20_排除庫存.csv',
-            ['排名','代號','名稱','綜合評分','籌碼狀態標註','週K布林位置'],
-            top20NoInv.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, renderTags(r.狀態標註), renderBoll(r)])
+            ['排名','代號','名稱','綜合評分','法人市值比','投信市值比','籌碼狀態標註','週K布林位置'],
+            top20NoInv.map((r,i) => [i+1, r.代號, r.名稱, r.綜合評分, r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註), renderBoll(r)])
         );
 
         // 輸出 4（indMap/sortedInds/top5Inds 已在輸出1前計算）
@@ -1475,8 +1475,8 @@
         if (resonanceData.length > 0) {
             outputHTML += createSection(
                 `輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}`, '輸出5_長短動能共振.csv',
-                ['排名','代號','名稱'],
-                resonanceData.map((r,i) => [i+1, r.代號, r.名稱])
+                ['排名','代號','名稱','綜合評分','法人市值比','投信市值比','狀態標註'],
+                resonanceData.map((r,i) => { const m=masterDict[r.代號]||{}; return [i+1, r.代號, r.名稱, m.綜合評分||'-', m.法人市值比pct||'-', m.投信市值比pct||'-', renderTags(m.狀態標註||'')]; })
             );
         } else {
             const h5 = rise5dTop40.size === 0 ? '（未偵測到檔名含「5日」的排行檔）' : '';
@@ -1498,7 +1498,7 @@
             outputHTML += createSection(
                 `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
                 '輸出6_特定ETF大摩共振.csv',
-                ['排名','代號','名稱','共振次數','出現清單'],
+                ['排名','代號','名稱','共振次數','出現清單','綜合評分','法人市值比','投信市值比'],
                 etfResonanceData.map((r,i) => {
                     // ETF 來源改為彩色 TAG
                     const etfTags = (r.出現清單||'').split(' / ').filter(Boolean)
@@ -1507,7 +1507,8 @@
                                         t.startsWith('00')?'teal':'blue';
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
-                    return [i+1, r.代號, r.名稱, r.共振次數, etfTags];
+                    const m = masterDict[r.代號]||{};
+                    return [i+1, r.代號, r.名稱, r.共振次數, etfTags, m.綜合評分||'-', m.法人市值比pct||'-', m.投信市值比pct||'-'];
                 })
             );
         } else {
@@ -1572,7 +1573,7 @@
             // 退出（昨天有今天沒有）
             const droppedSyms   = [...prevTop50Syms].filter(s => !todaySyms.has(s));
 
-            const compHeaders = ['排名','代號','名稱','今日評分','今日5日法人(百萬)','今日1月法人(百萬)','昨日評分','昨日5日法人(百萬)','今日標註'];
+            const compHeaders = ['排名','代號','名稱','今日評分','法人市值比','投信市值比','今日5日法人(百萬)','今日1月法人(百萬)','昨日評分','昨日5日法人(百萬)','今日標註'];
 
             function makeCompRows(syms) {
                 return syms.map((sym,i) => {
@@ -1581,6 +1582,8 @@
                     return [
                         i+1, sym, t.名稱||p.名稱||'',
                         t.綜合評分||'-',
+                        t.法人市值比pct||'-',
+                        t.投信市值比pct||'-',
                         (t.三大法人5日買超||0).toLocaleString(),
                         (t.法人一月買超||0).toLocaleString(),
                         p.綜合評分||'-',
@@ -2608,8 +2611,8 @@
         if (inv.length) {
             outputHTML += createSection(
                 `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, `輸出2_庫存_${label.replace(/\//g,'')}.csv`,
-                ['代號','名稱','綜合評分','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
-                inv.map(r=>[r.代號,r.名稱,r.綜合評分,
+                ['代號','名稱','綜合評分','法人市值比','投信市值比','法人5日買超(百萬)','法人一月買超(百萬)','投信週買超(百萬)','營收年增(%)','狀態標註','週K布林位置'],
+                inv.map(r=>[r.代號,r.名稱,r.綜合評分,r.法人市值比pct||'-',r.投信市值比pct||'-',
                     r.三大法人5日買超!==0?r.三大法人5日買超:'⚠️ 0（未讀到）',
                     r.法人一月買超!==0?r.法人一月買超:'⚠️ 0（未讀到）',
                     r.投信週買超!==0?r.投信週買超:'⚠️ 0（未讀到）',
@@ -2625,8 +2628,8 @@
         if (top20.length) {
             outputHTML += createSection(
                 `Top 20 推薦表（排除庫存）（${label}）`, `輸出3_TOP20_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','綜合評分','籌碼狀態標註','週K布林位置'],
-                top20.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,
+                ['排名','代號','名稱','綜合評分','法人市值比','投信市值比','籌碼狀態標註','週K布林位置'],
+                top20.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,r.法人市值比pct||'-',r.投信市值比pct||'-',
                     renderTags(r.狀態標註), renderBoll(r)])
             );
         }
@@ -2654,8 +2657,8 @@
             outputHTML += createSection(
                 `輸出 5：五日/一月漲幅多重共振清單（${resonance.length} 檔）`,
                 `輸出5_共振_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','評分','標註'],
-                resonance.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,renderTags(r.狀態標註)])
+                ['排名','代號','名稱','評分','法人市值比','投信市值比','標註'],
+                resonance.map((r,i)=>[i+1,r.代號,r.名稱,r.綜合評分,r.法人市值比pct||'-',r.投信市值比pct||'-',renderTags(r.狀態標註)])
             );
         } else {
             outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單</h2>
@@ -2667,7 +2670,7 @@
             outputHTML += createSection(
                 `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
                 `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','共振次數','出現清單','評分'],
+                ['排名','代號','名稱','共振次數','出現清單','評分','法人市值比','投信市值比'],
                 etfRes.map((r,i)=>{
                     const etfTags = (r.ETF清單||'').split(' / ').filter(Boolean)
                         .map(t => {
@@ -2675,7 +2678,7 @@
                                         t.startsWith('00')?'teal':'blue';
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
-                    return [i+1,r.代號,r.名稱,r.共振次數,etfTags,r.綜合評分];
+                    return [i+1,r.代號,r.名稱,r.共振次數,etfTags,r.綜合評分,r.法人市值比pct||'-',r.投信市值比pct||'-'];
                 })
             );
         } else {
@@ -2811,12 +2814,12 @@
                                          dropped.includes(sym)   ? renderTags('⚠️已退出') : '';
                         const tagHtml = [contTag, extraTag, renderTags(r.狀態標註||'')].filter(Boolean).join('');
                         return [i+1, sym, r.名稱||'', `${u.count}/${total}日`, u.dates.join(' · '),
-                                u.bestScore||'-', (r.三大法人5日買超||0).toLocaleString(),
+                                u.bestScore||'-', r.法人市值比pct||'-', r.投信市值比pct||'-', (r.三大法人5日買超||0).toLocaleString(),
                                 (r.法人一月買超||0).toLocaleString(), tagHtml];
                     });
             }
 
-            const headers = ['排名','代號','名稱','出現天數','出現日期','最高評分','5日法人(百萬)','1月法人(百萬)','標註'];
+            const headers = ['排名','代號','名稱','出現天數','出現日期','最高評分','法人市值比','投信市值比','5日法人(百萬)','1月法人(百萬)','標註'];
             const csvFn   = dates.join('_');
             const dateRange = `${labels[0]} ～ ${labels[labels.length-1]}（共${total}日）`;
 
@@ -2856,14 +2859,14 @@
                 <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px">── 各日詳細 TOP50 ──</div>`;
             dailySets.forEach(({label,dateKey,map}) => {
                 const rows = Object.entries(map).slice(0,50).map(([sym,r],i)=>[
-                    i+1, sym, r.名稱||'', r.綜合評分||'-', renderTags(r.狀態標註||'')]);
+                    i+1, sym, r.名稱||'', r.綜合評分||'-', r.法人市值比pct||'-', r.投信市值比pct||'-', renderTags(r.狀態標註||'')]);
                 html += `<div style="font-size:12px;color:#93c5fd;margin:12px 0 4px">
                     <b>📅 ${label}</b>
                     <button onclick="loadSingleDate('${dateKey}')" style="background:#2563eb;color:#fff;
                         border:none;padding:2px 10px;border-radius:4px;font-size:11px;cursor:pointer;margin-left:8px">
                         📂 載入完整報告</button></div>`;
                 html += createSection('TOP50（'+label+'）','TOP50_'+dateKey+'.csv',
-                    ['排名','代號','名稱','評分','標註'], rows);
+                    ['排名','代號','名稱','評分','法人市值比','投信市值比','標註'], rows);
             });
             html += '</div>';
 
@@ -2939,7 +2942,7 @@
         both.sort(sortFn); only5d.sort(sortFn); only1m.sort(sortFn);
 
         const dateLabels = dates.map(d=>d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8)).join('、');
-        const headers = ['#','代號','名稱','歷史出現次數','出現日期','歷史最高評分','最新評分','最新5日法人買超(百萬)','最新1月法人買超(百萬)','最新投信買超(百萬)','最新標註'];
+        const headers = ['#','代號','名稱','歷史出現次數','出現日期','歷史最高評分','最新評分','法人市值比','投信市值比','最新5日法人買超(百萬)','最新1月法人買超(百萬)','最新投信買超(百萬)','最新標註'];
 
         function makeRows(syms) {
             return syms.map((s,i) => {
@@ -2951,6 +2954,8 @@
                     (symDates[s]||[]).join(' / '),
                     h.綜合評分||'-',
                     l.綜合評分||'-',
+                    l.法人市值比pct||'-',
+                    l.投信市值比pct||'-',
                     (l.三大法人5日買超||0).toLocaleString(),
                     (l.法人一月買超||0).toLocaleString(),
                     (l.投信週買超||0).toLocaleString(),
