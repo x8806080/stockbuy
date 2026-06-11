@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04r</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04t</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -538,7 +538,7 @@
 
             <div class="score-row">
                 <label>門檻 A：比值 ≥</label>
-                <input type="number" id="corp_thrA" value="0" step="0.001"> <span class="unit">（0=自動P70）→ 得分</span>
+                <input type="number" id="corp_thrA" value="0" step="0.001"> <span class="unit">（0=自動P90）→ 得分</span>
                 <input type="number" id="corp_scoreA" value="60">
             </div>
             <div class="score-row">
@@ -548,12 +548,12 @@
             </div>
             <div class="score-row">
                 <label>門檻 B 止（線性終點）</label>
-                <input type="number" id="corp_thrB_hi" value="0" step="0.001"> <span class="unit">（0=自動P70，得分止）</span>
+                <input type="number" id="corp_thrB_hi" value="0" step="0.001"> <span class="unit">（0=自動P90，得分止）</span>
                 <input type="number" id="corp_scoreB_hi" value="50">
             </div>
             <div class="score-row">
                 <label>門檻 C：比值 ≥</label>
-                <input type="number" id="corp_thrC" value="0" step="0.001"> <span class="unit">（0=自動P20）→ 得分</span>
+                <input type="number" id="corp_thrC" value="0" step="0.001"> <span class="unit">（0=自動P50）→ 得分</span>
                 <input type="number" id="corp_scoreC" value="30">
             </div>
             <div style="font-size:12px;color:#888;margin:4px 0 8px 0">📦 市值缺漏時退回絕對金額保底門檻（百萬）：</div>
@@ -582,36 +582,48 @@
                 <input type="number" id="momentum_topN" value="40">
             </div>
 
-            <div class="editor-section-title">③ 基礎權重 — 中期法人力道（法人一月買超 ÷ 市值 比值，自動分位）</div>
-            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 與 ① 相同邏輯，自動用漲幅TOP40標的的 P90/P70/P50 比值分位數，得分固定</div>
+            <div class="editor-section-title">③ 基礎權重 — 中期法人力道（法人一月買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用 P90/P70/P50 比值分位數；填小數可手動覆蓋（如 0.05 = 5%）</div>
 
             <div class="score-row">
-                <label>🏛️ 月P90（前10%）→ 得分</label>
-                <input type="number" id="corp1m_scoreA" value="40" disabled style="opacity:.6">
+                <label>🏛️ 門檻 A：比值 ≥</label>
+                <input type="number" id="corp1m_thrA" value="0" step="0.001"> <span class="unit">(0=自動P90)</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreA" value="40">
             </div>
             <div class="score-row">
-                <label>月比P70（前30%）→ 得分</label>
-                <input type="number" id="corp1m_scoreB" value="20" disabled style="opacity:.6">
+                <label>門檻 B：比值 ≥</label>
+                <input type="number" id="corp1m_thrB" value="0" step="0.001"> <span class="unit">(0=自動P70)</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreB" value="20">
             </div>
             <div class="score-row">
-                <label>月比P50（前50%）→ 得分</label>
-                <input type="number" id="corp1m_scoreC" value="10" disabled style="opacity:.6">
+                <label>門檻 C：比值 ≥</label>
+                <input type="number" id="corp1m_thrC" value="0" step="0.001"> <span class="unit">(0=自動P50)</span>
+                <label>→ 得分</label>
+                <input type="number" id="corp1m_scoreC" value="10">
             </div>
 
-            <div class="editor-section-title">④ 基礎權重 — 投信動向（投信週買超 ÷ 市值 比值，自動分位）</div>
-            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 與 ① 相同邏輯，自動用漲幅TOP40標的的 P90/P70/P50 比值分位數，得分固定</div>
+            <div class="editor-section-title">④ 基礎權重 — 投信動向（投信週買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用 P90/P70/P50 比值分位數；填小數可手動覆蓋（如 0.03 = 3%）</div>
 
             <div class="score-row">
-                <label>🏦 投信P90（前10%）→ 得分</label>
-                <input type="number" id="trust_scoreA" value="30" disabled style="opacity:.6">
+                <label>🏦 門檻 A：比值 ≥</label>
+                <input type="number" id="trust_thrA" value="0" step="0.001"> <span class="unit">(0=自動P90)</span>
+                <label>→ 得分</label>
+                <input type="number" id="trust_scoreA" value="30">
             </div>
             <div class="score-row">
-                <label>投信比P70（前30%）→ 得分</label>
-                <input type="number" id="trust_scoreB" value="15" disabled style="opacity:.6">
+                <label>門檻 B：比值 ≥</label>
+                <input type="number" id="trust_thrB" value="0" step="0.001"> <span class="unit">(0=自動P70)</span>
+                <label>→ 得分</label>
+                <input type="number" id="trust_scoreB" value="15">
             </div>
             <div class="score-row">
-                <label>投信比P50（前50%）→ 得分</label>
-                <input type="number" id="trust_scoreC" value="8" disabled style="opacity:.6">
+                <label>門檻 C：比值 ≥</label>
+                <input type="number" id="trust_thrC" value="0" step="0.001"> <span class="unit">(0=自動P50)</span>
+                <label>→ 得分</label>
+                <input type="number" id="trust_scoreC" value="8">
             </div>
 
             <div class="editor-section-title">⑤ 基礎權重 — 基本面（營收年增率 %）</div>
@@ -738,9 +750,11 @@
                 topN:   Math.round(v('momentum_topN')),
             },
             corp1m: {
+                thrA: v('corp1m_thrA'), thrB: v('corp1m_thrB'), thrC: v('corp1m_thrC'),
                 scoreA: v('corp1m_scoreA'), scoreB: v('corp1m_scoreB'), scoreC: v('corp1m_scoreC'),
             },
             trust: {
+                thrA: v('trust_thrA'), thrB: v('trust_thrB'), thrC: v('trust_thrC'),
                 scoreA: v('trust_scoreA'), scoreB: v('trust_scoreB'), scoreC: v('trust_scoreC'),
             },
             rev: {
@@ -841,6 +855,23 @@
         return isNaN(num) ? null : num;
     }
 
+    // 從 DOM 表格即時讀取當前顯示順序(含排序/篩選結果)下載 CSV
+    function downloadTableCSV(secId, filename) {
+        const table = document.getElementById(secId + '-table');
+        if (!table) { return; }
+        const rows = [];
+        table.querySelectorAll('tr').forEach(tr => {
+            // 跳過被 TAG 篩選隱藏的列
+            if (tr.classList.contains('tag-hidden')) return;
+            const cells = [...tr.children].map(td => {
+                // 取純文字(去除 HTML 標籤)
+                return td.textContent.trim();
+            });
+            if (cells.length) rows.push(cells);
+        });
+        downloadCSV(filename, rows);
+    }
+
     function downloadCSV(filename, rows) {
         let csvContent = "\uFEFF";
         rows.forEach(row => {
@@ -912,6 +943,7 @@
 
         let masterDict       = {};
         let inventorySymbols = new Set();
+        let riseStartSymbols = new Set();
         let isInventoryUploaded = false;
         let rise5dTop40      = new Set();
         let rise1mTop40      = new Set();
@@ -936,10 +968,11 @@
             const headers  = fileObj.meta ? fileObj.meta.fields || [] : [];
 
             const isInventory  = fileName.includes('庫存');
+            const isRiseStart  = fileName.includes('起漲');  // 起漲標的檔
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
             const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
-            const is1mRankFile = !isInventory && has1m;
-            const is5dRankFile = !isInventory && !is1mRankFile && (fileName.includes('5日') || fileName.includes('五日'));
+            const is1mRankFile = !isInventory && !isRiseStart && has1m;
+            const is5dRankFile = !isInventory && !isRiseStart && !is1mRankFile && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -1004,7 +1037,7 @@
                 isEtfOrMorgan ? 'ETF/大摩' : '',
                 isInventory   ? '庫存'     : '',
             ].filter(Boolean).join('+');
-            const rankType = is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
+            const rankType = isRiseStart ? '起漲' : is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
             fileTypeLog.push(`${fileName} → 判定:【${rankType}】 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
             fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
 
@@ -1085,6 +1118,7 @@
                 }
 
                 if (isInventory) inventorySymbols.add(symbol);
+                if (isRiseStart) riseStartSymbols.add(symbol);
                 if (isEtfOrMorgan) {
                     entry.etfCount += 1;
                     if (!etfSourceDict[symbol]) etfSourceDict[symbol] = new Set();
@@ -1223,25 +1257,30 @@
             else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
 
-            // ③ 中期法人（法人一月買超/市值 比值，P90/P70/P50）
+            // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位）
             const ratio1m = row.市值 > 0 ? (corp1m / row.市值) : 0;
             row.法人月市值比pct = row.市值 > 0 ? (ratio1m*100).toFixed(3) + '%' : '-';
             if (row.市值 > 0 && ratio1m > 0) {
                 const c1 = SC.corp1m;
-                if      (ratio1m >= auto1mThrA && auto1mThrA > 0) { score += c1.scoreA; tags.push('🏛️月P90'); }
-                else if (ratio1m >= auto1mThrB && auto1mThrB > 0) { score += c1.scoreB; tags.push('月比P70'); }
-                else if (ratio1m >= auto1mThrC && auto1mThrC > 0) { score += c1.scoreC; tags.push('月比P50'); }
+                const m_tA = c1.thrA > 0 ? c1.thrA : auto1mThrA;
+                const m_tB = c1.thrB > 0 ? c1.thrB : auto1mThrB;
+                const m_tC = c1.thrC > 0 ? c1.thrC : auto1mThrC;
+                if      (m_tA > 0 && ratio1m >= m_tA) { score += c1.scoreA; tags.push('🏛️月P90'); }
+                else if (m_tB > 0 && ratio1m >= m_tB) { score += c1.scoreB; tags.push('月比P70'); }
+                else if (m_tC > 0 && ratio1m >= m_tC) { score += c1.scoreC; tags.push('月比P50'); }
             }
 
             // ④ 投信市值比評分（投信週買超/市值，P90/P70/P50）
             const trustRatio = row.投信市值比 || 0;
             row.投信市值比pct = row.市值 > 0 ? (trustRatio*100).toFixed(3) + '%' : '-';
             if (row.市值 > 0 && trustRatio > 0) {
-                const ttA = autoTrustThrA, ttB = autoTrustThrB, ttC = autoTrustThrC;
                 const tt = SC.trust;
-                if      (trustRatio >= ttA && ttA > 0) { score += tt.scoreA; tags.push('🏦投信P90'); }
-                else if (trustRatio >= ttB && ttB > 0) { score += tt.scoreB; tags.push('投信比P70'); }
-                else if (trustRatio >= ttC && ttC > 0) { score += tt.scoreC; tags.push('投信比P50'); }
+                const tt_A = tt.thrA > 0 ? tt.thrA : autoTrustThrA;
+                const tt_B = tt.thrB > 0 ? tt.thrB : autoTrustThrB;
+                const tt_C = tt.thrC > 0 ? tt.thrC : autoTrustThrC;
+                if      (tt_A > 0 && trustRatio >= tt_A) { score += tt.scoreA; tags.push('🏦投信P90'); }
+                else if (tt_B > 0 && trustRatio >= tt_B) { score += tt.scoreB; tags.push('投信比P70'); }
+                else if (tt_C > 0 && trustRatio >= tt_C) { score += tt.scoreC; tags.push('投信比P50'); }
             }
 
             // ⑤ 基本面
@@ -1542,6 +1581,22 @@
             );
         }
 
+        // ── 輸出 5d：起漲標的（來自起漲CSV）──
+        if (riseStartSymbols.size > 0) {
+            const riseStartData = [...riseStartSymbols]
+                .map(sym => masterDict[sym])
+                .filter(Boolean)
+                .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
+            if (riseStartData.length) {
+                outputHTML += createSection(
+                    `輸出 5d：起漲標的（${riseStartData.length} 檔，來自起漲CSV）`,
+                    '輸出5d_起漲標的.csv',
+                    STD_HEADERS,
+                    riseStartData.map(r => stdRow(r))
+                );
+            }
+        }
+
         // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
         console.log('[輸出7] _prevDayPayload=', !!window._prevDayPayload, 'prevTop50Syms=', prevTop50Syms.size);
         if (!window._prevDayPayload || prevTop50Syms.size === 0) {
@@ -1634,6 +1689,7 @@
                     .map(e => [e.代號, e.收盤價])
             ),
             // 5日/1月漲幅排行前40（含完整資料，供歷史載入顯示）
+            riseStart: [...riseStartSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
                 .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
@@ -2416,7 +2472,7 @@
                 <span onclick="toggleSection('${secId}')" style="cursor:pointer;user-select:none">
                     <span id="${secId}-arrow" style="display:inline-block;width:16px;color:var(--accent2)">▼</span>${title}
                 </span>
-                <button class="btn-download" onclick='downloadCSV("${filename}", ${JSON.stringify([headers, ...csvRows])})'>下載 CSV</button>
+                <button class="btn-download" onclick='downloadTableCSV("${secId}","${filename}")'>下載 CSV</button>
             </h2>
             <div id="${secId}-body">
                 ${filterHtml}
@@ -2703,6 +2759,16 @@
                 `輸出 5c：1個月漲幅排行 TOP 40（${label}）`, `輸出5c_${label.replace(/\//g,'')}.csv`,
                 ['代號','名稱','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 payload.rise1mRank.map(r=>{const row=stdRow(r); return [row[0],row[1],row[2],(r.漲幅||0).toFixed(2),row[3],row[4],row[5],row[6],row[7]];})
+            );
+        }
+
+        // 輸出 5d：起漲標的（歷史載入）
+        if (payload.riseStart?.length) {
+            outputHTML += createSection(
+                `輸出 5d：起漲標的（${payload.riseStart.length} 檔）（${label}）`,
+                `輸出5d_起漲_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS,
+                payload.riseStart.map(r => stdRow(r))
             );
         }
 
