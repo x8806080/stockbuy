@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04t</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04v</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -502,6 +502,16 @@
                             <label>最低評分：</label>
                             <input type="number" id="btMinScore" value="70" min="0" max="200"
                                 style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">
+                        <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                            <label style="font-weight:600">標籤篩選（可複選，AND）：</label>
+                            <span style="font-size:11px;color:#64748b">勾選的標籤全部符合才納入回測</span>
+                            <button type="button" onclick="clearBtTags()" style="background:#334155;color:#cbd5e1;border:none;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">清除</button>
+                        </div>
+                        <div id="btTagFilterBox" style="display:flex;flex-wrap:wrap;gap:6px">
+                            <!-- 標籤勾選項由 JS 動態產生 -->
                         </div>
                     </div>
                     <div id="backtestMsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:16px"></div>
@@ -3201,6 +3211,33 @@
         return el ? el.value : null;
     }
 
+    // 回測標籤篩選:所有可選標籤(分組)
+    const BT_TAG_GROUPS = [
+        { group: '法人/投信比值', tags: ['🏆P90','P70','P50','🏛️月P90','月比P70','月比P50','🏦投信P90','投信比P70','投信比P50'] },
+        { group: '動能', tags: ['雙動能共振','5日動能','一月動能'] },
+        { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振','🔥族群共振'] },
+        { group: '基本面', tags: ['營收>80%','營收>50%'] },
+    ];
+
+    function renderBtTagFilter() {
+        const box = document.getElementById('btTagFilterBox');
+        if (!box) return;
+        box.innerHTML = BT_TAG_GROUPS.map(g => `
+            <div style="display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--input-bg)">
+                <div style="font-size:10px;color:#64748b;font-weight:600">${g.group}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px">
+                    ${g.tags.map(t => `
+                        <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;background:#1e2535;white-space:nowrap">
+                            <input type="checkbox" value="${t}" style="cursor:pointer">${t}
+                        </label>`).join('')}
+                </div>
+            </div>`).join('');
+    }
+
+    function clearBtTags() {
+        document.querySelectorAll('#btTagFilterBox input:checked').forEach(cb => cb.checked = false);
+    }
+
     async function runBacktest() {
         const dateKey = getBacktestDate();
         if (!dateKey) { alert('請選擇入場日期'); return; }
@@ -3240,6 +3277,15 @@
         const holdDays = Math.round((priceDate - entryDate) / (1000*60*60*24));
         const minHold = parseInt(document.getElementById('btHoldDays').value) || 0;
         const minScore = parseInt(document.getElementById('btMinScore').value) || 0;
+        // 取得所有勾選的標籤(複選 AND)
+        const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb => cb.value);
+
+        // 標籤篩選判斷函式(全部勾選的標籤都要符合)
+        function passTagFilter(r) {
+            if (!selectedTags.length) return true;
+            const tags = r.狀態標註 || '';
+            return selectedTags.every(t => tags.includes(t));
+        }
 
         // 提前定義 label / nowLabel（供下方訊息使用，避免 TDZ）
         const label    = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
@@ -3292,7 +3338,7 @@
 
         // 檢查入場 TOP50 有哪些股票在 todayPrices 缺漏
         const neededSyms = entryPayload.top50
-            .filter(r => (r.綜合評分||0) >= (parseInt(document.getElementById('btMinScore').value)||0))
+            .filter(r => (r.綜合評分||0) >= minScore && passTagFilter(r))
             .map(r => r.代號);
         const missingSyms = neededSyms.filter(s => !todayPrices[s]);
 
@@ -3400,7 +3446,7 @@
         // 入場價對照（優先用 priceMap）
         const entryPriceMap = entryPayload.priceMap || {};
         const records = entryPayload.top50
-            .filter(r => (r.綜合評分||0) >= minScore)
+            .filter(r => (r.綜合評分||0) >= minScore && passTagFilter(r))
             .map(r => {
                 const entryPrice  = r.收盤價 || entryPriceMap[r.代號] || null;
                 const currentPrice = todayPrices[r.代號] || null;
@@ -3437,6 +3483,7 @@
             ${[
                 ['入場日期', label, '#60a5fa'],
                 ['現價日期', usedRepoDate || nowLabel, '#60a5fa'],
+                ['篩選條件', selectedTags.length ? selectedTags.join(' + ') : `評分≥${minScore}`, '#a78bfa'],
                 ['持有天數', `${holdDays} 天`, '#94a3b8'],
                 ['有效樣本', `${withPrice.length} 檔`, '#94a3b8'],
                 ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
@@ -3682,6 +3729,7 @@
         initHistDateSelect();   // 歷史查詢日期
         initBacktestDateList(); // 回測日期
         loadCustomIndustry();   // 載入自訂族群
+        renderBtTagFilter();    // 產生回測標籤篩選清單
         loadAndRenderResult();  // 自動載入上次分析結果
     }
     // 自訂族群 Modal ESC / 點背景關閉
