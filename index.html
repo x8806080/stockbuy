@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04p</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04q</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1500,7 +1500,7 @@
             outputHTML += createSection(
                 `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
                 '輸出6_特定ETF大摩共振.csv',
-                ['代號','名稱','當日價格','共振次數','ETF/大摩清單','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 etfResonanceData.map((r,i) => {
                     // ETF 來源改為彩色 TAG
                     const etfTags = (r.出現清單||'').split(' / ').filter(Boolean)
@@ -1511,7 +1511,7 @@
                         }).join('');
                     const m = masterDict[r.代號]||{};
                     const row = stdRow(m);
-                    return [r.代號, r.名稱, row[2], r.共振次數, etfTags, row[3], row[4], row[5], row[6], row[7]];
+                    return [r.代號, r.名稱, row[2], r.共振次數, etfTags, row[3], row[4], row[5], row[6], row[7], row[8]];
                 })
             );
         } else {
@@ -1526,11 +1526,11 @@
         if (rise5dArr.length) {
             outputHTML += createSection(
                 '輸出 5b：5日漲幅排行 TOP 40', '輸出5b_5日漲幅.csv',
-                ['代號','名稱','當日價格','5日漲幅(%)','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise5dArr.map(([sym,chg]) => {
                     const r = masterDict[sym] || {};
                     const row = stdRow(r);
-                    return [row[0], row[1], row[2], chg.toFixed(2), row[3], row[4], row[5], row[6], row[7]];
+                    return [row[0], row[1], row[2], chg.toFixed(2), row[3], row[4], row[5], row[6], row[7], row[8]];
                 })
             );
         }
@@ -1543,11 +1543,11 @@
         if (rise1mArr.length) {
             outputHTML += createSection(
                 '輸出 5c：1個月漲幅排行 TOP 40', '輸出5c_1月漲幅.csv',
-                ['代號','名稱','當日價格','1月漲幅(%)','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg]) => {
                     const r = masterDict[sym] || {};
                     const row = stdRow(r);
-                    return [row[0], row[1], row[2], chg.toFixed(2), row[3], row[4], row[5], row[6], row[7]];
+                    return [row[0], row[1], row[2], chg.toFixed(2), row[3], row[4], row[5], row[6], row[7], row[8]];
                 })
             );
         }
@@ -1645,9 +1645,9 @@
             ),
             // 5日/1月漲幅排行前40（含完整資料，供歷史載入顯示）
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
         };
 
         // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
@@ -2578,13 +2578,13 @@
 
     // ── 統一表格欄位（8欄）──
     // 代號 名稱 當日價格 法人市值比 投信市值比 營收年增 狀態標註 週K布林位置
-    const STD_HEADERS = ['代號','名稱','當日價格','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
+    const STD_HEADERS = ['代號','名稱','當日價格','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
     function stdRow(r, tagFn) {
         const price = (r.收盤價 !== null && r.收盤價 !== undefined && r.收盤價 !== 0) ? r.收盤價 : '-';
         const rev   = (r.營收年增 !== null && r.營收年增 !== undefined && r.營收年增 !== 0)
                       ? (Number(r.營收年增) > 0 ? '+' : '') + Number(r.營收年增).toFixed(1) + '%' : '-';
         const tags  = tagFn ? tagFn(r) : renderTags(r.狀態標註 || '');
-        return [r.代號, r.名稱, price, r.法人市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
+        return [r.代號, r.名稱, price, r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
     }
 
     // ── 把 payload 完整渲染到主輸出區（六大輸出）───────────
@@ -2671,7 +2671,7 @@
             outputHTML += createSection(
                 `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
                 `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
-                ['代號','名稱','當日價格','共振次數','ETF/大摩清單','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 etfRes.map((r,i)=>{
                     const etfTags = (r.ETF清單||'').split(' / ').filter(Boolean)
                         .map(t => {
@@ -2679,7 +2679,7 @@
                                         t.startsWith('00')?'teal':'blue';
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
-                    const row=stdRow(r); return [r.代號,r.名稱,row[2],r.共振次數,etfTags,row[3],row[4],row[5],row[6],row[7]];
+                    const row=stdRow(r); return [r.代號,r.名稱,row[2],r.共振次數,etfTags,row[3],row[4],row[5],row[6],row[7],row[8]];
                 })
             );
         } else {
@@ -2704,14 +2704,14 @@
         if (payload.rise5dRank?.length) {
             outputHTML += createSection(
                 `輸出 5b：5日漲幅排行 TOP 40（${label}）`, `輸出5b_${label.replace(/\//g,'')}.csv`,
-                ['代號','名稱','當日價格','5日漲幅(%)','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 payload.rise5dRank.map(r=>{const row=stdRow(r); return [row[0],row[1],row[2],(r.漲幅||0).toFixed(2),row[3],row[4],row[5],row[6],row[7]];})
             );
         }
         if (payload.rise1mRank?.length) {
             outputHTML += createSection(
                 `輸出 5c：1個月漲幅排行 TOP 40（${label}）`, `輸出5c_${label.replace(/\//g,'')}.csv`,
-                ['代號','名稱','當日價格','1月漲幅(%)','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['代號','名稱','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 payload.rise1mRank.map(r=>{const row=stdRow(r); return [row[0],row[1],row[2],(r.漲幅||0).toFixed(2),row[3],row[4],row[5],row[6],row[7]];})
             );
         }
@@ -2815,11 +2815,11 @@
                         const price = (r.收盤價!=null&&r.收盤價!==0)?r.收盤價:'-';
                         const rev = (r.營收年增!=null&&r.營收年增!==0)?(Number(r.營收年增)>0?'+':'')+Number(r.營收年增).toFixed(1)+'%':'-';
                         return [sym, r.名稱||'', price, `${u.count}/${total}日`, u.dates.join(' · '),
-                                r.法人市值比pct||'-', r.投信市值比pct||'-', rev, tagHtml, renderBoll(r)];
+                                r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', rev, tagHtml, renderBoll(r)];
                     });
             }
 
-            const headers = ['代號','名稱','當日價格','出現天數','出現日期','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
+            const headers = ['代號','名稱','當日價格','出現天數','出現日期','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
             const csvFn   = dates.join('_');
             const dateRange = `${labels[0]} ～ ${labels[labels.length-1]}（共${total}日）`;
 
@@ -2941,7 +2941,7 @@
         both.sort(sortFn); only5d.sort(sortFn); only1m.sort(sortFn);
 
         const dateLabels = dates.map(d=>d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8)).join('、');
-        const headers = ['代號','名稱','當日價格','歷史出現次數','出現日期','法人市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
+        const headers = ['代號','名稱','當日價格','歷史出現次數','出現日期','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
 
         function makeRows(syms) {
             return syms.map((s) => {
@@ -2951,7 +2951,7 @@
                 const price = (r.收盤價!=null&&r.收盤價!==0)?r.收盤價:'-';
                 const rev = (r.營收年增!=null&&r.營收年增!==0)?(Number(r.營收年增)>0?'+':'')+Number(r.營收年增).toFixed(1)+'%':'-';
                 return [s, r.名稱||'', price, `${symDateCount[s]}/${dates.length} 天`,
-                        (symDates[s]||[]).join(' / '), r.法人市值比pct||'-', r.投信市值比pct||'-',
+                        (symDates[s]||[]).join(' / '), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-',
                         rev, renderTags(r.狀態標註||''), renderBoll(r)];
             });
         }
