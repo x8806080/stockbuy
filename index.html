@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04w</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04z</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1427,27 +1427,35 @@
         });
 
         // ── 族群統計（供輸出1標籤 + 輸出4使用）──
+        // 統一正規化：去除前後空白、全形空白，避免比對失敗
+        const normInd = s => (s||'').replace(/\u3000/g,' ').trim();
+        const splitInds = str => (str||'').split(/[,、，]/).map(normInd).filter(Boolean);
+
         let indMap = {};
         top50.forEach(r => {
-            if (!r.相關產業) return;
-            r.相關產業.split(/[,、，]/).forEach(ind => {
-                ind = ind.trim();
-                if (!ind) return;
+            splitInds(r.相關產業).forEach(ind => {
                 if (!indMap[ind]) indMap[ind] = { count: 0, corpSum: 0 };
                 indMap[ind].count   += 1;
                 indMap[ind].corpSum += (r.三大法人5日買超 || 0);
             });
         });
-        const sortedInds = Object.entries(indMap).sort((a,b) => b[1].corpSum - a[1].corpSum).slice(0, 8);
+        // 熱門族群排序：先看進榜檔數(熱門度)，再看資金
+        const sortedInds = Object.entries(indMap)
+            .sort((a,b) => (b[1].count - a[1].count) || (b[1].corpSum - a[1].corpSum))
+            .slice(0, 8);
         const top5Inds = new Set(sortedInds.slice(0,5).map(([ind])=>ind));
+        console.log('[前5大熱門族群]', [...top5Inds]);
 
-        // 為 TOP50 標記所屬的前5大族群（在狀態標註加族群TAG）
+        // 為 TOP50 標記所屬的前5大族群（用相同正規化比對，避免漏標）
         function addIndTag(r) {
-            const myInds = (r.相關產業||'').split(/[,、，]/).map(x=>x.trim()).filter(Boolean);
+            const myInds = splitInds(r.相關產業);
             const matched = myInds.filter(x => top5Inds.has(x));
             const indTags = matched.map(x => `<span class="s-tag teal">${x}</span>`).join('');
             return indTags + renderTags(r.狀態標註);
         }
+        outputHTML += `<div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:6px;padding:8px 14px;font-size:12px;color:#5eead4;margin-bottom:8px">
+            🏷️ <b>前5大熱門族群（青色TAG）：</b>${[...top5Inds].map(t=>`<span class="s-tag teal">${t}</span>`).join('') || '（無）'}
+        </div>`;
         outputHTML += createSection(
             '輸出 1：整份資料 TOP 50 推薦表', '輸出1_TOP50.csv',
             STD_HEADERS,
@@ -1494,6 +1502,7 @@
             <h2>輸出 4：今日熱門族群解析 (TOP 50 資金匯聚)
                 <button class="btn-download" onclick='downloadCSV("輸出4_熱門族群.csv", ${JSON.stringify([["排行","產業名稱","進榜檔數","三大法人資金匯入(億元估算)"], ...out4Rows])})'>下載 CSV</button>
             </h2>`;
+        out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大熱門族群（個股TAG依此標記）：${[...top5Inds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ')}</div>`;
         if (pieData.length > 0) {
             out4HTML += buildPieChart(pieData, 260);
             out4HTML += `<p style="font-size:12px;color:#888;margin-top:4px">※ 資金估算：法人買超張數 ÷ 2000 ≈ 億元（以均價 NT$50 / 1000股/張 計）</p>`;
@@ -1508,7 +1517,8 @@
         const resonanceData = resonanceSymbols
             .map(s => {
                 const base = masterDict[s] || { 代號: s, 名稱: '' };
-                return { 代號: s, 名稱: base.名稱, 五日漲幅: rise5dMap[s] ?? 0, 一月漲幅: rise1mMap[s] ?? 0 };
+                // 帶完整欄位(供存檔/歷史載入用 stdRow 渲染)
+                return { ...slimEntry(base), 五日漲幅: rise5dMap[s] ?? 0, 一月漲幅: rise1mMap[s] ?? 0 };
             })
             .sort((a, b) => b.五日漲幅 - a.五日漲幅);
 
@@ -1683,11 +1693,14 @@
             inv:       finalData.filter(r => inventorySymbols.has(r.代號)),
             top20:     top50.filter(r => !inventorySymbols.has(r.代號)).slice(0,20),
             inds:      Object.entries(indMap)
-                           .sort((a,b)=>b[1].corp-a[1].corp).slice(0,8)
-                           .map(([k,v])=>({ind:k,count:v.count,corp:v.corp})),
+                           .sort((a,b)=>b[1].corpSum-a[1].corpSum).slice(0,8)
+                           .map(([k,v])=>({ind:k,count:v.count,corp:v.corpSum})),
             resonance: resonanceData,
             etfRes:    Object.entries(etfSourceDict)
-                           .map(([s,st])=>({代號:s,名稱:masterDict[s]?.名稱||'',共振次數:st.size,ETF清單:[...st].join(' / ')}))
+                           .map(([s,st])=>{
+                               const base = masterDict[s] || {代號:s,名稱:''};
+                               return { ...slimEntry(base), 共振次數:st.size, ETF清單:[...st].join(' / ') };
+                           })
                            .filter(r=>r.共振次數>=(SC.etf?.minCount||2))
                            .sort((a,b)=>b.共振次數-a.共振次數),
             rise5d: [...rise5dTop40],
@@ -2632,6 +2645,11 @@
         }
     }
 
+    // ── 切割相關產業字串成族群陣列 ──
+    function splitInds(s) {
+        return (s || '').split(/[,、，;；\/]/).map(x => x.trim()).filter(Boolean);
+    }
+
     // ── 統一表格欄位（8欄）──
     // 代號 名稱 當日價格 法人市值比 投信市值比 營收年增 狀態標註 週K布林位置
     const STD_HEADERS = ['代號','名稱','當日價格','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
@@ -2712,7 +2730,22 @@
         // 輸出4
         if (inds.length) {
             const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
-            const pieData = inds.filter(d=>d.corp>0).map(d=>({label:d.ind,v:d.corp}));
+            // 相容舊資料：若 inds 空或 corp 全無效，從 top50 即時重算族群統計
+            let indsUse = inds;
+            const indsValid = inds && inds.length && inds.some(d => (d.corp||0) > 0);
+            if (!indsValid && top50.length) {
+                const m = {};
+                top50.forEach(r => {
+                    (r.相關產業||'').split(/[,、，]/).forEach(ind => {
+                        ind = ind.trim(); if (!ind) return;
+                        if (!m[ind]) m[ind] = { count:0, corp:0 };
+                        m[ind].count++; m[ind].corp += (r.三大法人5日買超||0);
+                    });
+                });
+                indsUse = Object.entries(m).sort((a,b)=>b[1].corp-a[1].corp).slice(0,8)
+                    .map(([k,v])=>({ind:k, count:v.count, corp:v.corp}));
+            }
+            const pieData = indsUse.filter(d=>d.corp>0).map(d=>({label:d.ind,v:d.corp}));
             let out4 = `<div class="report-section"><h2>輸出 4：今日熱門族群解析</h2>`;
             if (pieData.length) {
                 out4 += `<div class="pie-wrap">${buildPieChart(pieData,220)}`;
@@ -2722,7 +2755,7 @@
                 ).join('')+'</div></div>';
             }
             out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
-            inds.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
+            indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
             out4 += `</table></div></div>`;
             outputHTML += out4;
         }
