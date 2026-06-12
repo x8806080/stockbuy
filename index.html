@@ -331,7 +331,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04v</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04w</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2649,6 +2649,24 @@
                 thrA, thrB, thrC, date } = payload;
         const SC = getScoreConfig();
         const label = dateLabel || date || '';
+
+        // ── 相容舊資料：若缺少比值pct欄位，用買超÷市值即時補算 ──
+        function patchRatios(arr) {
+            (arr||[]).forEach(r => {
+                const mktMil = (r.市值億 ? r.市值億*100 : r.市值) || 0; // 統一成百萬
+                if ((r.法人市值比pct === undefined || r.法人市值比pct === '-' || r.法人市值比pct == null) && mktMil > 0 && r.三大法人5日買超) {
+                    r.法人市值比pct = (r.三大法人5日買超 / mktMil * 100).toFixed(3) + '%';
+                }
+                if ((r.法人月市值比pct === undefined || r.法人月市值比pct === '-' || r.法人月市值比pct == null) && mktMil > 0 && r.法人一月買超) {
+                    r.法人月市值比pct = (r.法人一月買超 / mktMil * 100).toFixed(3) + '%';
+                }
+                if ((r.投信市值比pct === undefined || r.投信市值比pct === '-' || r.投信市值比pct == null) && mktMil > 0 && r.投信週買超) {
+                    r.投信市值比pct = (r.投信週買超 / mktMil * 100).toFixed(3) + '%';
+                }
+            });
+        }
+        patchRatios(top50); patchRatios(inv); patchRatios(top20); patchRatios(resonance); patchRatios(etfRes);
+        patchRatios(payload.rise5dRank); patchRatios(payload.rise1mRank); patchRatios(payload.riseStart);
 
         let outputHTML = '';
 
