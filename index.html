@@ -246,41 +246,83 @@
 
         /* ══ RWD：手機 ══ */
         @media (max-width: 600px) {
-            /* 手機：放大主要字體，表格維持可讀 */
+            /* 手機：整體放大 */
             body { padding: 6px; font-size: 16px; }
             .container { padding: 12px 10px; border-radius: 8px; }
-            h1 { font-size: 19px; }
+            h1 { font-size: 20px; }
             h2 { font-size: 16px; }
-            table { font-size: 14px; }
-            th, td { padding: 8px 9px; }
-            .s-tag { font-size: 12px; }
-            button { padding: 11px 16px; font-size: 15px; width: 100%; }
-            .btn-download { width: auto; margin-left: 0; margin-top: 6px; }
+            .report-section h2 { font-size: 15px; flex-wrap: wrap; }
+            button { padding: 11px 16px; font-size: 15px; }
+            .btn-download { width: auto; margin-left: 0; margin-top: 6px; padding: 6px 14px; }
             .upload-row { flex-direction: column; }
             input[type="file"] { font-size: 14px; }
             input, select { font-size: 16px; }
-            .score-row label { min-width: 120px; font-size: 11px; }
-            .score-row input[type=number] { width: 54px; font-size: 12px; }
-            .report-section h2 { font-size: 13px; }
-            table { font-size: 11px; min-width: 360px; }
-            th, td { padding: 5px 6px; }
-            .s-tag { font-size: 10px; padding: 1px 5px; }
+            .score-row label { min-width: 120px; font-size: 12px; }
+            .score-row input[type=number] { width: 60px; font-size: 14px; }
             .temp-value { font-size: 18px; }
             .temp-gauge { min-width: 140px; padding: 8px 10px; }
             .pie-wrap { flex-direction: column; }
             .hist-actions { flex-direction: column; }
             .hist-actions button { width: 100%; }
+
+            /* ── 表格卡片化：每列變一張卡片，欄位直式排列 ── */
+            .tbl-wrap { overflow: visible; }
+            .tbl-wrap table { min-width: 0 !important; width: 100%; border: none; font-size: 15px; }
+            .tbl-wrap table tr:first-child { display: none; } /* 隱藏表頭列 */
+            .tbl-wrap table tr {
+                display: block;
+                background: #11161f;
+                border: 1px solid #1e293b;
+                border-radius: 10px;
+                padding: 10px 12px;
+                margin-bottom: 10px;
+            }
+            .tbl-wrap table tr.tag-hidden { display: none; }
+            .tbl-wrap table td {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 12px;
+                border: none;
+                border-bottom: 1px solid #1a2230;
+                padding: 6px 0;
+                text-align: right;
+            }
+            .tbl-wrap table td:last-child { border-bottom: none; }
+            .tbl-wrap table td::before {
+                content: attr(data-label);
+                font-weight: 700;
+                color: #64748b;
+                text-align: left;
+                white-space: nowrap;
+                flex-shrink: 0;
+                font-size: 13px;
+            }
+            /* 第一欄(代號)當卡片標題,放大 */
+            .tbl-wrap table td:first-child {
+                font-size: 18px;
+                font-weight: 800;
+                color: #60a5fa;
+                border-bottom: 2px solid #1e293b;
+                padding-bottom: 8px;
+                margin-bottom: 4px;
+            }
+            .tbl-wrap table td:first-child::before { color: #475569; font-size: 13px; }
+            /* 狀態標註欄:TAG 可換行靠右 */
+            .s-tag { font-size: 12px; padding: 2px 7px; display: inline-block; margin: 1px; }
+            .tbl-wrap table td .s-tag { text-align: left; }
+            /* 篩選列在手機可橫向捲動 */
+            .tag-filter-bar { overflow-x: auto; flex-wrap: wrap; }
         }
 
         /* ══ RWD：iPhone SE / 小手機 ══ */
         @media (max-width: 390px) {
-            /* 小手機：表格不要太小 */
+            /* 小手機：卡片字體微調 */
             .container { padding: 8px 6px; }
-            table { font-size: 13px; min-width: 320px; }
-            th, td { padding: 6px 6px; }
-            h1 { font-size: 17px; }
-            h2 { font-size: 15px; }
-            .s-tag { font-size: 11px; }
+            h1 { font-size: 18px; }
+            .tbl-wrap table { font-size: 14px; }
+            .tbl-wrap table td:first-child { font-size: 17px; }
+            .tbl-wrap table td::before { font-size: 12px; }
         }
 
         /* ══ 列印 / PDF 樣式 ══ */
@@ -331,7 +373,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ab</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ac</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2487,7 +2529,7 @@
                 for (const m of matches) tags.push(m[2].trim());
             });
             const tagAttr = tags.length ? ` data-tags="${tags.map(t=>t.replace(/"/g,'&quot;')).join('|')}"` : '';
-            tableRows += `<tr${tagAttr}>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`;
+            tableRows += `<tr${tagAttr}>${row.map((cell,ci)=>`<td data-label="${(headers[ci]||'').replace(/"/g,'&quot;')}">${cell}</td>`).join('')}</tr>`;
         });
 
         return `<div class="report-section" id="${secId}">
