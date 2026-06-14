@@ -421,7 +421,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ai</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04aj</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1050,8 +1050,10 @@
     function buildPieChart(data, width) {
         const W = width || 260, H = W;
         const cx = W/2, cy = H/2, r = W*0.38;
+        // 過濾無效 value(NaN/undefined/<=0),避免座標算出 NaN
+        data = (data || []).filter(d => d && Number.isFinite(d.value) && d.value > 0);
         const total = data.reduce((s,d) => s + d.value, 0);
-        if (total === 0) return '';
+        if (!Number.isFinite(total) || total <= 0 || data.length === 0) return '';
         let paths = '', startAngle = -Math.PI / 2;
         const slices = [];
         data.forEach((d, i) => {
@@ -2149,10 +2151,17 @@
     // raw.githubusercontent.com 直接讀 JSON（直接回傳 JSON，不需 Base64 解碼）
     async function rawFetch(path) {
         const cfg = getRepoConfig();
+        // 私有 repo：raw.githubusercontent.com 帶 Token 會 CORS preflight 失敗
+        // → 直接走 Contents API（api.github.com 支援 CORS + Token），呼叫端無感
+        if (hasRepo()) {
+            const apiURL = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${cfg.branch || 'main'}`;
+            const data = await repoGet(apiURL);
+            if (!data) return null;
+            return decodeGitHubContent(data.content);
+        }
+        // 公開 repo：直接讀 raw（不帶 header，無 preflight）
         const url = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch || 'main'}/${path}`;
-        // 帶 Token header（私有 repo 需要）
-        const headers = hasRepo() ? { 'Authorization': `token ${REPO_CONFIG.TOKEN}` } : {};
-        const r = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`rawFetch HTTP ${r.status}`);
         return r.json();
