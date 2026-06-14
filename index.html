@@ -421,7 +421,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ag</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ah</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -617,15 +617,6 @@
                 <span id="gistDot" style="width:8px;height:8px;border-radius:50%;background:#4b5563;display:inline-block;flex-shrink:0"></span>
                 <span id="gistMsg">尚未同步</span>
             </div>
-        <h2>📈 市場溫度歷史走勢</h2>
-        <p class="history-subtitle">每次分析後自動記錄 TOP 20 平均分，追蹤市場籌碼強度趨勢</p>
-        <div id="histTempBar" class="temp-bar"></div>
-        <div class="chart-wrap"><svg id="histChart" width="100%" height="180"></svg></div>
-        <div id="histTableWrap"></div>
-        <div class="hist-actions">
-            <button class="btn-hist-export" onclick="exportHistCSV()">📥 匯出歷史 CSV</button>
-            <button class="btn-hist-clear" onclick="clearAllHist()">🗑 清除所有紀錄</button>
-        </div>
     </div>
 
     <!-- ══════════════ 評分規則編輯器 ══════════════ -->
@@ -1985,7 +1976,7 @@
         const top1score  = top50.length > 0 ? top50[0].綜合評分 : 0;
         const top20min   = top20scores.length > 0 ? Math.min(...top20scores) : 0;
 
-        await saveHistoryRecord({
+        saveHistoryRecord({
             date:    new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' }),
             avg20,
             top1:    top1score,
@@ -2408,21 +2399,7 @@
         renderHistory();
     }
 
-    async function clearAllHist() {
-        if (!confirm('確定要清除所有歷史紀錄？')) return;
-        localStorage.removeItem(HIST_KEY);
-        if (hasRepo()) {
-            try {
-                let sha = null;
-                const getRes = await fetch(repoFileURL(), { headers: repoHeaders() });
-                if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
-                const content = btoa('[]');
-                await fetch(repoFileURL(), { method: 'PUT', headers: repoHeaders(),
-                    body: JSON.stringify({ message: 'clear all history', content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) }) });
-            } catch (e) { console.warn('GitHub Repo 清除同步失敗:', e.message); }
-        }
-        renderHistory();
-    }
+
 
     function getSignal(avg) {
         if (avg >= 70) return { text: '滿倉', cls: 'sig-full',   dot: '#2ecc71', color: '#2ecc71' };
@@ -2432,193 +2409,31 @@
     }
 
     // ── 純 SVG 折線圖 ──────────────────────────────
-    function buildLineChart(hist) {
-        const W = 900, H = 160, PAD = { t: 20, b: 34, l: 44, r: 20 };
-        const cW = W - PAD.l - PAD.r;
-        const cH = H - PAD.t - PAD.b;
-        const scores = hist.map(h => h.avg20);
-        const maxV = Math.max(...scores, 75);
-        const minV = Math.max(0, Math.min(...scores, 30) - 5);
-        const range = maxV - minV || 1;
 
-        // helper: value → y pixel
-        const vy = v => PAD.t + cH - ((v - minV) / range) * cH;
-        // helper: index → x pixel
-        const vx = i => PAD.l + (hist.length === 1 ? cW / 2 : (i / (hist.length - 1)) * cW);
-
-        let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${H}px">`;
-
-        // 區域參考線 (70, 50, 35)
-        const zones = [
-            { v: 70, color: '#2ecc7133', label: '70 滿倉' },
-            { v: 50, color: '#3498db33', label: '50 正常' },
-            { v: 35, color: '#f39c1233', label: '35 縮減' },
-        ];
-        zones.forEach(z => {
-            if (z.v < minV || z.v > maxV) return;
-            const y = vy(z.v);
-            svg += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="${z.color.slice(0,7)}" stroke-width="1" stroke-dasharray="4,4" opacity="0.6"/>`;
-            svg += `<text x="${PAD.l - 4}" y="${y + 4}" text-anchor="end" fill="${z.color.slice(0,7)}" font-size="9" opacity="0.8">${z.v}</text>`;
-        });
-
-        // Y 軸刻度
-        [minV, Math.round((minV+maxV)/2), maxV].forEach(v => {
-            const y = vy(v);
-            svg += `<text x="${PAD.l - 6}" y="${y + 4}" text-anchor="end" fill="#5a6a8a" font-size="10">${Math.round(v)}</text>`;
-        });
-
-        if (hist.length < 2) {
-            // 只有 1 筆：畫一個點
-            if (hist.length === 1) {
-                const x = vx(0), y = vy(scores[0]);
-                const sig = getSignal(scores[0]);
-                svg += `<circle cx="${x}" cy="${y}" r="6" fill="${sig.color}"/>`;
-                svg += `<text x="${x}" y="${y - 10}" text-anchor="middle" fill="#e0e6f0" font-size="11">${scores[0]}</text>`;
-                svg += `<text x="${x}" y="${H - 6}" text-anchor="middle" fill="#6a7a9a" font-size="10">${hist[0].date.slice(5)}</text>`;
-            } else {
-                svg += `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#5a6a8a" font-size="13">尚無歷史資料，執行一次分析即開始記錄</text>`;
-            }
-            svg += '</svg>';
-            return svg;
-        }
-
-        // 填充區域
-        const areaPoints = hist.map((h, i) => `${vx(i)},${vy(h.avg20)}`).join(' ');
-        const firstX = vx(0), lastX = vx(hist.length - 1), baseY = vy(minV);
-        svg += `<polygon points="${firstX},${baseY} ${areaPoints} ${lastX},${baseY}" fill="#3498db" opacity="0.08"/>`;
-
-        // 折線
-        const linePoints = hist.map((h, i) => `${vx(i)},${vy(h.avg20)}`).join(' ');
-        svg += `<polyline points="${linePoints}" fill="none" stroke="#3498db" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-
-        // 各點
-        hist.forEach((h, i) => {
-            const x = vx(i), y = vy(h.avg20);
-            const sig = getSignal(h.avg20);
-            svg += `<circle cx="${x}" cy="${y}" r="4.5" fill="${sig.color}" stroke="#1a1f2e" stroke-width="1.5"/>`;
-            // 分數標籤（只顯示首尾 + 最大最小 + 最近）
-            const isFirst = i === 0, isLast = i === hist.length - 1;
-            const isMax = h.avg20 === Math.max(...scores);
-            const isMin = h.avg20 === Math.min(...scores);
-            if (isFirst || isLast || isMax || isMin) {
-                const labelY = y < PAD.t + 16 ? y + 16 : y - 8;
-                svg += `<text x="${x}" y="${labelY}" text-anchor="middle" fill="${sig.color}" font-size="10" font-weight="bold">${h.avg20}</text>`;
-            }
-            // X 軸日期（稀疏顯示，每隔幾週一個）
-            const step = Math.max(1, Math.floor(hist.length / 10));
-            if (i % step === 0 || isLast) {
-                svg += `<text x="${x}" y="${H - 4}" text-anchor="middle" fill="#5a6a8a" font-size="9">${h.date.slice(5)}</text>`;
-            }
-        });
-
-        svg += '</svg>';
-        return svg;
-    }
 
     // ── 渲染整個歷史面板 ──────────────────────────
     async function renderHistory() {
-        // 更新 Gist 狀態指示
+        // 更新 GitHub 同步狀態指示(溫度走勢功能已移除)
         const dot = document.getElementById('gistDot');
         const msg = document.getElementById('gistMsg');
         if (dot && msg) {
-            if (!hasRepo()) {
+            if (hasRepo()) {
+                try {
+                    const hist = await loadHistory();
+                    dot.style.background = '#4ade80';
+                    msg.textContent = `✅ GitHub Repo 同步（${hist.length} 筆紀錄）`;
+                } catch(e) {
+                    dot.style.background = '#facc15';
+                    msg.textContent = 'GitHub Repo 同步中…';
+                }
+            } else {
                 dot.style.background = '#6b7280';
                 msg.textContent = 'GitHub Repo 未設定（填入 Token 後啟用跨裝置同步）';
-            } else {
-                dot.style.background = '#facc15';
-                msg.textContent = 'GitHub Repo 同步中…';
             }
         }
-        const hist = await loadHistory();
-        if (dot && msg && hasRepo()) {
-            dot.style.background = '#4ade80';
-            msg.textContent = `✅ GitHub Repo 同步（${hist.length} 筆紀錄）`;
-        }
-
-        // 溫度燈號（最新一筆）
-        const tempBar = document.getElementById('histTempBar');
-        if (hist.length > 0) {
-            const latest = hist[hist.length - 1];
-            const sig = getSignal(latest.avg20);
-            // 趨勢箭頭
-            let trend = '', trendColor = '#9aafc8';
-            if (hist.length >= 2) {
-                const prev = hist[hist.length - 2].avg20;
-                const diff = latest.avg20 - prev;
-                if (diff > 3)       { trend = `▲ +${diff}`; trendColor = '#2ecc71'; }
-                else if (diff < -3) { trend = `▼ ${diff}`;  trendColor = '#e74c3c'; }
-                else                { trend = `— ${diff > 0 ? '+':''}${diff}`; trendColor = '#f39c12'; }
-            }
-            tempBar.innerHTML = `
-                <div class="temp-gauge">
-                    <div class="temp-dot" style="background:${sig.dot};box-shadow:0 0 8px ${sig.dot}"></div>
-                    <div>
-                        <div class="temp-label">最新 TOP 20 平均分（${latest.date}）</div>
-                        <div style="font-size:11px;color:#5a6a8a">共 ${latest.total} 支標的參與評分</div>
-                    </div>
-                    <div class="temp-value" style="color:${sig.color}">${latest.avg20}</div>
-                </div>
-                <div class="temp-gauge" style="flex:0;min-width:150px">
-                    <div>
-                        <div class="temp-label">操作訊號</div>
-                        <div style="margin-top:4px"><span class="signal-chip ${sig.cls}">${sig.text}</span></div>
-                    </div>
-                </div>
-                <div class="temp-gauge" style="flex:0;min-width:150px">
-                    <div>
-                        <div class="temp-label">週趨勢</div>
-                        <div style="font-size:20px;font-weight:bold;color:${trendColor};margin-top:2px">${trend || '—'}</div>
-                    </div>
-                </div>`;
-        } else {
-            tempBar.innerHTML = `<div style="color:#5a6a8a;font-size:13px">尚無紀錄，執行分析後自動儲存</div>`;
-        }
-
-        // 走勢圖
-        document.getElementById('histChart').outerHTML =
-            `<div id="histChart" class="chart-wrap" style="padding:0">${buildLineChart(hist)}</div>`;
-        // 因 outerHTML 替換後 id 仍有效但元素已換，需再找 chart-wrap 重置
-        // 實際上直接插到 chart-wrap 裡
-        document.querySelector('.chart-wrap').innerHTML = buildLineChart(hist);
-
-        // 表格（倒序：最新在上）
-        const wrap = document.getElementById('histTableWrap');
-        if (hist.length === 0) {
-            wrap.innerHTML = '<div class="no-hist">執行一次分析後，歷史紀錄將顯示在這裡</div>';
-            return;
-        }
-        const reversed = [...hist].reverse();
-        let tbl = `<div class="tbl-wrap"><table class="hist-table">
-            <tr><th>日期</th><th>TOP20 平均分</th><th>TOP1 最高分</th><th>TOP20 最低分</th><th>標的總數</th><th>市場訊號</th><th></th></tr>`;
-        reversed.forEach((h, ri) => {
-            const realIdx = hist.length - 1 - ri;
-            const sig = getSignal(h.avg20);
-            tbl += `<tr>
-                <td>${h.date}</td>
-                <td style="font-weight:bold;color:${sig.color}">${h.avg20}</td>
-                <td>${h.top1}</td>
-                <td>${h.min20}</td>
-                <td>${h.total}</td>
-                <td><span class="signal-chip ${sig.cls}">${sig.text}</span></td>
-                <td><button class="btn-del-hist" onclick="deleteHistRecord(${realIdx})">刪除</button></td>
-            </tr>`;
-        });
-        tbl += '</table>';
-        wrap.innerHTML = tbl;
     }
 
-    async function exportHistCSV() {
-        const hist = await loadHistory();
-        if (hist.length === 0) { alert('尚無歷史紀錄'); return; }
-        const rows = [
-            ['日期','TOP20平均分','TOP1最高分','TOP20最低分','標的總數','市場訊號'],
-            ...hist.map(h => {
-                const sig = getSignal(h.avg20);
-                return [h.date, h.avg20, h.top1, h.min20, h.total, sig.text];
-            })
-        ];
-        downloadCSV('市場溫度歷史_' + new Date().toISOString().slice(0,10) + '.csv', rows);
-    }
+
 
 
     // ── 歷史查詢 & 共振比對 ──────────────────────────────────
