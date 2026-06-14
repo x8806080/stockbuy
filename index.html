@@ -421,7 +421,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ae</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ag</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -784,9 +784,17 @@
                 ✅ ±2σ內 → 正常，不警示<br>
                 σ推算公式：σ = (上軌 - 中軌) ÷ 2 &emsp; 3σ上軌 = 中軌 + 1.5 × (上軌 - 中軌)
             </div>
-            <button class="btn-reset" onclick="resetScores()">↺ 還原預設值</button>
+            <select id="presetSelect" onchange="loadScorePreset(this.value)"
+                    style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px">
+                    <option value="">— 載入已存設定 —</option>
+                </select>
+                <button class="btn-save-cfg" onclick="saveScorePreset()"
+                    style="background:#16a34a">💾 儲存設定</button>
+                <button class="btn-del-cfg" onclick="deleteScorePreset()"
+                    style="background:#475569">🗑️ 刪除設定</button>
+                <button class="btn-reset" onclick="resetScores()">↺ 還原預設值</button>
                 <button class="btn-export-cfg" onclick="exportConfig()">📥 匯出設定 CSV</button>
-                <span style="font-size:13px;color:#888">修改後直接按下方「開始分析」即套用新規則</span>
+                <span style="font-size:13px;color:#888">改完按「開始分析」套用；可儲存多組設定下次載入</span>
             </div>
         </div>
     </details>
@@ -908,7 +916,65 @@
             const el = document.getElementById(k);
             if (el) el.value = v;
         });
-        document.getElementById('changedBadge').style.display = 'none';
+        const badge = document.getElementById('changedBadge');
+        if (badge) badge.style.display = 'none';
+    }
+
+    // ── 評分設定 儲存/載入（localStorage 多組具名設定）──
+    const SCORE_PRESETS_KEY = 'scorePresets_v1';
+    function getScorePresets() {
+        try { return JSON.parse(localStorage.getItem(SCORE_PRESETS_KEY) || '{}'); }
+        catch(e) { return {}; }
+    }
+    function readEditorValues() {
+        const obj = {};
+        Object.keys(DEFAULTS).forEach(k => {
+            const el = document.getElementById(k);
+            if (el) obj[k] = el.value;
+        });
+        return obj;
+    }
+    function applyEditorValues(obj) {
+        Object.entries(obj).forEach(([k,v]) => {
+            const el = document.getElementById(k);
+            if (el) el.value = v;
+        });
+    }
+    function saveScorePreset() {
+        const name = prompt('請輸入此組設定的名稱：');
+        if (!name) return;
+        const presets = getScorePresets();
+        presets[name] = readEditorValues();
+        localStorage.setItem(SCORE_PRESETS_KEY, JSON.stringify(presets));
+        renderPresetSelect();
+        document.getElementById('presetSelect').value = name;
+        alert(`已儲存設定：「${name}」`);
+    }
+    function loadScorePreset(name) {
+        if (!name) return;
+        const presets = getScorePresets();
+        if (presets[name]) {
+            applyEditorValues(presets[name]);
+            const badge = document.getElementById('changedBadge');
+            if (badge) badge.style.display = '';
+        }
+    }
+    function deleteScorePreset() {
+        const name = document.getElementById('presetSelect').value;
+        if (!name) { alert('請先從下拉選單選擇要刪除的設定'); return; }
+        if (!confirm(`確定刪除設定「${name}」？`)) return;
+        const presets = getScorePresets();
+        delete presets[name];
+        localStorage.setItem(SCORE_PRESETS_KEY, JSON.stringify(presets));
+        renderPresetSelect();
+    }
+    function renderPresetSelect() {
+        const sel = document.getElementById('presetSelect');
+        if (!sel) return;
+        const presets = getScorePresets();
+        const names = Object.keys(presets);
+        sel.innerHTML = '<option value="">— 載入已存設定 —</option>' +
+            names.map(n => `<option value="${n}">${n}</option>`).join('');
     }
 
     // 偵測任何 input 變動 → 顯示「已修改」badge
@@ -1521,17 +1587,20 @@
         const normInd = s => (s||'').replace(/\u3000/g,' ').trim();
         const splitInds = str => (str||'').split(/[,、，]/).map(normInd).filter(Boolean);
 
+        // 熱門族群：依「5日漲幅排行TOP40」標的的相關產業進榜檔數統計
         let indMap = {};
-        top50.forEach(r => {
+        rise5dTop40.forEach(sym => {
+            const r = masterDict[sym];
+            if (!r) return;
             splitInds(r.相關產業).forEach(ind => {
                 if (!indMap[ind]) indMap[ind] = { count: 0, corpSum: 0 };
                 indMap[ind].count   += 1;
                 indMap[ind].corpSum += (r.三大法人5日買超 || 0);
             });
         });
-        // 熱門族群排序：依三大法人資金匯入(corpSum)排序
+        // 熱門族群排序：依5日漲幅TOP40進榜檔數(count)排序，同檔數再比資金
         const sortedInds = Object.entries(indMap)
-            .sort((a,b) => b[1].corpSum - a[1].corpSum)
+            .sort((a,b) => (b[1].count - a[1].count) || (b[1].corpSum - a[1].corpSum))
             .slice(0, 8);
         const top5Inds = new Set(sortedInds.slice(0,5).map(([ind])=>ind));
         console.log('[前5大熱門族群]', [...top5Inds]);
@@ -2079,6 +2148,55 @@
         return r.json();
     }
 
+    // 刪除 repo 檔案(GitHub Contents API DELETE)
+    async function repoDelete(url, sha, message) {
+        const body = JSON.stringify({ message, sha, branch: REPO_CONFIG.BRANCH });
+        const r = await fetch(url, { method:'DELETE', headers: repoHeaders(), body });
+        if (!r.ok) {
+            const errText = await r.text();
+            throw new Error(`DELETE HTTP ${r.status}: ${errText.slice(0,100)}`);
+        }
+        return true;
+    }
+
+    // 刪除某日歷史資料(檔案 + 索引移除)
+    async function deleteDailyResult(dateKey) {
+        if (!hasRepo()) { alert('尚未設定 GitHub Token，無法刪除'); return false; }
+        if (!confirm(`確定要刪除 ${dateKey} 的歷史資料嗎？此動作無法復原。`)) return false;
+        try {
+            // 1. 刪每日檔
+            const existing = await repoGet(dailyFileURL(dateKey));
+            if (existing?.sha) {
+                await repoDelete(dailyFileURL(dateKey), existing.sha, `delete ${dateKey}`);
+            }
+            // 2. 從索引移除
+            const idxData = await repoGet(dailyIndexURL());
+            if (idxData) {
+                let idx = [];
+                try { idx = decodeGitHubContent(idxData.content); } catch(e) { idx = []; }
+                idx = idx.filter(d => d !== dateKey);
+                await repoPut(dailyIndexURL(), idx, idxData.sha, `update index after delete ${dateKey}`);
+            }
+            console.log(`🗑️ ${dateKey} 已刪除`);
+            return true;
+        } catch(e) {
+            alert(`刪除失敗：${e.message}`);
+            return false;
+        }
+    }
+    window.deleteDailyResult = deleteDailyResult;
+
+    // 刪除按鈕的處理(刪除後重新載入清單)
+    async function onDeleteHistDate(dateKey, ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        const ok = await deleteDailyResult(dateKey);
+        if (ok) {
+            await initHistDateSelect();
+            if (typeof initBacktestDateList === 'function') await initBacktestDateList();
+        }
+    }
+    window.onDeleteHistDate = onDeleteHistDate;
+
     async function saveDailyResult(payload, dateKey) {
         if (!hasRepo()) return;
         // 步驟1：存每日分析檔
@@ -2514,12 +2632,16 @@
         }
         container.innerHTML = idx.map(dateKey => {
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-            return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:13px;color:var(--text)"
+            return `<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:5px"
                 onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background=''">
-                <input type="checkbox" value="${dateKey}" class="hist-date-cb"
-                    style="width:15px;height:15px;accent-color:#3b82f6;cursor:pointer">
-                ${label}
-            </label>`;
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text);flex:1">
+                    <input type="checkbox" value="${dateKey}" class="hist-date-cb"
+                        style="width:15px;height:15px;accent-color:#3b82f6;cursor:pointer">
+                    ${label}
+                </label>
+                <button onclick="onDeleteHistDate('${dateKey}', event)" title="刪除此日資料"
+                    style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:2px 6px;line-height:1;width:auto">🗑️</button>
+            </div>`;
         }).join('');
     }
 
@@ -2555,12 +2677,49 @@
             });
         });
 
-        // 篩選列 HTML
+        // 篩選列 HTML（依類型分組排序：同類型放一起）
         let filterHtml = '';
         if (tagSet.size > 0) {
+            // TAG 分類排序權重（數字小的排前面）
+            function tagOrder(t) {
+                // 法人5日比值
+                if (t === '🏆P90') return 10;
+                if (t === 'P70') return 11;
+                if (t === 'P50') return 12;
+                // 法人月比值
+                if (t === '🏛️月P90') return 20;
+                if (t === '月比P70') return 21;
+                if (t === '月比P50') return 22;
+                // 投信比值
+                if (t === '🏦投信P90') return 30;
+                if (t === '投信比P70') return 31;
+                if (t === '投信比P50') return 32;
+                // 動能
+                if (t === '雙動能共振') return 40;
+                if (t === '5日動能') return 41;
+                if (t === '一月動能') return 42;
+                // 特殊
+                if (t.includes('潛龍')) return 50;
+                if (t.includes('超級基本面')) return 51;
+                if (t.includes('大摩') || t.includes('合買')) return 52;
+                if (t.includes('ETF共振')) return 53;
+                if (t.includes('5日漲幅族群共振')) return 54;
+                // 基本面
+                if (t.includes('營收')) return 60;
+                // 狀態
+                if (t.includes('新入選')) return 70;
+                if (t.includes('連續')) return 71;
+                if (t.includes('退出')) return 72;
+                // 熱門族群（青色）放最後
+                return 90;
+            }
+            const sortedTags = [...tagSet.entries()].sort((a,b) => {
+                const oa = tagOrder(a[0]), ob = tagOrder(b[0]);
+                return oa - ob || a[0].localeCompare(b[0],'zh-Hant');
+            });
             filterHtml = `<div class="tag-filter-bar" id="${secId}-bar">
                 <span class="filter-label">篩選：</span>`;
-            tagSet.forEach((cls, txt) => {
+            sortedTags.forEach(([txt, cls]) => {
                 filterHtml += `<span class="s-tag f-tag ${cls}" onclick="toggleTagFilter('${secId}','${txt.replace(/'/g,"\'")}')">${txt}</span>`;
             });
             filterHtml += `<button class="f-clear" onclick="clearTagFilter('${secId}')">✕ 清除</button>
@@ -3913,7 +4072,8 @@
         initHistDateSelect();   // 歷史查詢日期
         initBacktestDateList(); // 回測日期
         loadCustomIndustry();   // 載入自訂族群
-        renderBtTagFilter();    // 產生回測標籤篩選清單
+        renderBtTagFilter();
+        renderPresetSelect();   // 填充評分設定下拉    // 產生回測標籤篩選清單
         loadAndRenderResult();  // 自動載入上次分析結果
     }
     // 自訂族群 Modal ESC / 點背景關閉
