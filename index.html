@@ -421,7 +421,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ah</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ai</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1111,12 +1111,38 @@
 
         // ── 解析所有 CSV ──
         const filePromises = Array.from(files).map(file => new Promise(resolve => {
-            Papa.parse(file, {
-                header: true, skipEmptyLines: true, encoding: "Big5",
-                complete: results => resolve({ name: file.name, data: results.data, meta: results.meta })
-            });
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const buf = reader.result;
+                    let text, enc;
+                    // 先試 UTF-8(fatal:true 遇到非法序列會丟錯)
+                    try {
+                        text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+                        enc = 'UTF-8';
+                    } catch (e1) {
+                        // UTF-8 失敗 → 用 Big5
+                        text = new TextDecoder('big5').decode(buf);
+                        enc = 'Big5';
+                    }
+                    // 去除 BOM
+                    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                    Papa.parse(text, {
+                        header: true, skipEmptyLines: true,
+                        complete: results => resolve({ name: file.name, data: results.data, meta: results.meta, enc }),
+                        error: () => resolve({ name: file.name, data: [], meta: { fields: [] }, enc })
+                    });
+                } catch (err) {
+                    console.error('CSV 解析失敗:', file.name, err);
+                    resolve({ name: file.name, data: [], meta: { fields: [] }, enc: 'error' });
+                }
+            };
+            reader.onerror = () => resolve({ name: file.name, data: [], meta: { fields: [] } });
+            reader.readAsArrayBuffer(file);
         }));
         const parsedFiles = await Promise.all(filePromises);
+        console.log('[分析] 階段1: CSV 解析完成,共', parsedFiles.length, '檔');
+        parsedFiles.forEach(f => console.log('  -', f.name, '編碼:', f.enc, '列數:', f.data?.length, '欄位:', f.meta?.fields?.length));
 
         // ── 逐檔識別類型 ──
         parsedFiles.forEach(fileObj => {
@@ -1198,7 +1224,10 @@
             fileTypeLog.push(`${fileName} → 判定:【${rankType}】 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
             fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
 
-            data.forEach((row, rowIdx) => {
+            // 保險:資料列數異常多(編碼錯誤可能造成),截斷避免記憶體爆炸
+            const safeData = data.length > 5000 ? data.slice(0, 5000) : data;
+            if (data.length > 5000) console.warn(`⚠️ ${fileName} 列數異常(${data.length}),可能編碼錯誤,已截斷至 5000`);
+            safeData.forEach((row, rowIdx) => {
                 let symbol = row['代號'] || row['股票代號'] || row['代碼'] || row['商品代碼'] || row['Code'] || row['證券代號'];
                 if (!symbol) return;
                 symbol = String(symbol).trim();
@@ -1364,6 +1393,9 @@
         const resonantIndustries = new Set(
             Object.entries(industryCountIn5d).filter(([,c]) => c > SC.sector.minCount).map(([i]) => i)
         );
+
+        console.log('[分析] 階段2: masterDict 建立完成,共', Object.keys(masterDict).length, '檔股票');
+        console.log('[分析] rise5dTop40:', rise5dTop40.size, '| rise1mTop40:', rise1mTop40.size);
 
         // ── 計分（使用編輯器設定）──
         let finalData = Object.values(masterDict).map(row => {
