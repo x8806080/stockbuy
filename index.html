@@ -421,7 +421,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ak</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04al</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1121,6 +1121,8 @@
         let masterDict       = {};
         let inventorySymbols = new Set();
         let riseStartSymbols = new Set();
+        let morganSymbols    = new Set();   // 大摩5日買超
+        let trustRankSymbols = new Set();   // 投信當週買超排行
         let isInventoryUploaded = false;
         let rise5dTop40      = new Set();
         let rise1mTop40      = new Set();
@@ -1172,6 +1174,8 @@
 
             const isInventory  = fileName.includes('庫存');
             const isRiseStart  = fileName.includes('起漲');  // 起漲標的檔
+            const isMorgan5d   = fileName.includes('大摩') && (fileName.includes('5日') || fileName.includes('買超'));  // 大摩5日買超
+            const isTrustRank  = fileName.includes('投信') && (fileName.includes('當週') || fileName.includes('買超排行'));  // 投信當週買超排行
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
             const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
             const is1mRankFile = !isInventory && !isRiseStart && has1m;
@@ -1240,7 +1244,7 @@
                 isEtfOrMorgan ? 'ETF/大摩' : '',
                 isInventory   ? '庫存'     : '',
             ].filter(Boolean).join('+');
-            const rankType = isRiseStart ? '起漲' : is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
+            const rankType = isRiseStart ? '起漲' : isMorgan5d ? '大摩5日買超' : isTrustRank ? '投信當週買超排行' : is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
             fileTypeLog.push(`${fileName} → 判定:【${rankType}】 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
             fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
 
@@ -1325,6 +1329,8 @@
 
                 if (isInventory) inventorySymbols.add(symbol);
                 if (isRiseStart) riseStartSymbols.add(symbol);
+                if (isMorgan5d)  morganSymbols.add(symbol);
+                if (isTrustRank) trustRankSymbols.add(symbol);
                 if (isEtfOrMorgan) {
                     entry.etfCount += 1;
                     if (!etfSourceDict[symbol]) etfSourceDict[symbol] = new Set();
@@ -1815,6 +1821,38 @@
             }
         }
 
+        // ── 輸出 5e：大摩5日買超（來自大摩CSV）──
+        if (morganSymbols.size > 0) {
+            const morganData = [...morganSymbols]
+                .map(sym => masterDict[sym])
+                .filter(Boolean)
+                .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
+            if (morganData.length) {
+                outputHTML += createSection(
+                    `輸出 5e：大摩5日買超（${morganData.length} 檔）`,
+                    '輸出5e_大摩5日買超.csv',
+                    STD_HEADERS,
+                    morganData.map((r,i) => stdRow(r, null, i+1))
+                );
+            }
+        }
+
+        // ── 輸出 5f：投信當週買超排行（來自投信CSV）──
+        if (trustRankSymbols.size > 0) {
+            const trustRankData = [...trustRankSymbols]
+                .map(sym => masterDict[sym])
+                .filter(Boolean)
+                .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
+            if (trustRankData.length) {
+                outputHTML += createSection(
+                    `輸出 5f：投信當週買超排行（${trustRankData.length} 檔）`,
+                    '輸出5f_投信當週買超.csv',
+                    STD_HEADERS,
+                    trustRankData.map((r,i) => stdRow(r, null, i+1))
+                );
+            }
+        }
+
         // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
         console.log('[輸出7] _prevDayPayload=', !!window._prevDayPayload, 'prevTop50Syms=', prevTop50Syms.size);
         if (!window._prevDayPayload || prevTop50Syms.size === 0) {
@@ -1911,6 +1949,8 @@
             ),
             // 5日/1月漲幅排行前40（含完整資料，供歷史載入顯示）
             riseStart: [...riseStartSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
+            morgan5d:  [...morganSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
+            trustRank: [...trustRankSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
                 .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
@@ -2997,6 +3037,26 @@
                 `輸出5d_起漲_${label.replace(/\//g,'')}.csv`,
                 STD_HEADERS,
                 payload.riseStart.map((r,i) => stdRow(r, null, i+1))
+            );
+        }
+
+        // 輸出 5e：大摩5日買超（歷史載入）
+        if (payload.morgan5d?.length) {
+            outputHTML += createSection(
+                `輸出 5e：大摩5日買超（${payload.morgan5d.length} 檔）（${label}）`,
+                `輸出5e_大摩_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS,
+                payload.morgan5d.map((r,i) => stdRow(r, null, i+1))
+            );
+        }
+
+        // 輸出 5f：投信當週買超排行（歷史載入）
+        if (payload.trustRank?.length) {
+            outputHTML += createSection(
+                `輸出 5f：投信當週買超排行（${payload.trustRank.length} 檔）（${label}）`,
+                `輸出5f_投信當週_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS,
+                payload.trustRank.map((r,i) => stdRow(r, null, i+1))
             );
         }
 
