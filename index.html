@@ -422,7 +422,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04am</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04an</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1115,6 +1115,7 @@
         document.getElementById('outputArea').innerHTML = '';
         window._prevDayPayload = null; // 重置前日資料
 
+      try {
         // 讀取當前評分設定
         const SC = getScoreConfig();
         const TOP_N = SC.momentum.topN;
@@ -1187,9 +1188,10 @@
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
-            // 通用標籤名：用檔名(去副檔名)。庫存不建標籤。
+            // 通用標籤名：用檔名(去副檔名)。庫存與非選股檔(評分機制等)不建標籤。
             const fileTagName = fileName.replace(/\.csv$/i, '').trim();
-            const buildFileTag = !isInventory && fileTagName;
+            const isConfigFile = /評分機制|說明|規則|範例|設定/.test(fileName);
+            const buildFileTag = !isInventory && !isConfigFile && fileTagName;
             if (buildFileTag && !fileTagMap[fileTagName]) {
                 fileTagMap[fileTagName] = new Set();
                 fileTagOrder.push(fileTagName);
@@ -2127,6 +2129,17 @@
             total:   finalData.length,
         });
         renderHistory();
+      } catch (err) {
+        // 分析過程發生未預期錯誤 → 顯示明確訊息而非無聲當機
+        console.error('[分析失敗]', err);
+        document.getElementById('loadingStatus').style.display = 'none';
+        document.getElementById('outputArea').innerHTML =
+            `<div style="background:#3a1a1a;border-left:4px solid #ef4444;padding:16px 20px;border-radius:0 8px 8px 0;color:#fca5a5;margin:16px 0">
+                <b>⚠️ 分析發生錯誤</b><br><br>
+                <span style="color:#fda4af">${(err && err.message) ? err.message : err}</span><br><br>
+                <span style="font-size:12px;color:#94a3b8">請按 F12 開啟 Console 查看詳細錯誤(以 [分析失敗] 開頭),並回報給開發者。</span>
+            </div>`;
+      }
     }
 
     // ══════════════════════════════════════════════
