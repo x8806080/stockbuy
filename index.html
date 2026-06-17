@@ -220,6 +220,7 @@
         .s-tag.navy   { background: #1e3a5f; color: #bfdbfe; }
         .s-tag.lime   { background: #14532d; color: #d9f99d; }
         .s-tag.new    { background: #0891b2; color: #fff; font-weight:800; letter-spacing:.5px; border: 1px solid #22d3ee; }
+        .s-tag.filetag { background: #3730a3; color: #c7d2fe; border: 1px solid #6366f1; }
 
         /* ── TAG 篩選列 ── */
         .tag-filter-bar { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 10px; border-bottom:1px solid var(--border); margin-bottom:8px; align-items:center; }
@@ -421,7 +422,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04al</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04am</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1123,6 +1124,9 @@
         let riseStartSymbols = new Set();
         let morganSymbols    = new Set();   // 大摩5日買超
         let trustRankSymbols = new Set();   // 投信當週買超排行
+        // 通用：每個非庫存CSV → 一個標籤(檔名) + 一個標的集合 + 一個輸出表格
+        let fileTagMap   = {};   // 標籤名 → Set(代號)
+        let fileTagOrder = [];   // 保留檔案上傳順序(輸出/標籤排序用)
         let isInventoryUploaded = false;
         let rise5dTop40      = new Set();
         let rise1mTop40      = new Set();
@@ -1182,6 +1186,14 @@
             const is5dRankFile = !isInventory && !isRiseStart && !is1mRankFile && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
+
+            // 通用標籤名：用檔名(去副檔名)。庫存不建標籤。
+            const fileTagName = fileName.replace(/\.csv$/i, '').trim();
+            const buildFileTag = !isInventory && fileTagName;
+            if (buildFileTag && !fileTagMap[fileTagName]) {
+                fileTagMap[fileTagName] = new Set();
+                fileTagOrder.push(fileTagName);
+            }
 
             if (isInventory) isInventoryUploaded = true;
 
@@ -1331,6 +1343,8 @@
                 if (isRiseStart) riseStartSymbols.add(symbol);
                 if (isMorgan5d)  morganSymbols.add(symbol);
                 if (isTrustRank) trustRankSymbols.add(symbol);
+                // 通用：把代號加入該檔標籤集合
+                if (buildFileTag) fileTagMap[fileTagName].add(symbol);
                 if (isEtfOrMorgan) {
                     entry.etfCount += 1;
                     if (!etfSourceDict[symbol]) etfSourceDict[symbol] = new Set();
@@ -1531,7 +1545,15 @@
             }
 
             row.綜合評分 = score;
-            row.狀態標註 = tags.join(' / ');
+            // 掛上「檔名標籤」：該股出現在哪些上傳的CSV(除庫存)就掛哪些標籤
+            const fileTags = [];
+            fileTagOrder.forEach(tagName => {
+                if (fileTagMap[tagName] && fileTagMap[tagName].has(row.代號)) {
+                    fileTags.push('📁' + tagName);
+                }
+            });
+            const allTags = tags.concat(fileTags);
+            row.狀態標註 = allTags.join(' / ');
             row.防禦指令 = '獲利<10%守60分K20T；>10%守雙週K低點；>100%守雙月K低點';
             return row;
         });
@@ -1853,6 +1875,35 @@
             }
         }
 
+        // ── 輸出 5g+：通用「每個上傳CSV」獨立表格(除庫存與已有專屬輸出的檔) ──
+        // 已有專屬輸出的檔名關鍵字(起漲5d/大摩5e/投信當週5f/漲幅排行5b5c),跳過避免重複
+        const _hasOwnOutput = (name) =>
+            name.includes('起漲') ||
+            (name.includes('大摩') && (name.includes('5日') || name.includes('買超'))) ||
+            (name.includes('投信') && (name.includes('當週') || name.includes('買超排行'))) ||
+            name.includes('5日漲幅') || name.includes('五日漲幅') ||
+            name.includes('1個月漲幅') || name.includes('1月漲幅') || name.includes('一月漲幅') ||
+            /^(0050|00888|00913|00927|00929|00981A)/i.test(name);   // 純ETF成分檔不另列
+
+        let _genIdx = 0;
+        const _genLabels = ['5g','5h','5i','5j','5k','5l','5m','5n','5o','5p','5q','5r','5s','5t'];
+        fileTagOrder.forEach(tagName => {
+            if (_hasOwnOutput(tagName)) return;
+            const syms = fileTagMap[tagName];
+            if (!syms || syms.size === 0) return;
+            const arr = [...syms].map(s => masterDict[s]).filter(Boolean)
+                .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
+            if (!arr.length) return;
+            const lbl = _genLabels[_genIdx] || ('5z' + _genIdx);
+            _genIdx++;
+            outputHTML += createSection(
+                `輸出 ${lbl}：${tagName}（${arr.length} 檔）`,
+                `輸出${lbl}_${tagName}.csv`,
+                STD_HEADERS,
+                arr.map((r,i) => stdRow(r, null, i+1))
+            );
+        });
+
         // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
         console.log('[輸出7] _prevDayPayload=', !!window._prevDayPayload, 'prevTop50Syms=', prevTop50Syms.size);
         if (!window._prevDayPayload || prevTop50Syms.size === 0) {
@@ -2034,6 +2085,10 @@
         </div>`;
 
         document.getElementById('outputArea').innerHTML = outputHTML;
+
+        // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
+        setBtFileTags(fileTagOrder.filter(n => !_hasOwnOutput(n)));
+        renderBtTagFilter();
 
         // 分析完成後，若是舊日期則提示重置為今天
         if (analysisDateKey !== todayKey()) {
@@ -2620,6 +2675,8 @@
                 if (t.includes('新入選')) return 70;
                 if (t.includes('連續')) return 71;
                 if (t.includes('退出')) return 72;
+                // 檔名標籤(📁)
+                if (t.includes('📁')) return 80;
                 // 熱門族群（青色）放最後
                 return 90;
             }
@@ -2797,7 +2854,8 @@
         if (!str) return '';
         return str.split(' / ').filter(Boolean).map(t => {
             let cls = 'blue';
-            if (t.includes('🆕') || t.includes('新入選'))         cls = 'new';
+            if (t.includes('📁'))                                  cls = 'filetag';
+            else if (t.includes('🆕') || t.includes('新入選'))         cls = 'new';
             else if (t === '🏆P90')                                cls = 'gold';
             else if (t === 'P70')                                  cls = 'orange';
             else if (t === 'P50')                                  cls = 'teal';
@@ -2893,6 +2951,30 @@
         patchRatios(top50); patchRatios(inv); patchRatios(top20); patchRatios(resonance); patchRatios(etfRes);
         patchRatios(payload.rise5dRank); patchRatios(payload.rise1mRank); patchRatios(payload.riseStart);
 
+        // ── 重算熱門族群（與當日分析一致：用5日漲幅TOP40的相關產業進榜檔數）──
+        // 來源優先序：rise5dRank（5日漲幅排行）→ 若無則用 top50
+        const indSource = (payload.rise5dRank && payload.rise5dRank.length) ? payload.rise5dRank : top50;
+        const _indMap = {};
+        indSource.forEach(r => {
+            (r.相關產業 || '').split(/[,、，;；\/]/).forEach(ind => {
+                ind = ind.trim(); if (!ind) return;
+                if (!_indMap[ind]) _indMap[ind] = { count: 0, corp: 0 };
+                _indMap[ind].count++;
+                _indMap[ind].corp += (r.三大法人5日買超 || 0);
+            });
+        });
+        const _sortedInds = Object.entries(_indMap)
+            .sort((a,b) => (b[1].count - a[1].count) || (b[1].corp - a[1].corp))
+            .slice(0, 8);
+        const _top5Inds = new Set(_sortedInds.slice(0,5).map(([ind]) => ind));
+        // 個股族群TAG函式（前5大熱門族群標青色）
+        function histAddIndTag(r) {
+            const myInds = (r.相關產業 || '').split(/[,、，;；\/]/).map(x => x.trim()).filter(Boolean);
+            const matched = myInds.filter(x => _top5Inds.has(x));
+            const indTags = matched.map(x => `<span class="s-tag teal">${x}</span>`).join('');
+            return indTags + renderTags(r.狀態標註 || '');
+        }
+
         let outputHTML = '';
 
         // 日期標題列
@@ -2906,11 +2988,11 @@
             <span style="color:#64748b;font-size:11px;margin-left:12px">（重新上傳 CSV 可更新為最新分析）</span>
         </div>`;
 
-        // 輸出1
+        // 輸出1（個股加前5大熱門族群青色TAG）
         outputHTML += createSection(
             `輸出 1：整份資料 TOP 50 推薦表（${label}）`, `輸出1_TOP50_${label.replace(/\//g,'')}.csv`,
             STD_HEADERS,
-            top50.map((r,i) => stdRow(r, null, i+1))
+            top50.map((r,i) => stdRow(r, histAddIndTag, i+1))
         );
 
         // 輸出2
@@ -2937,21 +3019,8 @@
         // 輸出4
         if (inds.length) {
             const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
-            // 相容舊資料：若 inds 空或 corp 全無效，從 top50 即時重算族群統計
-            let indsUse = inds;
-            const indsValid = inds && inds.length && inds.some(d => (d.corp||0) > 0);
-            if (!indsValid && top50.length) {
-                const m = {};
-                top50.forEach(r => {
-                    (r.相關產業||'').split(/[,、，]/).forEach(ind => {
-                        ind = ind.trim(); if (!ind) return;
-                        if (!m[ind]) m[ind] = { count:0, corp:0 };
-                        m[ind].count++; m[ind].corp += (r.三大法人5日買超||0);
-                    });
-                });
-                indsUse = Object.entries(m).sort((a,b)=>b[1].corp-a[1].corp).slice(0,8)
-                    .map(([k,v])=>({ind:k, count:v.count, corp:v.corp}));
-            }
+            // 統一用上方重算的 _sortedInds(5日漲幅TOP40檔數,與當日分析一致)
+            const indsUse = _sortedInds.map(([k,v]) => ({ ind: k, count: v.count, corp: v.corp }));
             const pieData = indsUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
             let out4 = `<div class="report-section"><h2>輸出 4：今日熱門族群解析</h2>`;
             if (pieData.length) {
@@ -3491,16 +3560,34 @@
 
     // 回測標籤篩選:所有可選標籤(分組)
     const BT_TAG_GROUPS = [
-        { group: '法人/投信比值', tags: ['🏆P90','P70','P50','🏛️月P90','月比P70','月比P50','🏦投信P90','投信比P70','投信比P50'] },
+        { group: '法人5日比值', tags: ['🏆P90','P70','P50'] },
+        { group: '法人月比值', tags: ['🏛️月P90','月比P70','月比P50'] },
+        { group: '投信比值', tags: ['🏦投信P90','投信比P70','投信比P50'] },
         { group: '動能', tags: ['雙動能共振','5日動能','一月動能'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
         { group: '基本面', tags: ['營收>80%','營收>50%'] },
+        { group: '狀態', tags: ['🆕新入選'] },
     ];
+    // 動態檔名標籤群組(分析後由 fileTagOrder 填入,存 localStorage 供回測用)
+    const BT_FILETAG_KEY = 'btFileTags_v1';
+    function getBtFileTags() {
+        try { return JSON.parse(localStorage.getItem(BT_FILETAG_KEY) || '[]'); }
+        catch(e) { return []; }
+    }
+    function setBtFileTags(tags) {
+        try { localStorage.setItem(BT_FILETAG_KEY, JSON.stringify(tags)); } catch(e) {}
+    }
 
     function renderBtTagFilter() {
         const box = document.getElementById('btTagFilterBox');
         if (!box) return;
-        box.innerHTML = BT_TAG_GROUPS.map(g => `
+        // 組合:固定標籤群組 + 動態檔名標籤群組(以最終版標籤為主)
+        const groups = BT_TAG_GROUPS.slice();
+        const fileTags = getBtFileTags();
+        if (fileTags.length) {
+            groups.push({ group: '檔名標籤', tags: fileTags.map(t => '📁' + t) });
+        }
+        box.innerHTML = groups.map(g => `
             <div style="display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--input-bg)">
                 <div style="font-size:10px;color:#64748b;font-weight:600">${g.group}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:4px">
@@ -4003,13 +4090,14 @@
     })();
     updateSyncStatus();
     renderHistory();
+    // 評分設定的填充與自動載入 — 無條件執行(不依賴 GitHub Token)
+    renderPresetSelect();   // 填充評分設定下拉
+    loadLastConfig();       // 自動載入上次使用的評分設定
+    renderBtTagFilter();    // 產生回測標籤篩選清單
     if (hasRepo()) {
         initHistDateSelect();   // 歷史查詢日期
         initBacktestDateList(); // 回測日期
         loadCustomIndustry();   // 載入自訂族群
-        renderBtTagFilter();
-        renderPresetSelect();   // 填充評分設定下拉
-        loadLastConfig();       // 自動載入上次使用的評分設定    // 產生回測標籤篩選清單
         loadAndRenderResult();  // 自動載入上次分析結果
     }
     // 自訂族群 Modal ESC / 點背景關閉
