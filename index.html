@@ -422,7 +422,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04an</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ap</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1644,6 +1644,7 @@
 
 
 
+        console.log('[分析] 階段3: 評分完成,開始渲染輸出1');
         // 輸出 1
                 // ── 套用自訂族群（覆蓋 CSV 相關產業）──
         const customInd = getCustomIndustry();
@@ -1717,6 +1718,7 @@
             top20NoInv.map((r,i) => stdRow(r, null, i+1))
         );
 
+        console.log('[分析] 階段4: 輸出1完成,開始輸出4族群');
         // 輸出 4（indMap/sortedInds/top5Inds 已在輸出1前計算）
         const out4Rows = sortedInds.map(([ ind, { count, corpSum } ], i) => {
             const 億 = (corpSum / 2000).toFixed(2);
@@ -1829,6 +1831,7 @@
             );
         }
 
+        console.log('[分析] 階段5: 輸出4完成,開始5系列');
         // ── 輸出 5d：起漲標的（來自起漲CSV）──
         if (riseStartSymbols.size > 0) {
             const riseStartData = [...riseStartSymbols]
@@ -1877,6 +1880,7 @@
             }
         }
 
+        console.log('[分析] 階段6: 起漲/大摩/投信完成,開始通用檔案輸出');
         // ── 輸出 5g+：通用「每個上傳CSV」獨立表格(除庫存與已有專屬輸出的檔) ──
         // 已有專屬輸出的檔名關鍵字(起漲5d/大摩5e/投信當週5f/漲幅排行5b5c),跳過避免重複
         const _hasOwnOutput = (name) =>
@@ -1893,19 +1897,22 @@
             if (_hasOwnOutput(tagName)) return;
             const syms = fileTagMap[tagName];
             if (!syms || syms.size === 0) return;
-            const arr = [...syms].map(s => masterDict[s]).filter(Boolean)
+            const arrAll = [...syms].map(s => masterDict[s]).filter(Boolean)
                 .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
-            if (!arr.length) return;
+            if (!arrAll.length) return;
+            const arr = arrAll.slice(0, 50);   // 限前50筆,避免數百列渲染爆量當機
             const lbl = _genLabels[_genIdx] || ('5z' + _genIdx);
             _genIdx++;
+            const moreNote = arrAll.length > 50 ? `，顯示前50` : '';
             outputHTML += createSection(
-                `輸出 ${lbl}：${tagName}（${arr.length} 檔）`,
+                `輸出 ${lbl}：${tagName}（共${arrAll.length} 檔${moreNote}）`,
                 `輸出${lbl}_${tagName}.csv`,
                 STD_HEADERS,
                 arr.map((r,i) => stdRow(r, null, i+1))
             );
         });
 
+        console.log('[分析] 階段7: 通用檔案輸出完成,開始輸出7比對');
         // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
         console.log('[輸出7] _prevDayPayload=', !!window._prevDayPayload, 'prevTop50Syms=', prevTop50Syms.size);
         if (!window._prevDayPayload || prevTop50Syms.size === 0) {
@@ -2086,6 +2093,7 @@
             </div>
         </div>`;
 
+        console.log('[分析] 階段8: 輸出7完成,寫入畫面');
         document.getElementById('outputArea').innerHTML = outputHTML;
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
