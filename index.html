@@ -422,7 +422,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ap</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04aq</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2012,9 +2012,9 @@
             morgan5d:  [...morganSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
             trustRank: [...trustRankSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',相關產業:r.相關產業||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',相關產業:r.相關產業||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
         };
 
         // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
@@ -2974,7 +2974,12 @@
 
         // ── 重算熱門族群（與當日分析一致：用5日漲幅TOP40的相關產業進榜檔數）──
         // 來源優先序：rise5dRank（5日漲幅排行）→ 若無則用 top50
-        const indSource = (payload.rise5dRank && payload.rise5dRank.length) ? payload.rise5dRank : top50;
+        // 來源優先序：rise5dRank(有相關產業才用)→ 否則 top50(舊資料相容)
+        let indSource = top50;
+        if (payload.rise5dRank && payload.rise5dRank.length &&
+            payload.rise5dRank.some(r => (r.相關產業||'').trim())) {
+            indSource = payload.rise5dRank;
+        }
         const _indMap = {};
         indSource.forEach(r => {
             (r.相關產業 || '').split(/[,、，;；\/]/).forEach(ind => {
@@ -3037,8 +3042,8 @@
             );
         }
 
-        // 輸出4
-        if (inds.length) {
+        // 輸出4（用重算的 _sortedInds,只要有族群就顯示）
+        if (_sortedInds.length) {
             const PIE_COLORS=['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
             // 統一用上方重算的 _sortedInds(5日漲幅TOP40檔數,與當日分析一致)
             const indsUse = _sortedInds.map(([k,v]) => ({ ind: k, count: v.count, corp: v.corp }));
