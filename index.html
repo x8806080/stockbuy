@@ -268,49 +268,114 @@
             .hist-actions { flex-direction: column; }
             .hist-actions button { width: 100%; }
 
-            /* ── 表格卡片化：每列變一張卡片，欄位直式排列 ── */
+            /* ── 表格網格化：2欄小卡片,簡略資訊,點擊展開詳細 ── */
             .tbl-wrap { overflow: visible; }
-            .tbl-wrap table { min-width: 0 !important; width: 100%; border: none; font-size: 15px; }
+            .tbl-wrap table {
+                min-width: 0 !important; width: 100%; border: none;
+                display: grid;
+                grid-template-columns: 1fr 1fr;   /* 2欄併排 */
+                gap: 8px;
+            }
+            .tbl-wrap table tbody { display: contents; }
             .tbl-wrap table tr:first-child { display: none; } /* 隱藏表頭列 */
             .tbl-wrap table tr {
                 display: block;
                 background: #11161f;
                 border: 1px solid #1e293b;
                 border-radius: 10px;
-                padding: 10px 12px;
-                margin-bottom: 10px;
+                padding: 8px 9px;
+                margin: 0;
+                box-shadow: 0 2px 6px rgba(0,0,0,.3);
+                cursor: pointer;
+                position: relative;
             }
             .tbl-wrap table tr.tag-hidden { display: none; }
             .tbl-wrap table td {
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                gap: 12px;
+                align-items: baseline;
+                gap: 6px;
                 border: none;
-                border-bottom: 1px solid #1a2230;
-                padding: 6px 0;
+                padding: 2px 0;
                 text-align: right;
             }
-            .tbl-wrap table td:last-child { border-bottom: none; }
             .tbl-wrap table td::before {
                 content: attr(data-label);
-                font-weight: 700;
+                font-weight: 600;
                 color: #64748b;
                 text-align: left;
                 white-space: nowrap;
                 flex-shrink: 0;
-                font-size: 13px;
+                font-size: 11px;
             }
-            /* 第一欄(排名)當卡片標題,放大 */
-            .tbl-wrap table td:first-child {
+
+            /* 預設其餘全部隱藏(收合狀態) */
+            .tbl-wrap table td {
+                display: none;
+            }
+            /* 只顯示 代號/名稱/法人月比/法人5日比(用 !important 確保不被覆蓋) */
+            .tbl-wrap table td[data-label="代號"],
+            .tbl-wrap table td[data-label="名稱"],
+            .tbl-wrap table td[data-label="法人月市值比"],
+            .tbl-wrap table td[data-label="法人5日市值比"] {
+                display: flex !important;
+            }
+            /* 名稱當標題:大字 */
+            .tbl-wrap table td[data-label="名稱"] {
                 font-size: 18px;
                 font-weight: 800;
-                color: #60a5fa;
-                border-bottom: 2px solid #1e293b;
-                padding-bottom: 8px;
+                color: #f1f5f9;
+                justify-content: flex-start;
+                padding-bottom: 2px;
+            }
+            .tbl-wrap table td[data-label="名稱"]::before { display: none; }
+            /* 代號:小字副標 */
+            .tbl-wrap table td[data-label="代號"] {
+                display: flex !important;
+                font-size: 13px;
+                color: #eab308;
+                justify-content: flex-start;
+                padding-top: 0;
+                border-bottom: 1px solid #1e293b;
+                padding-bottom: 5px;
                 margin-bottom: 4px;
             }
-            .tbl-wrap table td:first-child::before { color: #475569; font-size: 13px; }
+            .tbl-wrap table td[data-label="代號"]::before { display: none; }
+            /* 月P90比值、P90比值:重點顯示 */
+            .tbl-wrap table td[data-label="法人月市值比"],
+            .tbl-wrap table td[data-label="法人5日市值比"] {
+                display: flex !important;
+                font-size: 15px;
+                font-weight: 700;
+                color: #5eead4;
+            }
+            .tbl-wrap table td[data-label="法人月市值比"]::before,
+            .tbl-wrap table td[data-label="法人5日市值比"]::before {
+                font-size: 11px; color: #64748b;
+            }
+
+            /* 展開狀態(.expanded):顯示全部欄位 */
+            .tbl-wrap table tr.expanded {
+                grid-column: 1 / -1;   /* 展開時佔滿整列 */
+                border-color: #3b82f6;
+                box-shadow: 0 4px 14px rgba(59,130,246,.3);
+            }
+            .tbl-wrap table tr.expanded td {
+                display: flex !important;
+                border-bottom: 1px solid #1a2230;
+                padding: 6px 0;
+            }
+            .tbl-wrap table tr.expanded td::before { font-size: 13px; }
+            .tbl-wrap table tr.expanded td[data-label="名稱"] { font-size: 20px; }
+            /* 點擊提示 */
+            .tbl-wrap table tr:not(.expanded)::after {
+                content: '👆詳細';
+                position: absolute;
+                top: 6px; right: 8px;
+                font-size: 10px;
+                color: #475569;
+            }
+
 
             /* 手機輸出下拉選單(固定頂部) */
             .mobile-output-nav {
@@ -338,27 +403,12 @@
                 width: 100%;
             }
 
-            /* 卡片大字強化(像看盤App):價格/漲幅放大 */
-            .tbl-wrap table td[data-label="當日價格"],
-            .tbl-wrap table td[data-label="綜合評分"] {
-                font-size: 22px;
+            /* 展開時:價格/評分大字 */
+            .tbl-wrap table tr.expanded td[data-label="當日價格"],
+            .tbl-wrap table tr.expanded td[data-label="綜合評分"] {
+                font-size: 20px;
                 font-weight: 800;
                 color: #fbbf24;
-                padding: 8px 0;
-            }
-            .tbl-wrap table td[data-label="當日價格"]::before,
-            .tbl-wrap table td[data-label="綜合評分"]::before { font-size: 13px; align-self: center; }
-            .tbl-wrap table td[data-label="法人5日市值比"],
-            .tbl-wrap table td[data-label="法人月市值比"],
-            .tbl-wrap table td[data-label="投信市值比"],
-            .tbl-wrap table td[data-label="營收年增"] {
-                font-size: 17px;
-                font-weight: 700;
-                color: #e2e8f0;
-            }
-            /* 卡片整體更有區塊感 */
-            .tbl-wrap table tr {
-                box-shadow: 0 2px 8px rgba(0,0,0,.3);
             }
             /* 狀態標註欄:TAG 可換行靠右 */
             .s-tag { font-size: 12px; padding: 2px 7px; display: inline-block; margin: 1px; }
@@ -472,7 +522,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ar</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04at</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2843,6 +2893,18 @@
 
     // 表格收折
     // ── 手機版:輸出下拉選單切換(一次只顯示一個輸出) ──
+    // 手機:點擊小卡片 → 展開/收合詳細資訊(事件委派)
+    document.addEventListener('click', (e) => {
+        // 只在手機模式作用
+        if (!window.matchMedia('(max-width: 600px)').matches) return;
+        const tr = e.target.closest('.tbl-wrap table tr');
+        if (!tr) return;
+        if (tr.querySelector('th')) return;  // 表頭不處理
+        // 不干擾 TAG 篩選等互動元素
+        if (e.target.closest('.s-tag, button, select, a')) return;
+        tr.classList.toggle('expanded');
+    });
+
     function buildMobileOutputNav() {
         const area = document.getElementById('outputArea');
         if (!area) return;
