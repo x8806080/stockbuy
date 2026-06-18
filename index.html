@@ -554,7 +554,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04au</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04aw</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1256,9 +1256,11 @@
         window._prevDayPayload = null; // 重置前日資料
 
       try {
+        console.log('[分析] 階段0: 分析開始,讀取設定');
         // 讀取當前評分設定
         const SC = getScoreConfig();
         const TOP_N = SC.momentum.topN;
+        console.log('[分析] 階段0b: 設定讀取完成,TOP_N=', TOP_N);
 
         let masterDict       = {};
         let inventorySymbols = new Set();
@@ -2233,10 +2235,13 @@
             </div>
         </div>`;
 
-        console.log('[分析] 階段8: 輸出7完成,寫入畫面');
-        document.getElementById('outputArea').innerHTML = outputHTML;
+        console.log('[分析] 階段8: 輸出7完成,outputHTML 大小:', (outputHTML.length/1024).toFixed(0), 'KB');
+        await renderOutputBatched(outputHTML);
+        console.log('[分析] 階段9: 分批渲染完成');
         buildMobileOutputNav();   // 手機:建立輸出下拉選單
+        console.log('[分析] 階段10: 手機選單完成');
         if (typeof switchTab === 'function') switchTab('analysis');  // 切回分析分頁看結果
+        console.log('[分析] 階段11: 切換分頁完成');
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
         setBtFileTags(fileTagOrder.filter(n => !_hasOwnOutput(n)));
@@ -2934,6 +2939,37 @@
 
     // 表格收折
     // ── 手機版:輸出下拉選單切換(一次只顯示一個輸出) ──
+    // ── 分批渲染:避免一次 innerHTML 巨量 HTML 卡死瀏覽器 ──
+    function renderOutputBatched(html) {
+        return new Promise(resolve => {
+            const area = document.getElementById('outputArea');
+            if (!area) { resolve(); return; }
+            area.innerHTML = '';
+            // 用暫存容器解析 HTML 成節點(不直接進 DOM,避免一次渲染)
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            const nodes = [...tmp.childNodes];
+            let i = 0;
+            const BATCH = 3;   // 每批 append 幾個頂層節點
+            function step() {
+                const frag = document.createDocumentFragment();
+                let n = 0;
+                while (i < nodes.length && n < BATCH) {
+                    frag.appendChild(nodes[i]);
+                    i++; n++;
+                }
+                area.appendChild(frag);
+                if (i < nodes.length) {
+                    requestAnimationFrame(step);   // 讓瀏覽器喘息再續
+                } else {
+                    resolve();
+                }
+            }
+            requestAnimationFrame(step);
+        });
+    }
+    window.renderOutputBatched = renderOutputBatched;
+
     // ── 分頁切換 ──
     function switchTab(target) {
         // 切換按鈕高亮
@@ -3389,9 +3425,10 @@
             );
         }
 
-        document.getElementById('outputArea').innerHTML = outputHTML;
-        buildMobileOutputNav();   // 手機:建立輸出下拉選單
-        if (typeof switchTab === 'function') switchTab('analysis');  // 歷史載入後切到分析分頁看結果
+        renderOutputBatched(outputHTML).then(() => {
+            buildMobileOutputNav();   // 手機:建立輸出下拉選單
+            if (typeof switchTab === 'function') switchTab('analysis');
+        });
         // 更新 PDF 頁首
         const sub = document.getElementById('pdfSubtitle');
         if (sub) sub.textContent = '分析日期：' + label;
