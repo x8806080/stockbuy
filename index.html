@@ -46,6 +46,38 @@
         }
 
         /* ══ Container ══ */
+        .tab-bar {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            background: var(--bg2);
+            z-index: 60;
+            padding-top: 8px;
+        }
+        .tab-btn {
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 12px 18px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all .15s;
+            width: auto;
+        }
+        .tab-btn:hover { background: var(--bg3); color: var(--text); }
+        .tab-btn.active {
+            color: var(--accent2);
+            border-bottom-color: var(--accent2);
+            background: var(--bg3);
+        }
+        [data-tab].tab-hidden { display: none !important; }
         .container {
             max-width: 1280px;
             margin: 0 auto;
@@ -522,7 +554,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04at</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04au</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -582,11 +614,19 @@
 </div>
 
 <div class="container">
+    <!-- ══ 分頁標籤列 ══ -->
+    <div class="tab-bar" id="mainTabBar">
+        <button class="tab-btn active" data-target="analysis" onclick="switchTab('analysis')">📊 分析</button>
+        <button class="tab-btn" data-target="history" onclick="switchTab('history')">📅 歷史查詢</button>
+        <button class="tab-btn" data-target="backtest" onclick="switchTab('backtest')">📈 回測追蹤</button>
+        <button class="tab-btn" data-target="score" onclick="switchTab('score')">⚙️ 評分設定</button>
+    </div>
+
     <h1>🚀 籌碼先行動能待發 - 量化分析儀 <small style="font-size:14px;color:#7f8c8d">（評分可調版）</small></h1>
 
 
     <!-- ══ 歷史查詢 & 共振比對 ══ -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div id="tab-history" data-tab="history" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">📅 歷史分析查詢 & 共振比對</h2>
             <button id="histToggleBtn" onclick="toggleHistPanel()"
@@ -634,7 +674,7 @@
     </div>
 
     <!-- ══ 績效回測追蹤 ══ -->
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div id="tab-backtest" data-tab="backtest" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">
                 📈 TOP50 績效回測追蹤
@@ -713,7 +753,7 @@
         </div>
     </div>
     <!-- ══════════════ 歷史紀錄區 ══════════════ -->
-    <div class="history-panel">
+    <div class="history-panel" id="tab-histpanel" data-tab="history">
             <div id="gistStatus" style="font-size:11px;color:var(--text-dim);margin-bottom:8px;display:flex;align-items:center;gap:6px">
                 <span id="gistDot" style="width:8px;height:8px;border-radius:50%;background:#4b5563;display:inline-block;flex-shrink:0"></span>
                 <span id="gistMsg">尚未同步</span>
@@ -721,7 +761,7 @@
     </div>
 
     <!-- ══════════════ 評分規則編輯器 ══════════════ -->
-    <details class="score-editor" id="scoreEditorDetails">
+    <details class="score-editor" id="scoreEditorDetails" data-tab="score">
         <summary>⚙️ 評分規則編輯器 <span id="changedBadge" class="changed-badge" style="display:none">已修改</span></summary>
         <div class="editor-grid">
 
@@ -892,7 +932,7 @@
     </details>
 
     <!-- ══════════════ 主控制面板 ══════════════ -->
-    <div class="control-panel">
+    <div class="control-panel" data-tab="analysis">
         <p>1. 選取所有 CSV 檔案（含庫存.csv 及各項排行），並設定分析日期後執行。</p>
         <div class="upload-row" style="margin-bottom:10px">
             <input type="file" id="csvFiles" multiple accept=".csv" style="flex:1;min-width:0">
@@ -912,7 +952,7 @@
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
 
-    <div id="outputArea">
+    <div id="outputArea" data-tab="analysis">
     <div class="pdf-header" style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:16px">
         <div style="font-size:18pt;font-weight:700;color:#1e3a5f">籌碼先行動能待發 — 量化策略分析報告</div>
         <div id="pdfSubtitle" style="font-size:10pt;color:#555;margin-top:4px"></div>
@@ -2196,6 +2236,7 @@
         console.log('[分析] 階段8: 輸出7完成,寫入畫面');
         document.getElementById('outputArea').innerHTML = outputHTML;
         buildMobileOutputNav();   // 手機:建立輸出下拉選單
+        if (typeof switchTab === 'function') switchTab('analysis');  // 切回分析分頁看結果
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
         setBtFileTags(fileTagOrder.filter(n => !_hasOwnOutput(n)));
@@ -2893,6 +2934,28 @@
 
     // 表格收折
     // ── 手機版:輸出下拉選單切換(一次只顯示一個輸出) ──
+    // ── 分頁切換 ──
+    function switchTab(target) {
+        // 切換按鈕高亮
+        document.querySelectorAll('#mainTabBar .tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.target === target);
+        });
+        // 顯示對應 data-tab 區塊,隱藏其他
+        document.querySelectorAll('[data-tab]').forEach(el => {
+            // tab-btn 本身也有可能被選到,排除
+            if (el.classList.contains('tab-btn')) return;
+            el.classList.toggle('tab-hidden', el.dataset.tab !== target);
+        });
+        // 評分設定 tab:自動展開 details
+        if (target === 'score') {
+            const det = document.getElementById('scoreEditorDetails');
+            if (det) det.open = true;
+        }
+        // 捲到頂
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.switchTab = switchTab;
+
     // 手機:點擊小卡片 → 展開/收合詳細資訊(事件委派)
     document.addEventListener('click', (e) => {
         // 只在手機模式作用
@@ -3328,6 +3391,7 @@
 
         document.getElementById('outputArea').innerHTML = outputHTML;
         buildMobileOutputNav();   // 手機:建立輸出下拉選單
+        if (typeof switchTab === 'function') switchTab('analysis');  // 歷史載入後切到分析分頁看結果
         // 更新 PDF 頁首
         const sub = document.getElementById('pdfSubtitle');
         if (sub) sub.textContent = '分析日期：' + label;
@@ -4292,6 +4356,7 @@
     renderPresetSelect();   // 填充評分設定下拉
     loadLastConfig();       // 自動載入上次使用的評分設定
     renderBtTagFilter();    // 產生回測標籤篩選清單
+    switchTab('analysis');  // 預設顯示「分析」分頁
     if (hasRepo()) {
         initHistDateSelect();   // 歷史查詢日期
         initBacktestDateList(); // 回測日期
