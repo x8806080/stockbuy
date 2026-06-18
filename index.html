@@ -554,7 +554,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ax</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ay</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1247,6 +1247,42 @@
     // ══════════════════════════════════════════════
     //  主分析流程
     // ══════════════════════════════════════════════
+    // ── 自製 CSV 解析器(取代 PapaParse,header 模式,處理引號) ──
+    function parseCSVText(text) {
+        const rows = [];
+        let field = '', row = [], inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i], next = text[i + 1];
+            if (inQuotes) {
+                if (ch === '"' && next === '"') { field += '"'; i++; }
+                else if (ch === '"') { inQuotes = false; }
+                else { field += ch; }
+            } else {
+                if (ch === '"') { inQuotes = true; }
+                else if (ch === ',') { row.push(field); field = ''; }
+                else if (ch === '\r') { /* 忽略 */ }
+                else if (ch === '\n') { row.push(field); rows.push(row); field = ''; row = []; }
+                else { field += ch; }
+            }
+        }
+        // 最後一筆
+        if (field !== '' || row.length) { row.push(field); rows.push(row); }
+        if (rows.length === 0) return { data: [], meta: { fields: [] } };
+        // 第一列為 header
+        const headers = rows[0].map(h => h.trim());
+        const data = [];
+        for (let r = 1; r < rows.length; r++) {
+            const cells = rows[r];
+            // 跳過空列
+            if (cells.length === 1 && cells[0].trim() === '') continue;
+            const obj = {};
+            headers.forEach((h, j) => { obj[h] = (cells[j] !== undefined ? cells[j] : '').trim(); });
+            data.push(obj);
+        }
+        return { data, meta: { fields: headers } };
+    }
+
+    // ── 自製 CSV 解析器結束 ──
     async function runAnalysis() {
         const files = document.getElementById('csvFiles').files;
         if (files.length === 0) { alert("請先選擇 CSV 檔案！"); return; }
@@ -1261,12 +1297,7 @@
         const SC = getScoreConfig();
         const TOP_N = SC.momentum.topN;
         console.log('[分析] 階段0b: 設定讀取完成,TOP_N=', TOP_N);
-
-        // 檢查 PapaParse 是否載入(CDN 可能失敗)
-        if (typeof Papa === 'undefined') {
-            throw new Error('CSV 解析套件(PapaParse)未載入成功,可能是網路或 CDN 問題,請重新整理頁面再試。');
-        }
-        console.log('[分析] 階段0c: PapaParse 已載入,檔案數:', files.length);
+        console.log('[分析] 階段0c: 開始解析,檔案數:', files.length);
 
         let masterDict       = {};
         let inventorySymbols = new Set();
@@ -1309,11 +1340,11 @@
                     }
                     // 去除 BOM
                     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-                    Papa.parse(text, {
-                        header: true, skipEmptyLines: true,
-                        complete: results => { clearTimeout(timer); console.log('  ✓ 解析:', file.name, results.data.length, '列'); finish({ name: file.name, data: results.data, meta: results.meta, enc }); },
-                        error: () => { clearTimeout(timer); finish({ name: file.name, data: [], meta: { fields: [] }, enc }); }
-                    });
+                    // 用自製解析器(取代 PapaParse,避免卡死)
+                    const parsed = parseCSVText(text);
+                    clearTimeout(timer);
+                    console.log('  ✓ 解析:', file.name, parsed.data.length, '列');
+                    finish({ name: file.name, data: parsed.data, meta: parsed.meta, enc });
                 } catch (err) {
                     clearTimeout(timer);
                     console.error('CSV 解析失敗:', file.name, err);
