@@ -554,7 +554,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04aw</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ax</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1262,6 +1262,12 @@
         const TOP_N = SC.momentum.topN;
         console.log('[分析] 階段0b: 設定讀取完成,TOP_N=', TOP_N);
 
+        // 檢查 PapaParse 是否載入(CDN 可能失敗)
+        if (typeof Papa === 'undefined') {
+            throw new Error('CSV 解析套件(PapaParse)未載入成功,可能是網路或 CDN 問題,請重新整理頁面再試。');
+        }
+        console.log('[分析] 階段0c: PapaParse 已載入,檔案數:', files.length);
+
         let masterDict       = {};
         let inventorySymbols = new Set();
         let riseStartSymbols = new Set();
@@ -1280,6 +1286,13 @@
 
         // ── 解析所有 CSV ──
         const filePromises = Array.from(files).map(file => new Promise(resolve => {
+            // 保險:單檔 15 秒沒解析完就跳過,避免永久卡住
+            let done = false;
+            const finish = (result) => { if (!done) { done = true; resolve(result); } };
+            const timer = setTimeout(() => {
+                console.warn('[解析逾時]', file.name, '→ 跳過');
+                finish({ name: file.name, data: [], meta: { fields: [] }, enc: 'timeout' });
+            }, 15000);
             const reader = new FileReader();
             reader.onload = () => {
                 try {
@@ -1298,15 +1311,16 @@
                     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
                     Papa.parse(text, {
                         header: true, skipEmptyLines: true,
-                        complete: results => resolve({ name: file.name, data: results.data, meta: results.meta, enc }),
-                        error: () => resolve({ name: file.name, data: [], meta: { fields: [] }, enc })
+                        complete: results => { clearTimeout(timer); console.log('  ✓ 解析:', file.name, results.data.length, '列'); finish({ name: file.name, data: results.data, meta: results.meta, enc }); },
+                        error: () => { clearTimeout(timer); finish({ name: file.name, data: [], meta: { fields: [] }, enc }); }
                     });
                 } catch (err) {
+                    clearTimeout(timer);
                     console.error('CSV 解析失敗:', file.name, err);
-                    resolve({ name: file.name, data: [], meta: { fields: [] }, enc: 'error' });
+                    finish({ name: file.name, data: [], meta: { fields: [] }, enc: 'error' });
                 }
             };
-            reader.onerror = () => resolve({ name: file.name, data: [], meta: { fields: [] } });
+            reader.onerror = () => { clearTimeout(timer); finish({ name: file.name, data: [], meta: { fields: [] } }); };
             reader.readAsArrayBuffer(file);
         }));
         const parsedFiles = await Promise.all(filePromises);
