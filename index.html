@@ -232,6 +232,7 @@
         .tag-filter-bar .f-clear:hover { border-color:var(--accent); color:var(--accent); }
         tr.tag-hidden { display:none; }
         .mobile-sort-bar { display: none; } /* 桌機隱藏，手機才顯示 */
+        .mobile-output-nav { display: none; } /* 桌機隱藏，手機才顯示 */
 
         /* ══ RWD：平板 ══ */
         @media (max-width: 900px) {
@@ -300,7 +301,7 @@
                 flex-shrink: 0;
                 font-size: 13px;
             }
-            /* 第一欄(代號)當卡片標題,放大 */
+            /* 第一欄(排名)當卡片標題,放大 */
             .tbl-wrap table td:first-child {
                 font-size: 18px;
                 font-weight: 800;
@@ -310,6 +311,55 @@
                 margin-bottom: 4px;
             }
             .tbl-wrap table td:first-child::before { color: #475569; font-size: 13px; }
+
+            /* 手機輸出下拉選單(固定頂部) */
+            .mobile-output-nav {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                position: sticky;
+                top: 0;
+                z-index: 50;
+                background: #0f1729;
+                padding: 10px 12px;
+                margin: 0 -10px 12px -10px;
+                border-bottom: 2px solid #1e3a5f;
+                box-shadow: 0 4px 12px rgba(0,0,0,.4);
+            }
+            .mobile-output-nav label { font-size: 13px; color: #93c5fd; font-weight: 700; }
+            .mobile-output-nav select {
+                padding: 12px 14px;
+                border-radius: 8px;
+                border: 1px solid #3b82f6;
+                background: #1a2540;
+                color: #fff;
+                font-size: 17px;
+                font-weight: 600;
+                width: 100%;
+            }
+
+            /* 卡片大字強化(像看盤App):價格/漲幅放大 */
+            .tbl-wrap table td[data-label="當日價格"],
+            .tbl-wrap table td[data-label="綜合評分"] {
+                font-size: 22px;
+                font-weight: 800;
+                color: #fbbf24;
+                padding: 8px 0;
+            }
+            .tbl-wrap table td[data-label="當日價格"]::before,
+            .tbl-wrap table td[data-label="綜合評分"]::before { font-size: 13px; align-self: center; }
+            .tbl-wrap table td[data-label="法人5日市值比"],
+            .tbl-wrap table td[data-label="法人月市值比"],
+            .tbl-wrap table td[data-label="投信市值比"],
+            .tbl-wrap table td[data-label="營收年增"] {
+                font-size: 17px;
+                font-weight: 700;
+                color: #e2e8f0;
+            }
+            /* 卡片整體更有區塊感 */
+            .tbl-wrap table tr {
+                box-shadow: 0 2px 8px rgba(0,0,0,.3);
+            }
             /* 狀態標註欄:TAG 可換行靠右 */
             .s-tag { font-size: 12px; padding: 2px 7px; display: inline-block; margin: 1px; }
             .tbl-wrap table td .s-tag { text-align: left; }
@@ -422,7 +472,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04aq</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ar</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2095,6 +2145,7 @@
 
         console.log('[分析] 階段8: 輸出7完成,寫入畫面');
         document.getElementById('outputArea').innerHTML = outputHTML;
+        buildMobileOutputNav();   // 手機:建立輸出下拉選單
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
         setBtFileTags(fileTagOrder.filter(n => !_hasOwnOutput(n)));
@@ -2791,6 +2842,64 @@
     }
 
     // 表格收折
+    // ── 手機版:輸出下拉選單切換(一次只顯示一個輸出) ──
+    function buildMobileOutputNav() {
+        const area = document.getElementById('outputArea');
+        if (!area) return;
+        const sections = [...area.querySelectorAll('.report-section')];
+        // 移除舊的 nav(重新分析時)
+        const oldNav = document.getElementById('mobileOutputNav');
+        if (oldNav) oldNav.remove();
+        if (sections.length === 0) return;
+
+        // 為每個 section 設 id + 取標題
+        const opts = sections.map((sec, i) => {
+            if (!sec.id) sec.id = 'msec-' + i;
+            const h2 = sec.querySelector('h2');
+            let title = h2 ? h2.textContent.trim() : ('輸出 ' + (i+1));
+            // 清掉標題裡的「下載CSV」等按鈕文字
+            title = title.replace(/下載\s*CSV/g, '').replace(/\s+/g, ' ').trim();
+            if (title.length > 22) title = title.slice(0, 22) + '…';
+            return { id: sec.id, title };
+        });
+
+        // 建立下拉選單(固定在 outputArea 上方,只有手機顯示)
+        const nav = document.createElement('div');
+        nav.id = 'mobileOutputNav';
+        nav.className = 'mobile-output-nav';
+        nav.innerHTML = `
+            <label>📑 選擇輸出</label>
+            <select id="mobileOutputSelect" onchange="showMobileOutput(this.value)">
+                ${opts.map(o => `<option value="${o.id}">${o.title}</option>`).join('')}
+            </select>`;
+        area.parentNode.insertBefore(nav, area);
+
+        // 預設顯示第一個
+        showMobileOutput(opts[0].id);
+    }
+
+    // 只顯示選定的輸出(手機),其餘隱藏
+    function showMobileOutput(secId) {
+        const area = document.getElementById('outputArea');
+        if (!area) return;
+        // 只在手機模式作用(用視窗寬度判斷)
+        const isMobile = window.matchMedia('(max-width: 600px)').matches;
+        const sections = [...area.querySelectorAll('.report-section')];
+        sections.forEach(sec => {
+            if (!isMobile) { sec.style.display = ''; return; }  // 桌機全顯示
+            sec.style.display = (sec.id === secId) ? '' : 'none';
+        });
+        const sel = document.getElementById('mobileOutputSelect');
+        if (sel && sel.value !== secId) sel.value = secId;
+    }
+    window.showMobileOutput = showMobileOutput;
+
+    // 視窗尺寸變化時,桌機↔手機切換要重設顯示
+    window.addEventListener('resize', () => {
+        const sel = document.getElementById('mobileOutputSelect');
+        if (sel) showMobileOutput(sel.value);
+    });
+
     function toggleSection(secId) {
         const body  = document.getElementById(secId + '-body');
         const arrow = document.getElementById(secId + '-arrow');
@@ -3156,6 +3265,7 @@
         }
 
         document.getElementById('outputArea').innerHTML = outputHTML;
+        buildMobileOutputNav();   // 手機:建立輸出下拉選單
         // 更新 PDF 頁首
         const sub = document.getElementById('pdfSubtitle');
         if (sub) sub.textContent = '分析日期：' + label;
