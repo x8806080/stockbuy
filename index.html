@@ -563,7 +563,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ba</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bb</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -830,6 +830,15 @@
                 <label>當日漲幅取「前百分之幾」%(如10=前10%)</label>
                 <input type="number" id="momentum_dayPct" value="10" step="1" min="1" max="100">
             </div>
+            <div style="font-size:12px;color:#fbbf24;margin:8px 0 4px 0">⭐ 組合獎勵分(當日漲幅進榜 且 月比值達標,額外加分)：</div>
+            <div class="score-row">
+                <label>當日強勢 + 月P90 組合加分</label>
+                <input type="number" id="momentum_comboP90" value="15">
+            </div>
+            <div class="score-row">
+                <label>當日強勢 + 月P70 組合加分</label>
+                <input type="number" id="momentum_comboP70" value="8">
+            </div>
 
             <div class="editor-section-title">③ 基礎權重 — 中期法人力道（法人一月買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
             <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用 P90/P70/P50 比值分位數；填小數可手動覆蓋（如 0.05 = 5%）</div>
@@ -1007,6 +1016,8 @@
                 day:    v('momentum_day'),
                 topPct: Math.max(1, Math.min(100, v('momentum_topPct') || 10)),
                 dayPct: Math.max(1, Math.min(100, v('momentum_dayPct') || 10)),
+                comboP90: v('momentum_comboP90'),
+                comboP70: v('momentum_comboP70'),
             },
             corp1m: {
                 thrA: v('corp1m_thrA'), thrB: v('corp1m_thrB'), thrC: v('corp1m_thrC'),
@@ -1049,7 +1060,7 @@
         corp_thrA:0, corp_scoreA:60, corp_thrB_lo:0, corp_scoreB_lo:40,
         corp_thrB_hi:0, corp_scoreB_hi:50, corp_thrC:0, corp_scoreC:30,
         corp_fallbackA:6000, corp_fallbackB:1000, corp_fallbackC:500,
-        momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_day:10, momentum_topPct:10, momentum_dayPct:10,
+        momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_day:10, momentum_topPct:10, momentum_dayPct:10, momentum_comboP90:15, momentum_comboP70:8,
         corp1m_thrA:3000, corp1m_scoreA:15, corp1m_thrB:1000, corp1m_scoreB:10,
         corp1m_thrC:500,  corp1m_scoreC:5,
         trust_rankA:10, trust_scoreA:10, trust_rankB:20, trust_scoreB:7, trust_scoreC:3,
@@ -1162,7 +1173,7 @@
             ['法人5日','線性終點(百萬)',cfg.corp.thrB_hi],['法人5日','線性終點得分',cfg.corp.scoreB_hi],
             ['法人5日','門檻C(百萬)',cfg.corp.thrC],['法人5日','門檻C得分',cfg.corp.scoreC],
             ['動能','雙進TOP40得分',cfg.momentum.both],['動能','僅5日得分',cfg.momentum.only5d],
-            ['動能','僅1月得分',cfg.momentum.only1m],['動能','當日強勢得分',cfg.momentum.day],['動能','漲幅前百分比%',cfg.momentum.topPct],['動能','當日漲幅前百分比%',cfg.momentum.dayPct],
+            ['動能','僅1月得分',cfg.momentum.only1m],['動能','當日強勢得分',cfg.momentum.day],['動能','漲幅前百分比%',cfg.momentum.topPct],['動能','當日漲幅前百分比%',cfg.momentum.dayPct],['動能','當日+月P90組合分',cfg.momentum.comboP90],['動能','當日+月P70組合分',cfg.momentum.comboP70],
             ['法人一月','門檻A(百萬)',cfg.corp1m.thrA],['法人一月','門檻A得分',cfg.corp1m.scoreA],
             ['法人一月','門檻B(百萬)',cfg.corp1m.thrB],['法人一月','門檻B得分',cfg.corp1m.scoreB],
             ['法人一月','門檻C(百萬)',cfg.corp1m.thrC],['法人一月','門檻C得分',cfg.corp1m.scoreC],
@@ -1391,9 +1402,10 @@
             const isRiseStart  = fileName.includes('起漲');  // 起漲標的檔
             const isMorgan5d   = fileName.includes('大摩') && (fileName.includes('5日') || fileName.includes('買超'));  // 大摩5日買超
             const isTrustRank  = fileName.includes('投信') && (fileName.includes('當週') || fileName.includes('買超排行'));  // 投信當週買超排行
-            // 當日漲幅排行檔(優先判斷,避免被5日/1月誤判)
+            // 當日漲幅排行檔(優先判斷;用精確關鍵字避免誤抓「5日漲幅排行」)
             const isDayRankFile = !isInventory && !isRiseStart &&
-                (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('日漲幅排行'));
+                (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('當沖')) &&
+                !fileName.includes('5日') && !fileName.includes('五日');
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
             const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
             const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has1m;
@@ -1727,15 +1739,19 @@
             // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位）
             const ratio1m = row.市值 > 0 ? (corp1m / row.市值) : 0;
             row.法人月市值比pct = row.市值 > 0 ? (ratio1m*100).toFixed(3) + '%' : '-';
+            let monthLevel = '';   // 記錄月分位等級,供組合獎勵用
             if (row.市值 > 0 && ratio1m > 0) {
                 const c1 = SC.corp1m;
                 const m_tA = c1.thrA > 0 ? c1.thrA : auto1mThrA;
                 const m_tB = c1.thrB > 0 ? c1.thrB : auto1mThrB;
                 const m_tC = c1.thrC > 0 ? c1.thrC : auto1mThrC;
-                if      (m_tA > 0 && ratio1m >= m_tA) { score += c1.scoreA; tags.push('🏛️月P90'); }
-                else if (m_tB > 0 && ratio1m >= m_tB) { score += c1.scoreB; tags.push('月比P70'); }
-                else if (m_tC > 0 && ratio1m >= m_tC) { score += c1.scoreC; tags.push('月比P50'); }
+                if      (m_tA > 0 && ratio1m >= m_tA) { score += c1.scoreA; tags.push('🏛️月P90'); monthLevel = 'P90'; }
+                else if (m_tB > 0 && ratio1m >= m_tB) { score += c1.scoreB; tags.push('月比P70'); monthLevel = 'P70'; }
+                else if (m_tC > 0 && ratio1m >= m_tC) { score += c1.scoreC; tags.push('月比P50'); monthLevel = 'P50'; }
             }
+            // ⭐ 組合獎勵:當日強勢 + 月P90/P70(在各自加分之外額外加)
+            if (rDayIn && monthLevel === 'P90') { score += m.comboP90; tags.push('⭐當日+月P90'); }
+            else if (rDayIn && monthLevel === 'P70') { score += m.comboP70; tags.push('⭐當日+月P70'); }
 
             // ④ 投信市值比評分（投信週買超/市值，P90/P70/P50）
             const trustRatio = row.投信市值比 || 0;
@@ -2953,6 +2969,7 @@
                 if (t === '5日動能') return 41;
                 if (t === '一月動能') return 42;
                 if (t === '當日強勢') return 43;
+                if (t.includes('⭐當日+月')) return 44;
                 // 特殊
                 if (t.includes('潛龍')) return 50;
                 if (t.includes('超級基本面')) return 51;
@@ -3287,6 +3304,7 @@
             else if (t.includes('💎') || t.includes('合買'))       cls = 'teal';
             else if (t.includes('🔥') || t.includes('族群'))       cls = 'purple';
             else if (t.includes('🎯') || t.includes('ETF'))        cls = 'green';
+            else if (t.includes('⭐當日+月'))                       cls = 'gold';
             else if (t.includes('當日強勢'))                        cls = 'orange';
             else if (t.includes('雙動能') || t.includes('動能'))   cls = 'navy';
             else if (t.includes('月續買') || t.includes('法人'))   cls = 'blue';
@@ -3993,6 +4011,7 @@
         { group: '法人月比值', tags: ['🏛️月P90','月比P70','月比P50'] },
         { group: '投信比值', tags: ['🏦投信P90','投信比P70','投信比P50'] },
         { group: '動能', tags: ['雙動能共振','5日動能','一月動能','當日強勢'] },
+        { group: '組合獎勵', tags: ['⭐當日+月P90','⭐當日+月P70'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
         { group: '基本面', tags: ['營收>80%','營收>50%'] },
         { group: '狀態', tags: ['🆕新入選'] },
