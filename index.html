@@ -268,20 +268,14 @@
 
         /* ══ RWD：平板 ══ */
         @media (max-width: 900px) {
-            /* iPad：整體字體放大 */
-            body { font-size: 17px; }
+            /* iPad:編輯器單欄(卡片網格由 1024px 區段處理) */
             .editor-grid { grid-template-columns: 1fr; }
-            table { font-size: 15px; }
-            th, td { padding: 9px 11px; }
-            h2 { font-size: 17px; }
-            .s-tag { font-size: 13px; }
-            button { font-size: 15px; }
             input, select { font-size: 16px; }  /* 16px 防 iOS 自動放大 */
         }
 
         /* ══ RWD：手機 ══ */
-        @media (max-width: 600px) {
-            /* 手機：整體放大 */
+        @media (max-width: 1024px) {
+            /* 手機 + 平板(iPad):整體放大 + 卡片網格 */
             body { padding: 6px; font-size: 16px; }
             .container { padding: 12px 10px; border-radius: 8px; }
             h1 { font-size: 20px; }
@@ -554,7 +548,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ay</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04az</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1371,7 +1365,7 @@
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
             const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
             const is1mRankFile = !isInventory && !isRiseStart && has1m;
-            const is5dRankFile = !isInventory && !isRiseStart && !is1mRankFile && (fileName.includes('5日') || fileName.includes('五日'));
+            const is5dRankFile = !isInventory && !isRiseStart && !is1mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -1876,7 +1870,7 @@
             🏷️ <b>前5大熱門族群（青色TAG）：</b>${[...top5Inds].map(t=>`<span class="s-tag teal">${t}</span>`).join('') || '（無）'}
         </div>`;
         outputHTML += createSection(
-            '輸出 1：整份資料 TOP 50 推薦表', '輸出1_TOP50.csv',
+            '輸出 2：整份資料 TOP 50 推薦表', '輸出2_TOP50.csv',
             STD_HEADERS,
             top50.map((r,i) => stdRow(r, addIndTag, i+1))
         );
@@ -1886,21 +1880,21 @@
             const invData = finalData.filter(r => inventorySymbols.has(r.代號));
             if (invData.length > 0) {
                 outputHTML += createSection(
-                    '輸出 2：庫存標的診斷報告', '輸出2_庫存診斷.csv',
+                    '輸出 3：庫存標的診斷報告', '輸出3_庫存診斷.csv',
                     STD_HEADERS,
                     invData.map((r,i) => stdRow(r, null, i+1))
                 );
             } else {
-                outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 偵測到庫存檔案，但無有效資料列（格式異常？）</p></div>`;
+                outputHTML += `<div class="report-section"><h2>輸出 3：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 偵測到庫存檔案，但無有效資料列（格式異常？）</p></div>`;
             }
         } else {
-            outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 未偵測到檔名含「庫存」的 CSV。</p></div>`;
+            outputHTML += `<div class="report-section"><h2>輸出 3：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 未偵測到檔名含「庫存」的 CSV。</p></div>`;
         }
 
         // 輸出 3
         const top20NoInv = top50.filter(r => !inventorySymbols.has(r.代號)).slice(0, 20);
         outputHTML += createSection(
-            'Top 20 推薦表 (排除庫存)', '輸出3_TOP20_排除庫存.csv',
+            '輸出 4：Top 20 推薦表 (排除庫存)', '輸出4_TOP20_排除庫存.csv',
             STD_HEADERS,
             top20NoInv.map((r,i) => stdRow(r, null, i+1))
         );
@@ -1919,7 +1913,7 @@
             .filter(d => d.value > 0);
 
         let out4HTML = `<div class="report-section">
-            <h2>輸出 4：今日熱門族群解析 (TOP 50 資金匯聚)
+            <h2>輸出 1：今日熱門族群解析 (TOP 50 資金匯聚)
                 <button class="btn-download" onclick='downloadCSV("輸出4_熱門族群.csv", ${JSON.stringify([["排行","產業名稱","進榜檔數","三大法人資金匯入(億元估算)"], ...out4Rows])})'>下載 CSV</button>
             </h2>`;
         out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大熱門族群（個股TAG依此標記）：${[...top5Inds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ')}</div>`;
@@ -1930,7 +1924,8 @@
         out4HTML += `<table><tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
         out4Rows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
         out4HTML += `</table></div>`;
-        outputHTML += out4HTML;
+        // 熱門族群改排輸出1：不在此處 append,留待最後 prepend 到最前面
+        window._out4HTML_firstOutput = out4HTML;
 
         // 輸出 5
         const resonanceSymbols = [...rise5dTop40].filter(s => rise1mTop40.has(s));
@@ -1993,7 +1988,7 @@
             .slice(0, 40);
         if (rise5dArr.length) {
             outputHTML += createSection(
-                '輸出 5b：5日漲幅排行 TOP 40', '輸出5b_5日漲幅.csv',
+                '輸出 7：5日漲幅排行 TOP 40', '輸出7_5日漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise5dArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
@@ -2009,7 +2004,7 @@
             .slice(0, 40);
         if (rise1mArr.length) {
             outputHTML += createSection(
-                '輸出 5c：1個月漲幅排行 TOP 40', '輸出5c_1月漲幅.csv',
+                '輸出 8：1個月漲幅排行 TOP 40', '輸出8_1月漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
@@ -2027,8 +2022,8 @@
                 .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
             if (riseStartData.length) {
                 outputHTML += createSection(
-                    `輸出 5d：起漲標的（${riseStartData.length} 檔，來自起漲CSV）`,
-                    '輸出5d_起漲標的.csv',
+                    `輸出 9：起漲標的（${riseStartData.length} 檔，來自起漲CSV）`,
+                    '輸出9_起漲標的.csv',
                     STD_HEADERS,
                     riseStartData.map((r,i) => stdRow(r, null, i+1))
                 );
@@ -2043,8 +2038,8 @@
                 .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
             if (morganData.length) {
                 outputHTML += createSection(
-                    `輸出 5e：大摩5日買超（${morganData.length} 檔）`,
-                    '輸出5e_大摩5日買超.csv',
+                    `輸出 10：大摩5日買超（${morganData.length} 檔）`,
+                    '輸出10_大摩5日買超.csv',
                     STD_HEADERS,
                     morganData.map((r,i) => stdRow(r, null, i+1))
                 );
@@ -2059,8 +2054,8 @@
                 .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0));
             if (trustRankData.length) {
                 outputHTML += createSection(
-                    `輸出 5f：投信當週買超排行（${trustRankData.length} 檔）`,
-                    '輸出5f_投信當週買超.csv',
+                    `輸出 11：投信當週買超排行（${trustRankData.length} 檔）`,
+                    '輸出11_投信當週買超.csv',
                     STD_HEADERS,
                     trustRankData.map((r,i) => stdRow(r, null, i+1))
                 );
@@ -2079,7 +2074,7 @@
             /^(0050|00888|00913|00927|00929|00981A)/i.test(name);   // 純ETF成分檔不另列
 
         let _genIdx = 0;
-        const _genLabels = ['5g','5h','5i','5j','5k','5l','5m','5n','5o','5p','5q','5r','5s','5t'];
+        const _genLabels = ['12','13','14','15','16','17','18','19','20','21','22','23','24','25'];
         fileTagOrder.forEach(tagName => {
             if (_hasOwnOutput(tagName)) return;
             const syms = fileTagMap[tagName];
@@ -2280,6 +2275,16 @@
             </div>
         </div>`;
 
+        // 熱門族群排輸出1：插到第一個 report-section(TOP50)前面
+        if (window._out4HTML_firstOutput) {
+            const firstSecIdx = outputHTML.indexOf('<div class="report-section"');
+            if (firstSecIdx >= 0) {
+                outputHTML = outputHTML.slice(0, firstSecIdx) + window._out4HTML_firstOutput + outputHTML.slice(firstSecIdx);
+            } else {
+                outputHTML = window._out4HTML_firstOutput + outputHTML;
+            }
+            window._out4HTML_firstOutput = null;
+        }
         console.log('[分析] 階段8: 輸出7完成,outputHTML 大小:', (outputHTML.length/1024).toFixed(0), 'KB');
         await renderOutputBatched(outputHTML);
         console.log('[分析] 階段9: 分批渲染完成');
@@ -3040,7 +3045,7 @@
     // 手機:點擊小卡片 → 展開/收合詳細資訊(事件委派)
     document.addEventListener('click', (e) => {
         // 只在手機模式作用
-        if (!window.matchMedia('(max-width: 600px)').matches) return;
+        if (!window.matchMedia('(max-width: 1024px)').matches) return;
         const tr = e.target.closest('.tbl-wrap table tr');
         if (!tr) return;
         if (tr.querySelector('th')) return;  // 表頭不處理
@@ -3089,7 +3094,7 @@
         const area = document.getElementById('outputArea');
         if (!area) return;
         // 只在手機模式作用(用視窗寬度判斷)
-        const isMobile = window.matchMedia('(max-width: 600px)').matches;
+        const isMobile = window.matchMedia('(max-width: 1024px)').matches;
         const sections = [...area.querySelectorAll('.report-section')];
         sections.forEach(sec => {
             if (!isMobile) { sec.style.display = ''; return; }  // 桌機全顯示
@@ -3331,7 +3336,7 @@
 
         // 輸出1（個股加前5大熱門族群青色TAG）
         outputHTML += createSection(
-            `輸出 1：整份資料 TOP 50 推薦表（${label}）`, `輸出1_TOP50_${label.replace(/\//g,'')}.csv`,
+            `輸出 2：整份資料 TOP 50 推薦表（${label}）`, `輸出2_TOP50_${label.replace(/\//g,'')}.csv`,
             STD_HEADERS,
             top50.map((r,i) => stdRow(r, histAddIndTag, i+1))
         );
@@ -3339,19 +3344,19 @@
         // 輸出2
         if (inv.length) {
             outputHTML += createSection(
-                `輸出 2：庫存標的診斷報告（共 ${inv.length} 檔）`, `輸出2_庫存_${label.replace(/\//g,'')}.csv`,
+                `輸出 3：庫存標的診斷報告（共 ${inv.length} 檔）`, `輸出3_庫存_${label.replace(/\//g,'')}.csv`,
                 STD_HEADERS,
                 inv.map((r,i) => stdRow(r, null, i+1))
             );
         } else {
-            outputHTML += `<div class="report-section"><h2>輸出 2：庫存標的診斷報告</h2>
+            outputHTML += `<div class="report-section"><h2>輸出 3：庫存標的診斷報告</h2>
                 <p style="color:var(--text-dim)">此日期無庫存資料。</p></div>`;
         }
 
         // 輸出3
         if (top20.length) {
             outputHTML += createSection(
-                `Top 20 推薦表（排除庫存）（${label}）`, `輸出3_TOP20_${label.replace(/\//g,'')}.csv`,
+                `輸出 4：Top 20 推薦表（排除庫存）（${label}）`, `輸出4_TOP20_${label.replace(/\//g,'')}.csv`,
                 STD_HEADERS,
                 top20.map((r,i) => stdRow(r, null, i+1))
             );
@@ -3363,7 +3368,7 @@
             // 統一用上方重算的 _sortedInds(5日漲幅TOP40檔數,與當日分析一致)
             const indsUse = _sortedInds.map(([k,v]) => ({ ind: k, count: v.count, corp: v.corp }));
             const pieData = indsUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
-            let out4 = `<div class="report-section"><h2>輸出 4：今日熱門族群解析</h2>`;
+            let out4 = `<div class="report-section"><h2>輸出 1：今日熱門族群解析</h2>`;
             if (pieData.length) {
                 out4 += `<div class="pie-wrap">${buildPieChart(pieData,220)}`;
                 out4 += '<div class="pie-legend">'+pieData.map((d,i)=>
@@ -3374,7 +3379,7 @@
             out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
             indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
             out4 += `</table></div></div>`;
-            outputHTML += out4;
+            window._histOut4 = out4;   // 留待最後 prepend 到最前(輸出1)
         }
 
         // 輸出5
@@ -3427,14 +3432,14 @@
                 // 輸出 5b/5c：漲幅排行（歷史載入時顯示）
         if (payload.rise5dRank?.length) {
             outputHTML += createSection(
-                `輸出 5b：5日漲幅排行 TOP 40（${label}）`, `輸出5b_${label.replace(/\//g,'')}.csv`,
+                `輸出 7：5日漲幅排行 TOP 40（${label}）`, `輸出7_${label.replace(/\//g,'')}.csv`,
                 ['排名','代號','名稱','綜合評分','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 payload.rise5dRank.map((r,i)=>[i+1, r.代號, r.名稱, r.綜合評分??'-', fmtPrice(r), (r.漲幅||0).toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)])
             );
         }
         if (payload.rise1mRank?.length) {
             outputHTML += createSection(
-                `輸出 5c：1個月漲幅排行 TOP 40（${label}）`, `輸出5c_${label.replace(/\//g,'')}.csv`,
+                `輸出 8：1個月漲幅排行 TOP 40（${label}）`, `輸出8_${label.replace(/\//g,'')}.csv`,
                 ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 payload.rise1mRank.map((r,i)=>[i+1, r.代號, r.名稱, r.綜合評分??'-', fmtPrice(r), (r.漲幅||0).toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)])
             );
@@ -3470,6 +3475,13 @@
             );
         }
 
+        // 熱門族群排輸出1:插到第一個 report-section 前
+        if (window._histOut4) {
+            const fi = outputHTML.indexOf('<div class="report-section"');
+            if (fi >= 0) outputHTML = outputHTML.slice(0, fi) + window._histOut4 + outputHTML.slice(fi);
+            else outputHTML = window._histOut4 + outputHTML;
+            window._histOut4 = null;
+        }
         renderOutputBatched(outputHTML).then(() => {
             buildMobileOutputNav();   // 手機:建立輸出下拉選單
             if (typeof switchTab === 'function') switchTab('analysis');
