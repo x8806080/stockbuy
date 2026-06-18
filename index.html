@@ -563,7 +563,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bb</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bc</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2054,12 +2054,11 @@
 
         // ── 輸出 5b：5日漲幅排行前40 ──
         const rise5dArr = Object.entries(rise5dMap)
-            .filter(([sym]) => masterDict[sym])
-            .sort((a,b) => b[1]-a[1])
-            .slice(0, 40);
+            .filter(([sym]) => masterDict[sym] && rise5dTop40.has(sym))
+            .sort((a,b) => b[1]-a[1]);
         if (rise5dArr.length) {
             outputHTML += createSection(
-                '輸出 7：5日漲幅排行 TOP 40', '輸出7_5日漲幅.csv',
+                `輸出 7：5日漲幅排行 前${SC.momentum.topPct}%（${rise5dArr.length} 檔）`, '輸出7_5日漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise5dArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
@@ -2068,14 +2067,13 @@
             );
         }
 
-        // ── 輸出 5c：1月漲幅排行前40 ──
+        // ── 輸出 8：1月漲幅排行 前N% ──
         const rise1mArr = Object.entries(rise1mMap)
-            .filter(([sym]) => masterDict[sym])
-            .sort((a,b) => b[1]-a[1])
-            .slice(0, 40);
+            .filter(([sym]) => masterDict[sym] && rise1mTop40.has(sym))
+            .sort((a,b) => b[1]-a[1]);
         if (rise1mArr.length) {
             outputHTML += createSection(
-                '輸出 8：1個月漲幅排行 TOP 40', '輸出8_1月漲幅.csv',
+                `輸出 8：1個月漲幅排行 前${SC.momentum.topPct}%（${rise1mArr.length} 檔）`, '輸出8_1月漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
@@ -2084,14 +2082,13 @@
             );
         }
 
-        // ── 輸出 8b：當日漲幅排行 ──
+        // ── 輸出 8b：當日漲幅排行 前N% ──
         const riseDayArr = Object.entries(riseDayMap)
-            .filter(([sym]) => masterDict[sym])
-            .sort((a,b) => b[1]-a[1])
-            .slice(0, 50);
+            .filter(([sym]) => masterDict[sym] && riseDayTop.has(sym))
+            .sort((a,b) => b[1]-a[1]);
         if (riseDayArr.length) {
             outputHTML += createSection(
-                '輸出 8b：當日漲幅排行', '輸出8b_當日漲幅.csv',
+                `輸出 8b：當日漲幅排行 前${SC.momentum.dayPct}%（${riseDayArr.length} 檔）`, '輸出8b_當日漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','當日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 riseDayArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
@@ -2158,6 +2155,7 @@
             (name.includes('投信') && (name.includes('當週') || name.includes('買超排行'))) ||
             name.includes('5日漲幅') || name.includes('五日漲幅') ||
             name.includes('1個月漲幅') || name.includes('1月漲幅') || name.includes('一月漲幅') ||
+            name.includes('當日漲幅') || name.includes('今日漲幅') || name.includes('單日漲幅') || name.includes('當沖') ||
             /^(0050|00888|00913|00927|00929|00981A)/i.test(name);   // 純ETF成分檔不另列
 
         let _genIdx = 0;
@@ -2381,7 +2379,8 @@
         console.log('[分析] 階段11: 切換分頁完成');
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
-        setBtFileTags(fileTagOrder.filter(n => !_hasOwnOutput(n)));
+        // 回測檔名標籤:納入所有檔名標籤(含起漲/大摩等有專屬輸出的),只排除純ETF成分檔
+        setBtFileTags(fileTagOrder.filter(n => !/^(0050|00888|00913|00927|00929|00981A)/i.test(n)));
         renderBtTagFilter();
 
         // 分析完成後，若是舊日期則提示重置為今天
