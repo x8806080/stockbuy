@@ -402,6 +402,21 @@
                 color: #475569;
             }
 
+            /* 回測結果卡片:顯示 代號/名稱/報酬率/入場評分 */
+            .bt-result-table table td[data-label="代號"],
+            .bt-result-table table td[data-label="名稱"],
+            .bt-result-table table td[data-label="報酬率"],
+            .bt-result-table table td[data-label="入場評分"] {
+                display: flex !important;
+            }
+            .bt-result-table table td[data-label="報酬率"] {
+                font-size: 20px !important;
+                font-weight: 800 !important;
+            }
+            .bt-result-table table td[data-label="報酬率"]::before { font-size: 12px; color:#64748b; }
+            .bt-result-table table td[data-label="入場評分"] { font-size: 15px; color:#cbd5e1; }
+            .bt-result-table table tr.expanded td { display: flex !important; }
+
 
             /* 手機輸出下拉選單(固定頂部) */
             .mobile-output-nav {
@@ -548,7 +563,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04az</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ba</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -789,23 +804,31 @@
                 <label>保底 C（≥）</label><input type="number" id="corp_fallbackC" value="500"><span class="unit">百萬</span>
             </div>
 
-            <div class="editor-section-title">② 基礎權重 — 動能與市場性（漲幅排名 TOP40）</div>
+            <div class="editor-section-title">② 基礎權重 — 動能與市場性（漲幅排名 前N%）</div>
 
             <div class="score-row">
-                <label>5日 &amp; 1月 雙進 TOP40 得分</label>
+                <label>5日 &amp; 1月 雙進榜 得分</label>
                 <input type="number" id="momentum_both" value="20">
             </div>
             <div class="score-row">
-                <label>僅 5日 進 TOP40 得分</label>
+                <label>僅 5日 進榜 得分</label>
                 <input type="number" id="momentum_5d" value="10">
             </div>
             <div class="score-row">
-                <label>僅 1月 進 TOP40 得分</label>
+                <label>僅 1月 進榜 得分</label>
                 <input type="number" id="momentum_1m" value="10">
             </div>
             <div class="score-row">
-                <label>漲幅排名取 TOP 幾名？</label>
-                <input type="number" id="momentum_topN" value="40">
+                <label>漲幅排名取「前百分之幾」%(如10=前10%)</label>
+                <input type="number" id="momentum_topPct" value="10" step="1" min="1" max="100">
+            </div>
+            <div class="score-row">
+                <label>當日漲幅 進榜 得分</label>
+                <input type="number" id="momentum_day" value="10">
+            </div>
+            <div class="score-row">
+                <label>當日漲幅取「前百分之幾」%(如10=前10%)</label>
+                <input type="number" id="momentum_dayPct" value="10" step="1" min="1" max="100">
             </div>
 
             <div class="editor-section-title">③ 基礎權重 — 中期法人力道（法人一月買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
@@ -981,7 +1004,9 @@
                 both:   v('momentum_both'),
                 only5d: v('momentum_5d'),
                 only1m: v('momentum_1m'),
-                topN:   Math.round(v('momentum_topN')),
+                day:    v('momentum_day'),
+                topPct: Math.max(1, Math.min(100, v('momentum_topPct') || 10)),
+                dayPct: Math.max(1, Math.min(100, v('momentum_dayPct') || 10)),
             },
             corp1m: {
                 thrA: v('corp1m_thrA'), thrB: v('corp1m_thrB'), thrC: v('corp1m_thrC'),
@@ -1024,7 +1049,7 @@
         corp_thrA:0, corp_scoreA:60, corp_thrB_lo:0, corp_scoreB_lo:40,
         corp_thrB_hi:0, corp_scoreB_hi:50, corp_thrC:0, corp_scoreC:30,
         corp_fallbackA:6000, corp_fallbackB:1000, corp_fallbackC:500,
-        momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_topN:40,
+        momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_day:10, momentum_topPct:10, momentum_dayPct:10,
         corp1m_thrA:3000, corp1m_scoreA:15, corp1m_thrB:1000, corp1m_scoreB:10,
         corp1m_thrC:500,  corp1m_scoreC:5,
         trust_rankA:10, trust_scoreA:10, trust_rankB:20, trust_scoreB:7, trust_scoreC:3,
@@ -1137,7 +1162,7 @@
             ['法人5日','線性終點(百萬)',cfg.corp.thrB_hi],['法人5日','線性終點得分',cfg.corp.scoreB_hi],
             ['法人5日','門檻C(百萬)',cfg.corp.thrC],['法人5日','門檻C得分',cfg.corp.scoreC],
             ['動能','雙進TOP40得分',cfg.momentum.both],['動能','僅5日得分',cfg.momentum.only5d],
-            ['動能','僅1月得分',cfg.momentum.only1m],['動能','TOP名次範圍',cfg.momentum.topN],
+            ['動能','僅1月得分',cfg.momentum.only1m],['動能','當日強勢得分',cfg.momentum.day],['動能','漲幅前百分比%',cfg.momentum.topPct],['動能','當日漲幅前百分比%',cfg.momentum.dayPct],
             ['法人一月','門檻A(百萬)',cfg.corp1m.thrA],['法人一月','門檻A得分',cfg.corp1m.scoreA],
             ['法人一月','門檻B(百萬)',cfg.corp1m.thrB],['法人一月','門檻B得分',cfg.corp1m.scoreB],
             ['法人一月','門檻C(百萬)',cfg.corp1m.thrC],['法人一月','門檻C得分',cfg.corp1m.scoreC],
@@ -1289,8 +1314,7 @@
         console.log('[分析] 階段0: 分析開始,讀取設定');
         // 讀取當前評分設定
         const SC = getScoreConfig();
-        const TOP_N = SC.momentum.topN;
-        console.log('[分析] 階段0b: 設定讀取完成,TOP_N=', TOP_N);
+        console.log('[分析] 階段0b: 設定讀取完成,前N%=', SC.momentum.topPct, '%');
         console.log('[分析] 階段0c: 開始解析,檔案數:', files.length);
 
         let masterDict       = {};
@@ -1304,8 +1328,13 @@
         let isInventoryUploaded = false;
         let rise5dTop40      = new Set();
         let rise1mTop40      = new Set();
+        let riseDayTop       = new Set();   // 當日漲幅前N%
         let rise5dMap        = {};
         let rise1mMap        = {};
+        let riseDayMap       = {};          // 當日漲幅值
+        let rise5dRankList   = [];          // {sym, idx} 暫存,迴圈後算前N%
+        let rise1mRankList   = [];
+        let riseDayRankList  = [];
         let etfSourceDict    = {};
         let fileTypeLog      = [];
 
@@ -1362,10 +1391,13 @@
             const isRiseStart  = fileName.includes('起漲');  // 起漲標的檔
             const isMorgan5d   = fileName.includes('大摩') && (fileName.includes('5日') || fileName.includes('買超'));  // 大摩5日買超
             const isTrustRank  = fileName.includes('投信') && (fileName.includes('當週') || fileName.includes('買超排行'));  // 投信當週買超排行
+            // 當日漲幅排行檔(優先判斷,避免被5日/1月誤判)
+            const isDayRankFile = !isInventory && !isRiseStart &&
+                (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('日漲幅排行'));
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
             const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
-            const is1mRankFile = !isInventory && !isRiseStart && has1m;
-            const is5dRankFile = !isInventory && !isRiseStart && !is1mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
+            const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has1m;
+            const is5dRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is1mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -1474,12 +1506,17 @@
                 if (is5dRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
                     if (v !== null) rise5dMap[symbol] = v;
-                    if (rowIdx < TOP_N) rise5dTop40.add(symbol);
+                    rise5dRankList.push({ sym: symbol, idx: rowIdx });
                 }
                 if (is1mRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
                     if (v !== null) rise1mMap[symbol] = v;
-                    if (rowIdx < TOP_N) rise1mTop40.add(symbol);
+                    rise1mRankList.push({ sym: symbol, idx: rowIdx });
+                }
+                if (isDayRankFile && riseKey) {
+                    const v = parseNum(row[riseKey]);
+                    if (v !== null) riseDayMap[symbol] = v;
+                    riseDayRankList.push({ sym: symbol, idx: rowIdx });
                 }
 
                 if (corp5dKey) {
@@ -1567,7 +1604,23 @@
             }
         });
 
-        // ── 依漲幅排行TOP40標的，自動推算「買超/市值比值」分位數門檻 ──
+        // ── 依「前N%」計算漲幅排行進榜集合(取代固定TOP40) ──
+        // 每個排行清單依 idx 排序,取前 pct% 的標的
+        function topByPct(list, pct) {
+            const result = new Set();
+            if (!list.length) return result;
+            const sorted = list.slice().sort((a,b) => a.idx - b.idx);
+            const cutoff = Math.max(1, Math.ceil(sorted.length * pct / 100));
+            for (let i = 0; i < cutoff && i < sorted.length; i++) result.add(sorted[i].sym);
+            return result;
+        }
+        rise5dTop40 = topByPct(rise5dRankList, SC.momentum.topPct);
+        rise1mTop40 = topByPct(rise1mRankList, SC.momentum.topPct);
+        riseDayTop  = topByPct(riseDayRankList, SC.momentum.dayPct);
+        console.log('[分析] 前N%進榜: 5日', rise5dTop40.size, '| 1月', rise1mTop40.size, '| 當日', riseDayTop.size,
+                    `(5日/1月前${SC.momentum.topPct}%, 當日前${SC.momentum.dayPct}%)`);
+
+        // ── 依漲幅排行標的，自動推算「買超/市值比值」分位數門檻 ──
         const benchmarkSymbols = new Set([...rise5dTop40, ...rise1mTop40]);
         const benchmarkRatios = [...benchmarkSymbols]
             .map(s => masterDict[s]?.法人市值比 ?? 0)
@@ -1665,9 +1718,11 @@
 
             // ② 動能
             const m = SC.momentum;
+            const rDayIn = riseDayTop.has(row.代號);
             if (r5In && r1mIn) { score += m.both;   tags.push('雙動能共振'); }
             else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
+            if (rDayIn)        { score += m.day;    tags.push('當日強勢'); }
 
             // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位）
             const ratio1m = row.市值 > 0 ? (corp1m / row.市值) : 0;
@@ -1937,7 +1992,7 @@
             })
             .sort((a, b) => b.五日漲幅 - a.五日漲幅);
 
-        const out5Hint = `（5日排行 TOP${TOP_N} 共 ${rise5dTop40.size} 檔 ∩ 1個月排行 TOP${TOP_N} 共 ${rise1mTop40.size} 檔，交集 ${resonanceData.length} 檔）`;
+        const out5Hint = `（5日排行 前${SC.momentum.topPct}% 共 ${rise5dTop40.size} 檔 ∩ 1個月排行 前${SC.momentum.topPct}% 共 ${rise1mTop40.size} 檔，交集 ${resonanceData.length} 檔）`;
         if (resonanceData.length > 0) {
             outputHTML += createSection(
                 `輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}`, '輸出5_長短動能共振.csv',
@@ -1948,7 +2003,7 @@
             const h5 = rise5dTop40.size === 0 ? '（未偵測到檔名含「5日」的排行檔）' : '';
             const h1 = rise1mTop40.size === 0 ? '（未偵測到檔名含「1個月/一月/1月」的排行檔）' : '';
             outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}</h2>
-                <p style="color:#e67e22;font-weight:bold;">⚠️ 本期無標的同時出現在兩份排行榜 TOP${TOP_N} 中。${h5}${h1}</p></div>`;
+                <p style="color:#e67e22;font-weight:bold;">⚠️ 本期無標的同時出現在兩份排行榜 前${SC.momentum.topPct}% 中。${h5}${h1}</p></div>`;
         }
 
         // 輸出 6
@@ -1964,7 +2019,7 @@
             outputHTML += createSection(
                 `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
                 '輸出6_特定ETF大摩共振.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
                 etfResonanceData.map((r,i) => {
                     // ETF 來源改為彩色 TAG
                     const etfTags = (r.出現清單||'').split(' / ').filter(Boolean)
@@ -1974,7 +2029,7 @@
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
                     const m = masterDict[r.代號]||{};
-                    return [i+1, r.代號, r.名稱, m.綜合評分??'-', fmtPrice(m), r.共振次數, etfTags, m.法人市值比pct||'-', m.法人月市值比pct||'-', m.投信市值比pct||'-', fmtRev(m), renderTags(m.狀態標註||''), renderBoll(m)];
+                    return [i+1, r.代號, r.名稱, m.綜合評分??'-', fmtPrice(m), r.共振次數, etfTags, m.法人市值比pct||'-', m.法人月市值比pct||'-', m.投信市值比pct||'-', fmtRev(m), renderBoll(m)];
                 })
             );
         } else {
@@ -2007,6 +2062,22 @@
                 '輸出 8：1個月漲幅排行 TOP 40', '輸出8_1月漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg],i) => {
+                    const r = masterDict[sym] || {};
+                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), chg.toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
+                })
+            );
+        }
+
+        // ── 輸出 8b：當日漲幅排行 ──
+        const riseDayArr = Object.entries(riseDayMap)
+            .filter(([sym]) => masterDict[sym])
+            .sort((a,b) => b[1]-a[1])
+            .slice(0, 50);
+        if (riseDayArr.length) {
+            outputHTML += createSection(
+                '輸出 8b：當日漲幅排行', '輸出8b_當日漲幅.csv',
+                ['排名','代號','名稱','綜合評分','當日價格','當日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                riseDayArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
                     return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), chg.toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
                 })
@@ -2881,6 +2952,7 @@
                 if (t === '雙動能共振') return 40;
                 if (t === '5日動能') return 41;
                 if (t === '一月動能') return 42;
+                if (t === '當日強勢') return 43;
                 // 特殊
                 if (t.includes('潛龍')) return 50;
                 if (t.includes('超級基本面')) return 51;
@@ -3215,6 +3287,7 @@
             else if (t.includes('💎') || t.includes('合買'))       cls = 'teal';
             else if (t.includes('🔥') || t.includes('族群'))       cls = 'purple';
             else if (t.includes('🎯') || t.includes('ETF'))        cls = 'green';
+            else if (t.includes('當日強勢'))                        cls = 'orange';
             else if (t.includes('雙動能') || t.includes('動能'))   cls = 'navy';
             else if (t.includes('月續買') || t.includes('法人'))   cls = 'blue';
             else if (t.includes('投信'))                            cls = 'lime';
@@ -3400,7 +3473,7 @@
             outputHTML += createSection(
                 `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
                 `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
                 etfRes.map((r,i)=>{
                     const etfTags = (r.ETF清單||'').split(' / ').filter(Boolean)
                         .map(t => {
@@ -3408,7 +3481,7 @@
                                         t.startsWith('00')?'teal':'blue';
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
-                    return [i+1,r.代號,r.名稱,r.綜合評分??'-',fmtPrice(r),r.共振次數,etfTags,r.法人市值比pct||'-',r.法人月市值比pct||'-',r.投信市值比pct||'-',fmtRev(r),renderTags(r.狀態標註||''),renderBoll(r)];
+                    return [i+1,r.代號,r.名稱,r.綜合評分??'-',fmtPrice(r),r.共振次數,etfTags,r.法人市值比pct||'-',r.法人月市值比pct||'-',r.投信市值比pct||'-',fmtRev(r),renderBoll(r)];
                 })
             );
         } else {
@@ -3919,7 +3992,7 @@
         { group: '法人5日比值', tags: ['🏆P90','P70','P50'] },
         { group: '法人月比值', tags: ['🏛️月P90','月比P70','月比P50'] },
         { group: '投信比值', tags: ['🏦投信P90','投信比P70','投信比P50'] },
-        { group: '動能', tags: ['雙動能共振','5日動能','一月動能'] },
+        { group: '動能', tags: ['雙動能共振','5日動能','一月動能','當日強勢'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
         { group: '基本面', tags: ['營收>80%','營收>50%'] },
         { group: '狀態', tags: ['🆕新入選'] },
@@ -4235,19 +4308,19 @@
             <button class="btn-dl" onclick='downloadCSV("回測_${label.replace(/\//g,"")}.csv",${JSON.stringify(csvRows)})'>⬇ 下載 CSV</button>
         </div>`;
 
-        html += `<div class="tbl-wrap"><table>
+        html += `<div class="tbl-wrap bt-result-table"><table>
             <tr><th>代號</th><th>名稱</th><th>入場評分</th><th>入場收盤</th><th>現在收盤</th><th>報酬率</th><th>標註</th></tr>`;
         withPrice.forEach(r => {
             const retColor = r.報酬率>0?'#4ade80':r.報酬率<0?'#f87171':'#94a3b8';
             const retStr = r.報酬率!==null?(r.報酬率>=0?'+':'')+r.報酬率.toFixed(2)+'%':'-';
             html += `<tr>
-                <td><b>${r.代號}</b></td>
-                <td>${r.名稱}</td>
-                <td>${r.入場評分}</td>
-                <td>${r.入場收盤||'-'}</td>
-                <td>${r.現在收盤||'-'}</td>
-                <td style="color:${retColor};font-weight:700">${retStr}</td>
-                <td>${renderTags(r.狀態標註||'')}</td>
+                <td data-label="代號"><b>${r.代號}</b></td>
+                <td data-label="名稱">${r.名稱}</td>
+                <td data-label="入場評分">${r.入場評分}</td>
+                <td data-label="入場收盤">${r.入場收盤||'-'}</td>
+                <td data-label="現在收盤">${r.現在收盤||'-'}</td>
+                <td data-label="報酬率" style="color:${retColor};font-weight:700">${retStr}</td>
+                <td data-label="標註">${renderTags(r.狀態標註||'')}</td>
             </tr>`;
         });
         html += `</table></div>`;
