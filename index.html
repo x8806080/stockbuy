@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bf</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bi</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -689,6 +689,28 @@
 
     <!-- ══ 績效回測追蹤 ══ -->
     <div id="tab-backtest" data-tab="backtest" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+        <!-- ══ 官方歷史資料自動建置 ══ -->
+        <details style="margin-bottom:16px;border:1px solid #166534;border-radius:8px;background:#0c1812">
+            <summary style="padding:10px 14px;cursor:pointer;color:#86efac;font-weight:700;font-size:14px">🛰️ 官方歷史資料自動建置(從證交所抓三大法人+收盤)</summary>
+            <div style="padding:12px 14px">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.7">
+                    透過證交所公開 API 自動抓取歷史資料,補足回測所需。<br>
+                    • <b style="color:#86efac">三大法人/投信買超</b>:T86(全市場一次,快)<br>
+                    • <b style="color:#86efac">收盤價</b>:STOCK_DAY_ALL(算漲幅+轉金額)<br>
+                    • <b style="color:#fbbf24">相關產業</b>:內建 stock_info 對照表
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                        <label style="font-size:11px;color:#64748b">回補天數(交易日)</label>
+                        <input id="histBuildDays" type="number" value="20" min="1" max="60" style="width:90px;padding:7px;border:1px solid #334155;border-radius:5px;background:#1a2540;color:#fff;font-size:14px">
+                    </div>
+                    <button onclick="testFetchT86()" style="background:#0891b2;color:#fff;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🧪 測試抓今日T86</button>
+                    <button onclick="buildHistoricalData()" style="background:#15803d;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🚀 開始建置歷史資料</button>
+                </div>
+                <div id="histBuildLog" style="font-size:12px;color:#cbd5e1;max-height:200px;overflow-y:auto;background:#0a0e1a;border-radius:6px;padding:8px;display:none"></div>
+            </div>
+        </details>
+
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">
                 📈 TOP50 績效回測追蹤
@@ -2585,7 +2607,7 @@
         }
         // 公開 repo：直接讀 raw（不帶 header，無 preflight）
         const url = `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch || 'main'}/${path}`;
-        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        const r = await fetchWithTimeout(url, 10000);
         if (r.status === 404) return null;
         if (!r.ok) throw new Error(`rawFetch HTTP ${r.status}`);
         return r.json();
@@ -3976,6 +3998,96 @@
 
     // 從 TWSE 抓取當日全市場收盤價
     // 使用 allorigins.win CORS proxy → TWSE STOCK_DAY_ALL
+    // 相容性 fetch + timeout:用 Promise.race(完全不傳 signal,避免 corsproxy 的 postMessage clone AbortSignal 失敗)
+    async function fetchWithTimeout(url, ms) {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('逾時')), ms || 15000)
+        );
+        return Promise.race([ fetch(url), timeout ]);
+    }
+
+    // ── 從證交所抓三大法人買賣超(T86,全市場一次回傳) ──
+    async function fetchT86(dateStr) {
+        const url = `https://www.twse.com.tw/fund/T86?response=json&date=${dateStr}&selectType=ALL`;
+        const proxies = [
+            `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+            `https://thingproxy.freeboard.io/fetch/${url}`,
+            `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+        ];
+        let lastErr = '';
+        for (const proxy of proxies) {
+            try {
+                const res = await fetchWithTimeout(proxy, 15000);
+                if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
+                const text = await res.text();
+                let data;
+                try { const wrap = JSON.parse(text); data = typeof wrap.contents === 'string' ? JSON.parse(wrap.contents) : wrap; }
+                catch { data = JSON.parse(text); }
+                if (data?.stat === 'OK' && data?.data) {
+                    const result = {};
+                    data.data.forEach(row => {
+                        const sym = (row[0]||'').trim();
+                        if (!sym || !/^\d{4}$/.test(sym)) return;
+                        const parseShares = v => parseFloat((v||'0').toString().replace(/,/g,'')) || 0;
+                        result[sym] = {
+                            名稱: (row[1]||'').trim(),
+                            投信買賣超股數: parseShares(row[10]),
+                            三大法人買賣超股數: parseShares(row[18]),
+                        };
+                    });
+                    if (Object.keys(result).length > 0) return result;
+                    lastErr = 'T86 無有效資料';
+                } else {
+                    lastErr = data?.stat || 'T86 回傳非OK(可能假日)';
+                }
+            } catch(e) {
+                lastErr = e.message;
+            }
+        }
+        throw new Error(`T86 抓取失敗:${lastErr}`);
+    }
+
+    // 測試:抓最近交易日 T86(今天沒有就往前找)
+    async function testFetchT86() {
+        const log = document.getElementById('histBuildLog');
+        log.style.display = 'block';
+        log.innerHTML = `<div style="color:#fbbf24">🧪 測試抓取 T86(自動找最近有資料的交易日)...</div>`;
+        // 從今天往前試最多 7 天
+        for (let back = 0; back < 7; back++) {
+            const d = new Date();
+            d.setDate(d.getDate() - back);
+            const dow = d.getDay();
+            if (dow === 0 || dow === 6) continue;  // 跳過週末
+            const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+            log.innerHTML += `<div style="color:#94a3b8;font-size:11px">嘗試 ${dateStr}...</div>`;
+            try {
+                const t0 = Date.now();
+                const data = await fetchT86(dateStr);
+                const dt = ((Date.now()-t0)/1000).toFixed(1);
+                const syms = Object.keys(data);
+                const sample = syms.slice(0,5).map(s => `${s} ${data[s].名稱}(法人${(data[s].三大法人買賣超股數/1000).toFixed(0)}張/投信${(data[s].投信買賣超股數/1000).toFixed(0)}張)`).join('<br>');
+                log.innerHTML = `<div style="color:#4ade80">✅ 成功!日期 ${dateStr},共 ${syms.length} 檔,耗時 ${dt} 秒</div>
+                    <div style="color:#94a3b8;margin-top:6px;font-size:11px">範例:<br>${sample}</div>
+                    <div style="color:#86efac;margin-top:6px">→ T86 可透過 proxy 抓取,歷史建置可行!告訴我就接著做完整流程。</div>`;
+                return;
+            } catch(e) {
+                log.innerHTML += `<div style="color:#64748b;font-size:11px">  ↳ ${e.message}</div>`;
+            }
+        }
+        log.innerHTML += `<div style="color:#f87171;margin-top:6px">❌ 最近7天都抓不到。可能所有 proxy 暫時失效,或證交所擋了。稍後再試,或把這訊息截圖給我。</div>`;
+    }
+    window.testFetchT86 = testFetchT86;
+
+    async function buildHistoricalData() {
+        const log = document.getElementById('histBuildLog');
+        log.style.display = 'block';
+        const days = parseInt(document.getElementById('histBuildDays').value) || 20;
+        log.innerHTML = `<div style="color:#fbbf24">🚀 準備建置最近 ${days} 個交易日的歷史資料...</div>
+            <div style="color:#94a3b8;margin-top:6px;font-size:11px">⚠️ 完整版開發中。請先用「🧪 測試抓今日T86」確認 proxy 可用,我再接著做完整流程。</div>`;
+    }
+    window.buildHistoricalData = buildHistoricalData;
+
     // ── TWSE 收盤價抓取（今日 / 歷史兩模式）──────────────────
     // dateStr: YYYYMMDD，空白=今天
     // symbols: 若為歷史日期，只抓這些代號（避免50次全抓）
@@ -4001,7 +4113,7 @@
             let lastErr = '';
             for (const proxy of proxies) {
                 try {
-                    const res = await fetch(proxy, { signal: AbortSignal.timeout(15000) });
+                    const res = await fetchWithTimeout(proxy, 15000);
                     if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
                     const text = await res.text();
                     // allorigins 回傳 {contents:...}，其他直接回傳 JSON
@@ -4057,7 +4169,7 @@
                 try {
                     const url    = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${yyyymm}&stockNo=${sym}&response=json`;
                     const pUrl   = getProxy() + encodeURIComponent(url);
-                    const res    = await fetch(pUrl, { signal: AbortSignal.timeout(10000) });
+                    const res    = await fetchWithTimeout(pUrl, 10000);
                     if (!res.ok) { proxyIdx++; return; }
                     const text   = await res.text();
                     let data;
