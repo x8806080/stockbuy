@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bi</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bj</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4009,43 +4009,51 @@
     // ── 從證交所抓三大法人買賣超(T86,全市場一次回傳) ──
     async function fetchT86(dateStr) {
         const url = `https://www.twse.com.tw/fund/T86?response=json&date=${dateStr}&selectType=ALL`;
+        // T86 全市場回應大(>1MB);allorigins /raw 避免 /get 的 413 限制
         const proxies = [
-            `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-            `https://thingproxy.freeboard.io/fetch/${url}`,
-            `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+            { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, wrap: false },
+            { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, wrap: false },
+            { url: `https://thingproxy.freeboard.io/fetch/${url}`, wrap: false },
+            { url: `https://corsproxy.io/?url=${encodeURIComponent(url)}`, wrap: false },
+            { url: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, wrap: true },
         ];
         let lastErr = '';
-        for (const proxy of proxies) {
+        for (const p of proxies) {
             try {
-                const res = await fetchWithTimeout(proxy, 15000);
+                const res = await fetchWithTimeout(p.url, 20000);
                 if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
                 const text = await res.text();
                 let data;
-                try { const wrap = JSON.parse(text); data = typeof wrap.contents === 'string' ? JSON.parse(wrap.contents) : wrap; }
-                catch { data = JSON.parse(text); }
+                try {
+                    if (p.wrap) {
+                        const w = JSON.parse(text);
+                        data = typeof w.contents === 'string' ? JSON.parse(w.contents) : w;
+                    } else {
+                        data = JSON.parse(text);
+                    }
+                } catch (pe) { lastErr = '回應非JSON(proxy錯誤頁)'; continue; }
                 if (data?.stat === 'OK' && data?.data) {
                     const result = {};
                     data.data.forEach(row => {
                         const sym = (row[0]||'').trim();
                         if (!sym || !/^\d{4}$/.test(sym)) return;
-                        const parseShares = v => parseFloat((v||'0').toString().replace(/,/g,'')) || 0;
+                        const ps = v => parseFloat((v||'0').toString().replace(/,/g,'')) || 0;
                         result[sym] = {
                             名稱: (row[1]||'').trim(),
-                            投信買賣超股數: parseShares(row[10]),
-                            三大法人買賣超股數: parseShares(row[18]),
+                            投信買賣超股數: ps(row[10]),
+                            三大法人買賣超股數: ps(row[18]),
                         };
                     });
                     if (Object.keys(result).length > 0) return result;
-                    lastErr = 'T86 無有效資料';
+                    lastErr = '解析後無有效資料';
                 } else {
-                    lastErr = data?.stat || 'T86 回傳非OK(可能假日)';
+                    lastErr = (data?.stat || '無資料').replace(/很抱歉，?/,'');
                 }
             } catch(e) {
                 lastErr = e.message;
             }
         }
-        throw new Error(`T86 抓取失敗:${lastErr}`);
+        throw new Error(lastErr);
     }
 
     // 測試:抓最近交易日 T86(今天沒有就往前找)
@@ -4053,8 +4061,8 @@
         const log = document.getElementById('histBuildLog');
         log.style.display = 'block';
         log.innerHTML = `<div style="color:#fbbf24">🧪 測試抓取 T86(自動找最近有資料的交易日)...</div>`;
-        // 從今天往前試最多 7 天
-        for (let back = 0; back < 7; back++) {
+        // 從昨天往前試最多 10 天(今天常未收盤)
+        for (let back = 1; back < 11; back++) {
             const d = new Date();
             d.setDate(d.getDate() - back);
             const dow = d.getDay();
