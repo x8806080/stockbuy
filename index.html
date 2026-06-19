@@ -78,6 +78,20 @@
             background: var(--bg3);
         }
         [data-tab].tab-hidden { display: none !important; }
+        /* ── 日曆元件 ── */
+        .cal-wrap { user-select: none; }
+        .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .cal-head button { width: auto; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 14px; }
+        .cal-head .cal-title { font-size: 14px; font-weight: 700; color: var(--text); }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+        .cal-dow { text-align: center; font-size: 11px; color: var(--text-dim); padding: 2px 0; font-weight: 600; }
+        .cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; border-radius: 6px; color: #475569; position: relative; }
+        .cal-day.has-data { background: var(--bg3); color: var(--text); cursor: pointer; border: 1px solid transparent; font-weight: 600; }
+        .cal-day.has-data:hover { border-color: var(--accent2); }
+        .cal-day.selected { background: #3b82f6; color: #fff; border-color: #60a5fa; }
+        .cal-day.has-data::after { content: ''; position: absolute; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: #10b981; }
+        .cal-day.selected::after { background: #fff; }
+        .cal-day.empty { visibility: hidden; }
         .container {
             max-width: 1280px;
             margin: 0 auto;
@@ -402,6 +416,11 @@
                 color: #475569;
             }
 
+            /* 回測標籤篩選:手機放大字體 */
+            #btTagFilterBox > div > div:first-child { font-size: 14px !important; }
+            #btTagFilterBox label { font-size: 15px !important; padding: 6px 10px !important; gap: 6px !important; }
+            #btTagFilterBox input[type="checkbox"] { width: 18px; height: 18px; }
+
             /* 回測結果卡片:顯示 代號/名稱/報酬率/入場評分 */
             .bt-result-table table td[data-label="代號"],
             .bt-result-table table td[data-label="名稱"],
@@ -563,7 +582,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bc</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bd</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -646,9 +665,9 @@
         <div id="histPanelInner" style="margin-top:14px">
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
                 <!-- 日期多選清單 -->
-                <div style="flex:0 0 auto;min-width:180px">
+                <div style="flex:0 0 auto;min-width:260px">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                        <span style="font-size:12px;color:var(--text-dim)">選擇分析日期（可多選）</span>
+                        <span style="font-size:12px;color:var(--text-dim)">選擇分析日期（日曆可多選）</span>
                         <div style="display:flex;gap:6px">
                             <button onclick="selectAllDates(true)"
                                 style="background:none;border:1px solid var(--border);color:var(--accent2);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">全選</button>
@@ -657,8 +676,12 @@
                         </div>
                     </div>
                     <div id="histDateList"
-                        style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:6px">
+                        style="border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:10px">
                         <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入日期清單…</div>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-top:6px">
+                        <button onclick="deleteSelectedHistDates()"
+                            style="background:none;border:1px solid #ef4444;color:#ef4444;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;width:100%">🗑️ 刪除選取日期資料</button>
                     </div>
                     <div style="font-size:11px;color:var(--text-dim);margin-top:5px">
                         共振比對可選多個日期，取聯集後與最新漲幅比對
@@ -696,10 +719,10 @@
         <div id="backtestPanelInner" style="margin-top:14px">
             <!-- Step 1：選入場日 -->
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px">
-                <div style="flex:0 0 auto;min-width:180px">
-                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">① 選擇入場日期</div>
+                <div style="flex:0 0 auto;min-width:260px">
+                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">① 選擇入場日期(日曆)</div>
                     <div id="backtestDateList"
-                        style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:6px">
+                        style="border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:10px">
                         <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入…</div>
                     </div>
                 </div>
@@ -1268,7 +1291,7 @@
         const svgStr = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
         let legendHTML = '<div class="pie-legend">';
         slices.forEach(s => {
-            legendHTML += `<div class="pie-legend-item"><div class="pie-swatch" style="background:${s.color}"></div><span><b>${s.label}</b>：${s.value} 億 (${s.pct}%)</span></div>`;
+            legendHTML += `<div class="pie-legend-item"><div class="pie-swatch" style="background:${s.color}"></div><span><b>${s.label}</b>：${s.value} 檔 (${s.pct}%)</span></div>`;
         });
         legendHTML += '</div>';
         return `<div class="pie-wrap">${svgStr}${legendHTML}</div>`;
@@ -1973,7 +1996,7 @@
         console.log('[分析] 階段4: 輸出1完成,開始輸出4族群');
         // 輸出 4（indMap/sortedInds/top5Inds 已在輸出1前計算）
         const out4Rows = sortedInds.map(([ ind, { count, corpSum } ], i) => {
-            const 億 = (corpSum / 2000).toFixed(2);
+            const 億 = (corpSum / 100).toFixed(2);
             // 前5大用青色TAG，其餘藍色
             const cls = i < 5 ? 'teal' : 'blue';
             const indTag = `<span class="s-tag ${cls}">${ind}</span>`;
@@ -1990,7 +2013,7 @@
         out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大熱門族群（個股TAG依此標記）：${[...top5Inds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ')}</div>`;
         if (pieData.length > 0) {
             out4HTML += buildPieChart(pieData, 260);
-            out4HTML += `<p style="font-size:12px;color:#888;margin-top:4px">※ 資金估算：法人買超張數 ÷ 2000 ≈ 億元（以均價 NT$50 / 1000股/張 計）</p>`;
+            out4HTML += `<p style="font-size:12px;color:#888;margin-top:4px">※ 資金 = 三大法人5日累計買賣超金額加總（百萬 ÷ 100 = 億元）</p>`;
         }
         out4HTML += `<table><tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
         out4Rows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
@@ -2642,6 +2665,22 @@
     }
     window.onDeleteHistDate = onDeleteHistDate;
 
+    // 批次刪除月曆選取的日期
+    async function deleteSelectedHistDates() {
+        const dates = getCalSelected('histDateList');
+        if (!dates.length) { alert('請先在日曆點選要刪除的日期'); return; }
+        if (!confirm(`確定刪除這 ${dates.length} 天的分析資料?此動作無法復原。`)) return;
+        let okCount = 0;
+        for (const dk of dates) {
+            const ok = await deleteDailyResult(dk);
+            if (ok) okCount++;
+        }
+        alert(`已刪除 ${okCount} / ${dates.length} 天資料`);
+        await initHistDateSelect();
+        if (typeof initBacktestDateList === 'function') await initBacktestDateList();
+    }
+    window.deleteSelectedHistDates = deleteSelectedHistDates;
+
     async function saveDailyResult(payload, dateKey) {
         if (!hasRepo()) return;
         // 步驟1：存每日分析檔
@@ -2891,6 +2930,91 @@
 
 
     // ── 歷史查詢 & 共振比對 ──────────────────────────────────
+    // ── 共用月曆元件 ──
+    // containerId: 容器, dataKeys: 有資料的日期(YYYYMMDD陣列), mode: 'multi'|'single'
+    // onSelect: 選取變動的 callback(selectedArray)
+    const _calState = {};   // 各容器的當前顯示年月 + 選取集合
+    function buildCalendar(containerId, dataKeys, mode, onSelect) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const dataSet = new Set(dataKeys || []);
+        if (!_calState[containerId]) {
+            // 預設顯示最新資料的月份
+            let initYM;
+            if (dataKeys && dataKeys.length) {
+                const latest = dataKeys.slice().sort().pop();
+                initYM = { y: +latest.slice(0,4), m: +latest.slice(4,6)-1 };
+            } else {
+                const now = new Date();
+                initYM = { y: now.getFullYear(), m: now.getMonth() };
+            }
+            _calState[containerId] = { ...initYM, selected: new Set(), dataSet, onSelect, mode };
+        }
+        const st = _calState[containerId];
+        st.dataSet = dataSet; st.onSelect = onSelect; st.mode = mode;
+        renderCalendar(containerId);
+    }
+    function renderCalendar(containerId) {
+        const container = document.getElementById(containerId);
+        const st = _calState[containerId];
+        if (!container || !st) return;
+        const { y, m, dataSet, selected } = st;
+        const first = new Date(y, m, 1);
+        const startDow = first.getDay();
+        const daysInMonth = new Date(y, m+1, 0).getDate();
+        const dows = ['日','一','二','三','四','五','六'];
+        let html = `<div class="cal-wrap">
+            <div class="cal-head">
+                <button onclick="calNav('${containerId}',-1)">‹</button>
+                <span class="cal-title">${y} 年 ${m+1} 月</span>
+                <button onclick="calNav('${containerId}',1)">›</button>
+            </div>
+            <div class="cal-grid">`;
+        dows.forEach(d => html += `<div class="cal-dow">${d}</div>`);
+        for (let i = 0; i < startDow; i++) html += `<div class="cal-day empty"></div>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+            const key = `${y}${String(m+1).padStart(2,'0')}${String(d).padStart(2,'0')}`;
+            const has = dataSet.has(key);
+            const sel = selected.has(key);
+            const cls = ['cal-day'];
+            if (has) cls.push('has-data');
+            if (sel) cls.push('selected');
+            const onclick = has ? `onclick="calPick('${containerId}','${key}')"` : '';
+            html += `<div class="${cls.join(' ')}" ${onclick}>${d}</div>`;
+        }
+        html += `</div></div>`;
+        container.innerHTML = html;
+    }
+    function calNav(containerId, delta) {
+        const st = _calState[containerId];
+        if (!st) return;
+        st.m += delta;
+        if (st.m < 0) { st.m = 11; st.y--; }
+        if (st.m > 11) { st.m = 0; st.y++; }
+        renderCalendar(containerId);
+    }
+    function calPick(containerId, key) {
+        const st = _calState[containerId];
+        if (!st) return;
+        if (st.mode === 'single') {
+            st.selected = new Set([key]);
+        } else {
+            if (st.selected.has(key)) st.selected.delete(key);
+            else st.selected.add(key);
+        }
+        renderCalendar(containerId);
+        if (st.onSelect) st.onSelect([...st.selected]);
+    }
+    function getCalSelected(containerId) {
+        const st = _calState[containerId];
+        return st ? [...st.selected] : [];
+    }
+    function clearCalSelected(containerId) {
+        const st = _calState[containerId];
+        if (st) { st.selected.clear(); renderCalendar(containerId); if (st.onSelect) st.onSelect([]); }
+    }
+    window.calNav = calNav; window.calPick = calPick;
+
     async function initHistDateSelect() {
         const idx = await loadDailyIndex();
         const container = document.getElementById('histDateList');
@@ -2899,27 +3023,19 @@
             container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">尚無歷史資料</div>';
             return;
         }
-        container.innerHTML = idx.map(dateKey => {
-            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-            return `<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;border-radius:5px"
-                onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background=''">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text);flex:1">
-                    <input type="checkbox" value="${dateKey}" class="hist-date-cb"
-                        style="width:15px;height:15px;accent-color:#3b82f6;cursor:pointer">
-                    ${label}
-                </label>
-                <button onclick="onDeleteHistDate('${dateKey}', event)" title="刪除此日資料"
-                    style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:2px 6px;line-height:1;width:auto">🗑️</button>
-            </div>`;
-        }).join('');
+        buildCalendar('histDateList', idx, 'multi', null);
     }
 
     function getSelectedDates() {
-        return [...document.querySelectorAll('.hist-date-cb:checked')].map(cb=>cb.value);
+        return getCalSelected('histDateList');
     }
 
     function selectAllDates(checked) {
-        document.querySelectorAll('.hist-date-cb').forEach(cb => cb.checked = checked);
+        const st = _calState['histDateList'];
+        if (!st) return;
+        if (checked) st.selected = new Set([...st.dataSet]);
+        else st.selected.clear();
+        renderCalendar('histDateList');
     }
 
 
@@ -3162,16 +3278,23 @@
             return { id: sec.id, title };
         });
 
-        // 建立下拉選單(固定在 outputArea 上方,只有手機顯示)
+        // 建立下拉選單(固定在 outputArea 上方,只有手機顯示,且只屬於分析分頁)
         const nav = document.createElement('div');
         nav.id = 'mobileOutputNav';
         nav.className = 'mobile-output-nav';
+        nav.setAttribute('data-tab', 'analysis');   // 只在分析分頁顯示
         nav.innerHTML = `
             <label>📑 選擇輸出</label>
             <select id="mobileOutputSelect" onchange="showMobileOutput(this.value)">
                 ${opts.map(o => `<option value="${o.id}">${o.title}</option>`).join('')}
             </select>`;
         area.parentNode.insertBefore(nav, area);
+
+        // 若當前不在分析分頁,隱藏 nav
+        const activeBtn = document.querySelector('#mainTabBar .tab-btn.active');
+        if (activeBtn && activeBtn.dataset.target !== 'analysis') {
+            nav.classList.add('tab-hidden');
+        }
 
         // 預設顯示第一個
         showMobileOutput(opts[0].id);
@@ -3460,11 +3583,7 @@
             const pieData = indsUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
             let out4 = `<div class="report-section"><h2>輸出 1：今日熱門族群解析</h2>`;
             if (pieData.length) {
-                out4 += `<div class="pie-wrap">${buildPieChart(pieData,220)}`;
-                out4 += '<div class="pie-legend">'+pieData.map((d,i)=>
-                    `<div class="pie-legend-item"><div class="pie-swatch" style="background:${PIE_COLORS[i%8]}"></div>
-                    <span><b>${d.label}</b>：${d.value} 檔</span></div>`
-                ).join('')+'</div></div>';
+                out4 += buildPieChart(pieData, 220);   // 已含 pie-wrap + 圖例,不重複加
             }
             out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
             indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
@@ -3985,23 +4104,19 @@
             container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">尚無歷史資料</div>';
             return;
         }
-        container.innerHTML = idx.map(dateKey => {
-            const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
-            return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:13px;color:var(--text)"
-                onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background=''">
-                <input type="radio" name="btDate" value="${dateKey}" class="bt-date-rb"
-                    style="accent-color:#10b981;cursor:pointer">
-                ${label}
-            </label>`;
-        }).join('');
-        // 預設選第一個
-        const first = container.querySelector('.bt-date-rb');
-        if (first) first.checked = true;
+        buildCalendar('backtestDateList', idx, 'single', null);
+        // 預設選最新日期
+        const st = _calState['backtestDateList'];
+        if (st && idx.length) {
+            const latest = idx.slice().sort().pop();
+            st.selected = new Set([latest]);
+            renderCalendar('backtestDateList');
+        }
     }
 
     function getBacktestDate() {
-        const el = document.querySelector('.bt-date-rb:checked');
-        return el ? el.value : null;
+        const sel = getCalSelected('backtestDateList');
+        return sel.length ? sel[0] : null;
     }
 
     // 回測標籤篩選:所有可選標籤(分組)
