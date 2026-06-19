@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bj</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bk</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3515,6 +3515,20 @@
         patchRatios(top50); patchRatios(inv); patchRatios(top20); patchRatios(resonance); patchRatios(etfRes);
         patchRatios(payload.rise5dRank); patchRatios(payload.rise1mRank); patchRatios(payload.riseStart);
 
+        // ── 套用最新自訂族群(覆蓋歷史 payload 的相關產業,讓族群修改連動歷史載入) ──
+        const customInd = getCustomIndustry();
+        const applyCustomInd = arr => (arr||[]).forEach(r => {
+            if (r && r.代號 && customInd[r.代號]) r.相關產業 = customInd[r.代號];
+        });
+        applyCustomInd(top50); applyCustomInd(inv); applyCustomInd(top20);
+        applyCustomInd(resonance); applyCustomInd(etfRes);
+        applyCustomInd(payload.rise5dRank); applyCustomInd(payload.rise1mRank); applyCustomInd(payload.riseStart);
+        // 更新 _stockIndMap,讓歷史載入的個股也能編輯族群
+        window._stockIndMap = window._stockIndMap || {};
+        [top50, payload.rise5dRank, payload.rise1mRank].forEach(arr => {
+            (arr||[]).forEach(r => { if (r && r.代號) window._stockIndMap[r.代號] = r.相關產業 || ''; });
+        });
+
         // ── 重算熱門族群（與當日分析一致：用5日漲幅TOP40的相關產業進榜檔數）──
         // 來源優先序：rise5dRank（5日漲幅排行）→ 若無則用 top50
         // 來源優先序：rise5dRank(有相關產業才用)→ 否則 top50(舊資料相容)
@@ -3539,9 +3553,14 @@
         // 個股族群TAG函式（前5大熱門族群標青色）
         function histAddIndTag(r) {
             const myInds = (r.相關產業 || '').split(/[,、，;；\/]/).map(x => x.trim()).filter(Boolean);
-            const matched = myInds.filter(x => _top5Inds.has(x));
-            const indTags = matched.map(x => `<span class="s-tag teal">${x}</span>`).join('');
-            return indTags + renderTags(r.狀態標註 || '');
+            // 每個族群 TAG 帶 × 可刪除,末尾 ＋族群(與當日分析一致,可編輯)
+            const indTags = myInds.map(x => {
+                const hot = _top5Inds.has(x);
+                const cls = hot ? 'teal' : 'navy';
+                return `<span class="s-tag ${cls} ind-tag" data-sym="${r.代號}" data-ind="${x}">${x}<span class="ind-x" onclick="indDelTag('${r.代號}','${x.replace(/'/g,"\\'")}',event)">×</span></span>`;
+            }).join('');
+            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">＋族群</span>`;
+            return indTags + addBtn + renderTags(r.狀態標註 || '');
         }
 
         let outputHTML = '';
