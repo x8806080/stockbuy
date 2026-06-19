@@ -267,6 +267,12 @@
         .s-tag.lime   { background: #14532d; color: #d9f99d; }
         .s-tag.new    { background: #0891b2; color: #fff; font-weight:800; letter-spacing:.5px; border: 1px solid #22d3ee; }
         .s-tag.filetag { background: #3730a3; color: #c7d2fe; border: 1px solid #6366f1; }
+        /* 族群 TAG 編輯:× 刪除鈕 + ＋族群鈕 */
+        .s-tag.ind-tag { position: relative; padding-right: 4px; }
+        .ind-x { display:inline-flex; align-items:center; justify-content:center; margin-left:4px; width:15px; height:15px; border-radius:50%; background:rgba(0,0,0,.35); color:#fca5a5; font-size:12px; cursor:pointer; font-weight:700; }
+        .ind-x:hover { background:#b91c1c; color:#fff; }
+        .ind-add { display:inline-block; margin:1px 3px; padding:2px 8px; border:1px dashed #6366f1; border-radius:4px; color:#a5b4fc; font-size:11px; cursor:pointer; font-weight:600; }
+        .ind-add:hover { background:#312e81; color:#fff; }
 
         /* ── TAG 篩選列 ── */
         .tag-filter-bar { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 10px; border-bottom:1px solid var(--border); margin-bottom:8px; align-items:center; }
@@ -582,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04be</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bf</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -613,30 +619,6 @@
             <button onclick="clearAllStoredConfig()" style="background:#450a0a;color:#f87171;border:none;padding:9px 16px;border-radius:7px;cursor:pointer;font-size:13px">🗑 清除設定</button>
             <button onclick="closeSettings()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">取消</button>
             <button onclick="saveSettings()" style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700">確認</button>
-        </div>
-    </div>
-</div>
-
-<!-- ══ 自訂族群 Modal ══ -->
-<div id="industryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
-    <div style="background:#161b25;border:1px solid #2a3350;border-radius:12px;padding:24px 28px;width:min(560px,94vw);max-height:88vh;overflow-y:auto">
-        <h3 style="margin:0 0 4px;color:#a78bfa;font-size:16px">🏷️ 自訂族群對應</h3>
-        <p style="font-size:12px;color:#64748b;margin:0 0 16px;line-height:1.6">
-            為個股指定正確族群（覆蓋 CSV 的相關產業）。一支股票可設多個族群，用逗號分隔。<br>
-            設定會存在本機，並隨分析同步到 repo（所有裝置共用）。
-        </p>
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <input id="indStockInput" type="text" placeholder="股票代號（如 2347）"
-                style="flex:0 0 130px;padding:8px 10px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px;font-family:monospace">
-            <input id="indNameInput" type="text" placeholder="族群名稱（如 PCB,銅箔基板）"
-                style="flex:1;min-width:160px;padding:8px 10px;border-radius:6px;border:1px solid #2a3350;background:#0d1220;color:#e2e8f0;font-size:14px">
-            <button onclick="addIndustryMapping()" style="background:#5b21b6;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">＋ 新增</button>
-        </div>
-        <div id="indMappingList" style="max-height:300px;overflow-y:auto;border:1px solid #2a3350;border-radius:8px;background:#0d1220;padding:8px;margin-bottom:16px">
-            <div style="color:#64748b;font-size:12px;padding:8px;text-align:center">尚無自訂族群</div>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-            <button onclick="closeIndustryEditor()" style="background:#334155;color:#cbd5e1;border:none;padding:9px 20px;border-radius:7px;cursor:pointer;font-size:14px">關閉</button>
         </div>
     </div>
 </div>
@@ -996,7 +978,6 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button onclick="runAnalysis()">▶ 開始執行大師策略分析</button>
-            <button onclick="openIndustryEditor()" style="background:#5b21b6;color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">🏷️ 自訂族群</button>
         </div>
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
@@ -1953,9 +1934,14 @@
         // 為 TOP50 標記所屬的前5大族群（用相同正規化比對，避免漏標）
         function addIndTag(r) {
             const myInds = splitInds(r.相關產業);
-            const matched = myInds.filter(x => top5Inds.has(x));
-            const indTags = matched.map(x => `<span class="s-tag teal">${x}</span>`).join('');
-            return indTags + renderTags(r.狀態標註);
+            // 每個族群 TAG:前5大熱門用青色,其餘灰藍,都帶 × 可刪除
+            const indTags = myInds.map(x => {
+                const hot = top5Inds.has(x);
+                const cls = hot ? 'teal' : 'navy';
+                return `<span class="s-tag ${cls} ind-tag" data-sym="${r.代號}" data-ind="${x}">${x}<span class="ind-x" onclick="indDelTag('${r.代號}','${x.replace(/'/g,"\\'")}',event)">×</span></span>`;
+            }).join('');
+            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">＋族群</span>`;
+            return indTags + addBtn + renderTags(r.狀態標註);
         }
         outputHTML += `<div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:6px;padding:8px 14px;font-size:12px;color:#5eead4;margin-bottom:8px">
             🏷️ <b>前5大熱門族群（青色TAG）：</b>${[...top5Inds].map(t=>`<span class="s-tag teal">${t}</span>`).join('') || '（無）'}
@@ -2016,35 +2002,9 @@
         out4Rows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
         out4HTML += `</table>`;
 
-        // ── 族群即時編輯器(可新增/移除個股族群,按重算連動) ──
-        const editorStocks = top50.slice(0, 50);
-        // 存每檔當前族群(供編輯器的增/移除基於現況)
+        // 存每檔當前族群(供 TOP50 狀態標註欄的族群編輯用)
         window._stockIndMap = {};
         finalData.forEach(r => { window._stockIndMap[r.代號] = r.相關產業 || ''; });
-        out4HTML += `<details style="margin-top:14px;border:1px solid #3730a3;border-radius:8px;background:#0c1020">
-            <summary style="padding:10px 14px;cursor:pointer;color:#a5b4fc;font-weight:700;font-size:14px">✏️ 族群即時編輯(修改後按重算,會連動熱門族群表與TOP50)</summary>
-            <div style="padding:12px 14px">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">在下方輸入代號,新增或移除族群。修改會記住(下次分析自動套用),按「🔄 重算」立即生效。</div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
-                    <div style="display:flex;flex-direction:column;gap:3px">
-                        <label style="font-size:11px;color:#64748b">股票代號</label>
-                        <input id="indEditSym" list="indEditSymList" placeholder="如 2408" oninput="indEditShowCurrent()" style="width:120px;padding:7px;border:1px solid #334155;border-radius:5px;background:#1a2540;color:#fff;font-size:14px">
-                        <datalist id="indEditSymList">
-                            ${editorStocks.map(r => `<option value="${r.代號}">${r.名稱}</option>`).join('')}
-                        </datalist>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px">
-                        <label style="font-size:11px;color:#64748b">族群名稱(多個用逗號分隔)</label>
-                        <input id="indEditNames" placeholder="如 半導體–DRAM製造" style="width:100%;padding:7px;border:1px solid #334155;border-radius:5px;background:#1a2540;color:#fff;font-size:14px">
-                    </div>
-                    <button onclick="indEditApply('replace')" style="background:#4338ca;color:#fff;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">設為此族群</button>
-                    <button onclick="indEditApply('add')" style="background:#15803d;color:#fff;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">➕新增</button>
-                    <button onclick="indEditApply('remove')" style="background:#b91c1c;color:#fff;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">➖移除</button>
-                </div>
-                <div id="indEditCurrent" style="font-size:12px;color:#cbd5e1;margin-bottom:12px"></div>
-                <button onclick="runAnalysis()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700;width:100%">🔄 重算(套用族群修改)</button>
-            </div>
-        </details>`;
         out4HTML += `</div>`;
         // 熱門族群改排輸出1：不在此處 append,留待最後 prepend 到最前面
         window._out4HTML_firstOutput = out4HTML;
@@ -4511,96 +4471,59 @@
     // ── 自訂族群對應 ──────────────────────────────────────
     const CUSTOM_IND_KEY = 'customIndustryMap_v1';
 
-    // 族群即時編輯:新增/移除/設定個股族群
-    function indEditApply(mode) {
-        const sym = (document.getElementById('indEditSym')?.value || '').trim();
-        const namesRaw = (document.getElementById('indEditNames')?.value || '').trim();
-        if (!sym) { alert('請輸入股票代號'); return; }
-        const newInds = namesRaw.split(/[,，、]/).map(x => x.trim()).filter(Boolean);
-        if (mode !== 'clear' && newInds.length === 0) { alert('請輸入族群名稱'); return; }
-
+    // ── 族群 TAG 欄即時編輯(從 TOP50 狀態標註直接操作) ──
+    function _indCurrentList(sym) {
         const map = getCustomIndustry();
-        // 目前族群:優先用自訂,否則用本次分析的原始族群
         const curStr = map[sym] || (window._stockIndMap && window._stockIndMap[sym]) || '';
-        let curList = curStr.split(/[,，、;；\/]/).map(x => x.trim()).filter(Boolean);
-
-        if (mode === 'replace') {
-            curList = newInds;
-        } else if (mode === 'add') {
-            newInds.forEach(n => { if (!curList.includes(n)) curList.push(n); });
-        } else if (mode === 'remove') {
-            curList = curList.filter(x => !newInds.includes(x));
-        }
-        map[sym] = curList.join(',');
+        return curStr.split(/[,，、;；\/]/).map(x => x.trim()).filter(Boolean);
+    }
+    // 刪除某族群
+    function indDelTag(sym, ind, ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        let list = _indCurrentList(sym).filter(x => x !== ind);
+        const map = getCustomIndustry();
+        map[sym] = list.join(',');
         saveCustomIndustry(map);
         if (typeof syncCustomIndustry === 'function') syncCustomIndustry();
-        indEditShowCurrent();
-        // 提示
-        const el = document.getElementById('indEditCurrent');
-        if (el) el.innerHTML = `<span style="color:#4ade80">✓ ${sym} 已更新為:</span> ${curList.map(t=>`<span class="s-tag teal">${t}</span>`).join('') || '(無)'} <span style="color:#fbbf24">— 按下方「🔄 重算」生效</span>`;
+        showRecalcBar(`已從 ${sym} 移除「${ind}」`);
     }
-    window.indEditApply = indEditApply;
-
-    // 顯示輸入代號的當前族群
-    function indEditShowCurrent() {
-        const sym = (document.getElementById('indEditSym')?.value || '').trim();
-        const el = document.getElementById('indEditCurrent');
-        if (!el || !sym) return;
+    window.indDelTag = indDelTag;
+    // 新增族群
+    function indAddTag(sym, ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        const name = prompt(`為 ${sym} 新增族群名稱(多個用逗號分隔):`);
+        if (name === null) return;
+        const adds = name.split(/[,，、]/).map(x => x.trim()).filter(Boolean);
+        if (!adds.length) return;
+        let list = _indCurrentList(sym);
+        adds.forEach(a => { if (!list.includes(a)) list.push(a); });
         const map = getCustomIndustry();
-        const curStr = map[sym] || (window._stockIndMap && window._stockIndMap[sym]) || '';
-        const list = curStr.split(/[,，、;；\/]/).map(x => x.trim()).filter(Boolean);
-        const isCustom = !!map[sym];
-        el.innerHTML = `<b style="color:#94a3b8">${sym} 目前族群${isCustom?'(已自訂)':''}:</b> ${list.map(t=>`<span class="s-tag teal">${t}</span>`).join('') || '(無)'}`;
+        map[sym] = list.join(',');
+        saveCustomIndustry(map);
+        if (typeof syncCustomIndustry === 'function') syncCustomIndustry();
+        showRecalcBar(`已為 ${sym} 新增「${adds.join('、')}」`);
     }
-    window.indEditShowCurrent = indEditShowCurrent;
+    window.indAddTag = indAddTag;
+    // 浮動重算提示列
+    function showRecalcBar(msg) {
+        let bar = document.getElementById('recalcBar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'recalcBar';
+            bar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9998;background:#1e1b4b;border:1px solid #6366f1;border-radius:10px;padding:12px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 8px 24px rgba(0,0,0,.5)';
+            document.body.appendChild(bar);
+        }
+        bar.innerHTML = `<span style="color:#c7d2fe;font-size:13px">${msg}</span>
+            <button onclick="runAnalysis();this.parentNode.remove()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🔄 重算套用</button>
+            <button onclick="this.parentNode.remove()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;width:auto">×</button>`;
+    }
+    window.showRecalcBar = showRecalcBar;
 
     function getCustomIndustry() {
         try { return JSON.parse(localStorage.getItem(CUSTOM_IND_KEY)) || {}; } catch { return {}; }
     }
     function saveCustomIndustry(map) {
         localStorage.setItem(CUSTOM_IND_KEY, JSON.stringify(map));
-    }
-    function openIndustryEditor() {
-        renderIndustryList();
-        document.getElementById('industryModal').style.display = 'flex';
-    }
-    function closeIndustryEditor() {
-        document.getElementById('industryModal').style.display = 'none';
-    }
-    function addIndustryMapping() {
-        const sym  = document.getElementById('indStockInput').value.trim();
-        const inds = document.getElementById('indNameInput').value.trim();
-        if (!sym || !inds) { alert('請填入股票代號和族群名稱'); return; }
-        const map = getCustomIndustry();
-        map[sym] = inds;
-        saveCustomIndustry(map);
-        document.getElementById('indStockInput').value = '';
-        document.getElementById('indNameInput').value = '';
-        renderIndustryList();
-        // 同步到 repo
-        syncCustomIndustry();
-    }
-    function delIndustryMapping(sym) {
-        const map = getCustomIndustry();
-        delete map[sym];
-        saveCustomIndustry(map);
-        renderIndustryList();
-        syncCustomIndustry();
-    }
-    function renderIndustryList() {
-        const map = getCustomIndustry();
-        const container = document.getElementById('indMappingList');
-        const keys = Object.keys(map);
-        if (!keys.length) {
-            container.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px;text-align:center">尚無自訂族群</div>';
-            return;
-        }
-        container.innerHTML = keys.map(sym => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #1e2535;font-size:13px">
-                <span style="font-family:monospace;color:#60a5fa;flex:0 0 60px">${sym}</span>
-                <span style="flex:1;color:#cbd5e1">${(map[sym]||'').split(/[,，]/).map(t=>`<span class="s-tag teal">${t.trim()}</span>`).join('')}</span>
-                <button onclick="delIndustryMapping('${sym}')" style="background:none;border:1px solid #450a0a;color:#f87171;padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer">刪除</button>
-            </div>`).join('');
     }
     // 同步自訂族群到 repo（存成 data/custom_industry.json）
     async function syncCustomIndustry() {
@@ -4735,10 +4658,6 @@
         loadCustomIndustry();   // 載入自訂族群
         loadAndRenderResult();  // 自動載入上次分析結果
     }
-    // 自訂族群 Modal ESC / 點背景關閉
-    document.getElementById('industryModal').addEventListener('click', e => {
-        if (e.target === e.currentTarget) closeIndustryEditor();
-    });
 </script>
 </body>
 </html>
