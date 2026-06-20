@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bw</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bx</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3079,6 +3079,23 @@
         if (!st) return;
         if (st.mode === 'single') {
             st.selected = new Set([key]);
+        } else if (st.mode === 'range') {
+            // 區間模式:第1次點=起點;第2次點=終點,自動選中間所有有資料日期
+            if (!st._rangeStart || st.selected.size === 0) {
+                // 開始新區間
+                st._rangeStart = key;
+                st.selected = new Set([key]);
+            } else if (st._rangeStart === key) {
+                // 點同一天 → 取消
+                st._rangeStart = null;
+                st.selected.clear();
+            } else {
+                // 設終點,選起訖之間所有有資料日期
+                const lo = st._rangeStart < key ? st._rangeStart : key;
+                const hi = st._rangeStart < key ? key : st._rangeStart;
+                st.selected = new Set([...st.dataSet].filter(d => d >= lo && d <= hi));
+                st._rangeStart = null;  // 完成一次區間
+            }
         } else {
             if (st.selected.has(key)) st.selected.delete(key);
             else st.selected.add(key);
@@ -4383,7 +4400,7 @@
             container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">尚無歷史資料</div>';
             return;
         }
-        buildCalendar('backtestDateList', idx, 'multi', null);
+        buildCalendar('backtestDateList', idx, 'range', null);
         // 預設選最新日期
         const st = _calState['backtestDateList'];
         if (st && idx.length) {
@@ -4484,17 +4501,20 @@
         const passTag = r => !selectedTags.length || selectedTags.every(t => (r.狀態標註||'').includes(t));
 
         const entryPriceMap = entryPayload.priceMap || {};
-        const records = entryPayload.top50
-            .filter(r => topNSyms.has(r.代號) && passTag(r))
-            .map(r => {
-                const ep = r.收盤價 || entryPriceMap[r.代號] || null;
-                const cp = exitPrices[r.代號] || null;
-                let ret = (ep && cp) ? ((cp-ep)/ep*100) : null;
-                let stopped = false;
-                if (ret !== null && stopLoss > 0 && ret <= -stopLoss) { ret = -stopLoss; stopped = true; }
-                return { 代號:r.代號, 名稱:r.名稱, 入場評分:r.綜合評分, 入場收盤:ep,
-                         現在收盤:cp, 報酬率:ret, 停損:stopped, 狀態標註:r.狀態標註 };
-            });
+        // 先算「前N名」的全量 records(不套標籤篩選),供標籤拆解表用
+        const buildRec = r => {
+            const ep = r.收盤價 || entryPriceMap[r.代號] || null;
+            const cp = exitPrices[r.代號] || null;
+            let ret = (ep && cp) ? ((cp-ep)/ep*100) : null;
+            let stopped = false;
+            if (ret !== null && stopLoss > 0 && ret <= -stopLoss) { ret = -stopLoss; stopped = true; }
+            return { 代號:r.代號, 名稱:r.名稱, 入場評分:r.綜合評分, 入場收盤:ep,
+                     現在收盤:cp, 報酬率:ret, 停損:stopped, 狀態標註:r.狀態標註 };
+        };
+        const fullRecords = entryPayload.top50.filter(r => topNSyms.has(r.代號)).map(buildRec);
+        const fullWithPrice = fullRecords.filter(r => r.報酬率 !== null);
+        // 篩選後的 records(套標籤交集篩選)供主統計
+        const records = entryPayload.top50.filter(r => topNSyms.has(r.代號) && passTag(r)).map(buildRec);
         const withPrice = records.filter(r => r.報酬率 !== null);
         const wins = withPrice.filter(r=>r.報酬率>0);
         const stats = {
@@ -4506,7 +4526,7 @@
             wins: wins.length, loses: withPrice.length - wins.length,
         };
         return {
-            records, withPrice, stats,
+            records, withPrice, fullWithPrice, stats,
             label: dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8),
             exitLabel: exitDateKey.slice(0,4)+'/'+exitDateKey.slice(4,6)+'/'+exitDateKey.slice(6,8),
             exitDateKey,
@@ -4538,11 +4558,13 @@
 
         result.innerHTML = '';
         const dayResults = [];
-        const allRecords = [];
+        const allRecords = [];      // 篩選後的(供主統計+每日明細)
+        const allFullRecords = [];  // 全量前N名未篩選(供標籤拆解表)
         for (let i = 0; i < entryDates.length; i++) {
             const dk = entryDates[i];
             msg.textContent = `批次回測中… ${i+1}/${entryDates.length}（${dk.slice(4,6)}/${dk.slice(6,8)}）`;
             const r = await computeDayBacktest(dk, opts);
+            if (r.fullWithPrice?.length) r.fullWithPrice.forEach(rec => allFullRecords.push({ ...rec, 入場日:dk }));
             if (r.error || !r.withPrice?.length) {
                 dayResults.push({ dateKey:dk, label:dk.slice(4,6)+'/'+dk.slice(6,8), error:r.error||'無樣本', stats:null });
                 continue;
@@ -4551,12 +4573,12 @@
             r.withPrice.forEach(rec => allRecords.push({ ...rec, 入場日:dk }));
         }
 
-        renderRangeResult(dayResults, allRecords, { start, end, ...opts, totalDays: entryDates.length });
+        renderRangeResult(dayResults, allRecords, allFullRecords, { start, end, ...opts, totalDays: entryDates.length });
         msg.textContent = `批次回測完成（${entryDates.length} 個入場日）`;
     }
     window.runRangeBacktest = runRangeBacktest;
 
-    function renderRangeResult(dayResults, allRecords, meta) {
+    function renderRangeResult(dayResults, allRecords, allFullRecords, meta) {
         const result = document.getElementById('backtestResult');
         const valid = dayResults.filter(d => d.stats);
         // ── 整體統計(所有入場日的所有標的彙總)──
@@ -4579,7 +4601,12 @@
         const oc = overallAvg>=0?'#4ade80':'#f87171';
         const tc = totalReturn>=0?'#4ade80':'#f87171';
 
-        let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">📊 批次區間回測:${startL} ~ ${endL}（${valid.length}/${meta.totalDays} 個有效入場日,持有${meta.holdN||'—'}日${meta.selectedTags.length?',篩選:'+meta.selectedTags.join('+'):''}${meta.stopLoss?',停損'+meta.stopLoss+'%':''}）</div>`;
+        // 篩選模式說明:有勾選=交集篩選,無勾選=全部TOP50
+        const filterDesc = meta.selectedTags.length
+            ? `<span style="color:#fbbf24">🔗 交集篩選:${meta.selectedTags.join(' ∩ ')}</span>(只回測同時具備這些標籤的標的)`
+            : `<span style="color:#86efac">全部 TOP${meta.topN}</span>(未篩選)`;
+        let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">📊 批次區間回測:${startL} ~ ${endL}</div>`;
+        html += `<div style="margin-bottom:12px;font-size:13px;padding:8px 12px;background:var(--bg2);border-radius:6px">當前模式:${filterDesc}<br><span style="font-size:11px;color:#64748b">${valid.length}/${meta.totalDays} 個有效入場日,持有${meta.holdN||'—'}日${meta.stopLoss?',停損'+meta.stopLoss+'%':''}</span></div>`;
 
         // 卡片區
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">` +
@@ -4595,17 +4622,18 @@
                 <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${k}</div>
                 <div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
 
-        // ── 按標籤拆解勝率 ──
+        // ── 按標籤拆解勝率(永遠基於全部TOP50,各標籤「單獨」算,供比較) ──
         const tagStats = {};
         const tagList = ['雙動能共振','5日動能','一月動能','當日強勢','🔥熱門族群','🏆P90','🏛️月P90','⭐當日+月P90','⭐當日+月P70'];
         tagList.forEach(t => {
-            const recs = allRecords.filter(r => (r.狀態標註||'').includes(t));
+            const recs = allFullRecords.filter(r => (r.狀態標註||'').includes(t));
             if (recs.length) {
                 const w = recs.filter(r=>r.報酬率>0).length;
                 tagStats[t] = { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
             }
         });
-        html += `<div style="margin:18px 0 8px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 按標籤拆解勝率</div>`;
+        html += `<div style="margin:18px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨勝率比較</div>`;
+        html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">基於全部 TOP${meta.topN}(不受上方勾選影響),每個標籤「單獨」計算,用來比較哪個標籤策略強。想看交集請在上方勾選2個以上標籤後重跑。</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
             <thead><tr style="background:var(--bg2)">
                 <th style="padding:8px;text-align:left">標籤</th><th style="padding:8px;text-align:right">樣本</th>
