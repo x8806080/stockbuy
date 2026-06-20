@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bt</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bv</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -736,14 +736,15 @@
                         </button>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>持有交易日：</label>
-                            <select id="btHoldDays" style="padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                                <option value="1">1 日後出場</option>
-                                <option value="3">3 日後出場</option>
-                                <option value="5" selected>5 日後出場</option>
-                                <option value="10">10 日後出場</option>
-                                <option value="20">20 日後出場</option>
-                                <option value="0">用最新價</option>
-                            </select>
+                            <input type="number" id="btHoldDays" value="5" min="0" max="120"
+                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                            <span style="font-size:11px;color:var(--text-dim)">日後出場(0=最新價)</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
+                            <label>停損(%)：</label>
+                            <input type="number" id="btStopLoss" value="0" min="0" max="50" step="0.5"
+                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                            <span style="font-size:11px;color:var(--text-dim)">虧損達此%視為-此%(0=不停損)</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>取評分前幾名：</label>
@@ -1980,6 +1981,15 @@
         const top5Inds = new Set(sortedInds.slice(0,5).map(([ind])=>ind));
         console.log('[前5大熱門族群]', [...top5Inds]);
 
+        // 為屬於前5大熱門族群的個股,在狀態標註加「🔥熱門族群」(供回測篩選)
+        finalData.forEach(r => {
+            const myInds = splitInds(r.相關產業);
+            if (myInds.some(i => top5Inds.has(i))) {
+                if (!r.狀態標註) r.狀態標註 = '🔥熱門族群';
+                else if (!r.狀態標註.includes('🔥熱門族群')) r.狀態標註 = '🔥熱門族群 / ' + r.狀態標註;
+            }
+        });
+
         // 為 TOP50 標記所屬的前5大族群（用相同正規化比對，避免漏標）
         function addIndTag(r) {
             const myInds = splitInds(r.相關產業);
@@ -1989,7 +1999,7 @@
                 const cls = hot ? 'teal' : 'navy';
                 return `<span class="s-tag ${cls} ind-tag" data-sym="${r.代號}" data-ind="${x}">${x}<span class="ind-x" onclick="indDelTag('${r.代號}','${x.replace(/'/g,"\\'")}',event)">×</span></span>`;
             }).join('');
-            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">＋族群</span>`;
+            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">✏️編輯族群</span>`;
             return indTags + addBtn + renderTags(r.狀態標註);
         }
         outputHTML += `<div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:6px;padding:8px 14px;font-size:12px;color:#5eead4;margin-bottom:8px">
@@ -2440,7 +2450,9 @@
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
         // 回測檔名標籤:納入所有檔名標籤(含起漲/大摩等有專屬輸出的),只排除純ETF成分檔
-        setBtFileTags(fileTagOrder.filter(n => !/^(0050|00888|00913|00927|00929|00981A)/i.test(n)));
+        const _btFileTags = fileTagOrder.filter(n => !/^(0050|00888|00913|00927|00929|00981A)/i.test(n));
+        console.log('[回測檔名標籤] fileTagOrder=', fileTagOrder.length, '個, 過濾後=', _btFileTags.length, '個:', _btFileTags);
+        setBtFileTags(_btFileTags);
         renderBtTagFilter();
 
         // 分析完成後，若是舊日期則提示重置為今天
@@ -3150,6 +3162,7 @@
                 if (t === '一月動能') return 42;
                 if (t === '當日強勢') return 43;
                 if (t.includes('⭐當日+月')) return 44;
+                if (t === '🔥熱門族群') return 45;
                 // 特殊
                 if (t.includes('潛龍')) return 50;
                 if (t.includes('超級基本面')) return 51;
@@ -3491,6 +3504,7 @@
             else if (t.includes('💎') || t.includes('合買'))       cls = 'teal';
             else if (t.includes('🔥') || t.includes('族群'))       cls = 'purple';
             else if (t.includes('🎯') || t.includes('ETF'))        cls = 'green';
+            else if (t.includes('🔥熱門族群'))                      cls = 'orange';
             else if (t.includes('⭐當日+月'))                       cls = 'gold';
             else if (t.includes('當日強勢'))                        cls = 'orange';
             else if (t.includes('雙動能') || t.includes('動能'))   cls = 'navy';
@@ -3612,6 +3626,18 @@
             .sort((a,b) => (b[1].count - a[1].count) || (b[1].corp - a[1].corp))
             .slice(0, 8);
         const _top5Inds = new Set(_sortedInds.slice(0,5).map(([ind]) => ind));
+
+        // 重算「🔥熱門族群」狀態標註(套用最新族群後,讓歷史回測也能篩熱門族群)
+        const _updateHotTag = arr => (arr||[]).forEach(r => {
+            if (!r || !r.代號) return;
+            const myInds = (r.相關產業||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
+            const isHot = myInds.some(i => _top5Inds.has(i));
+            let st = (r.狀態標註||'').split(' / ').filter(t => t && t !== '🔥熱門族群');
+            if (isHot) st.unshift('🔥熱門族群');
+            r.狀態標註 = st.join(' / ');
+        });
+        _updateHotTag(top50); _updateHotTag(top20); _updateHotTag(inv);
+        _updateHotTag(payload.rise5dRank); _updateHotTag(payload.rise1mRank);
         // 個股族群TAG函式（前5大熱門族群標青色）
         function histAddIndTag(r) {
             const myInds = (r.相關產業 || '').split(/[,、，;；\/]/).map(x => x.trim()).filter(Boolean);
@@ -3621,7 +3647,7 @@
                 const cls = hot ? 'teal' : 'navy';
                 return `<span class="s-tag ${cls} ind-tag" data-sym="${r.代號}" data-ind="${x}">${x}<span class="ind-x" onclick="indDelTag('${r.代號}','${x.replace(/'/g,"\\'")}',event)">×</span></span>`;
             }).join('');
-            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">＋族群</span>`;
+            const addBtn = `<span class="ind-add" onclick="indAddTag('${r.代號}',event)">✏️編輯族群</span>`;
             return indTags + addBtn + renderTags(r.狀態標註 || '');
         }
 
@@ -4212,9 +4238,12 @@
             if (rDayIn && monthLevel==='P90') { score += m.comboP90; tags.push('⭐當日+月P90'); }
             else if (rDayIn && monthLevel==='P70') { score += m.comboP70; tags.push('⭐當日+月P70'); }
 
-            // 族群共振加分
+            // 族群共振加分 + 熱門族群標籤(屬於當天前5大族群)
             const myInds = splitIndsStandalone(r.相關產業);
-            if (myInds.some(i => top5Inds.has(i))) score += SC.sector?.score || 0;
+            if (myInds.some(i => top5Inds.has(i))) {
+                score += SC.sector?.score || 0;
+                tags.push('🔥熱門族群');
+            }
 
             r.綜合評分 = score;
             r.狀態標註 = tags.join(' / ');
@@ -4372,6 +4401,7 @@
         { group: '投信比值', tags: ['🏦投信P90','投信比P70','投信比P50'] },
         { group: '動能', tags: ['雙動能共振','5日動能','一月動能','當日強勢'] },
         { group: '組合獎勵', tags: ['⭐當日+月P90','⭐當日+月P70'] },
+        { group: '族群', tags: ['🔥熱門族群'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
         { group: '基本面', tags: ['營收>80%','營收>50%'] },
         { group: '狀態', tags: ['🆕新入選'] },
@@ -4584,20 +4614,28 @@
         // 過濾 + 計算報酬率
         // 入場價對照（優先用 priceMap）
         const entryPriceMap = entryPayload.priceMap || {};
+        const stopLoss = parseFloat(document.getElementById('btStopLoss')?.value) || 0;
         const records = entryPayload.top50
             .filter(r => topNSyms.has(r.代號) && passTagFilter(r))
             .map(r => {
                 const entryPrice  = r.收盤價 || entryPriceMap[r.代號] || null;
                 const currentPrice = todayPrices[r.代號] || null;
-                const returnPct = (entryPrice && currentPrice)
+                let returnPct = (entryPrice && currentPrice)
                     ? ((currentPrice - entryPrice) / entryPrice * 100)
                     : null;
+                let stopped = false;
+                // 停損:報酬率跌破 -stopLoss% 則視為停損出場(報酬=-stopLoss%)
+                if (returnPct !== null && stopLoss > 0 && returnPct <= -stopLoss) {
+                    returnPct = -stopLoss;
+                    stopped = true;
+                }
                 return {
                     代號: r.代號, 名稱: r.名稱,
                     入場評分: r.綜合評分,
                     入場收盤: entryPrice,
                     現在收盤: currentPrice,
                     報酬率: returnPct,
+                    停損: stopped,
                     狀態標註: r.狀態標註,
                 };
             })
@@ -4706,7 +4744,7 @@
         const curStr = map[sym] || (window._stockIndMap && window._stockIndMap[sym]) || '';
         return curStr.split(/[,，、;；\/]/).map(x => x.trim()).filter(Boolean);
     }
-    // 刪除某族群
+    // 刪除某族群(單一,保留給 × 按鈕用)
     function indDelTag(sym, ind, ev) {
         if (ev) { ev.preventDefault(); ev.stopPropagation(); }
         let list = _indCurrentList(sym).filter(x => x !== ind);
@@ -4717,12 +4755,109 @@
         showRecalcBar(`已從 ${sym} 移除「${ind}」`);
     }
     window.indDelTag = indDelTag;
-    // 新增族群
+
+    // 提取全市場所有不重複的族群名稱(供搜尋選擇)
+    let _allIndCache = null;
+    function getAllIndustries() {
+        if (_allIndCache) return _allIndCache;
+        const set = new Set();
+        const addFrom = s => (s||'').split(/[,，、;；\/]/).map(x=>x.trim()).filter(Boolean).forEach(x=>set.add(x));
+        // 從內建字典提取
+        if (typeof STOCK_DICT !== 'undefined') {
+            Object.values(STOCK_DICT).forEach(d => addFrom(d.i));
+        }
+        // 從自訂族群提取
+        const cust = getCustomIndustry();
+        Object.values(cust).forEach(addFrom);
+        _allIndCache = [...set].sort();
+        return _allIndCache;
+    }
+
+    // 開啟族群編輯彈窗(可搜尋現有標籤、多選刪除、新增)
     function indAddTag(sym, ev) {
         if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-        const name = prompt(`為 ${sym} 新增族群名稱(多個用逗號分隔):`);
-        if (name === null) return;
-        const adds = name.split(/[,，、]/).map(x => x.trim()).filter(Boolean);
+        openIndModal(sym);
+    }
+    window.indAddTag = indAddTag;
+
+    function openIndModal(sym) {
+        const cur = _indCurrentList(sym);
+        const allInds = getAllIndustries();
+        // 移除舊彈窗
+        document.getElementById('indEditModal')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'indEditModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+        modal.innerHTML = `
+            <div style="background:#1a2540;border:1px solid #334155;border-radius:12px;max-width:480px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+                <div style="padding:14px 16px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center">
+                    <b style="color:#e2e8f0;font-size:15px">編輯 ${sym} 的族群</b>
+                    <span onclick="document.getElementById('indEditModal').remove()" style="cursor:pointer;color:#94a3b8;font-size:22px;line-height:1">×</span>
+                </div>
+                <div style="padding:12px 16px;border-bottom:1px solid #334155">
+                    <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">目前族群(點 × 移除):</div>
+                    <div id="indCurList" style="display:flex;flex-wrap:wrap;gap:5px;min-height:28px">
+                        ${cur.map(x=>`<span class="s-tag teal" style="display:inline-flex;align-items:center;gap:3px">${x}<span onclick="indModalRemove('${sym}','${x.replace(/'/g,"\\'")}')" style="cursor:pointer;font-weight:700">×</span></span>`).join('') || '<span style="color:#64748b;font-size:12px">(無)</span>'}
+                    </div>
+                </div>
+                <div style="padding:12px 16px;flex:1;overflow-y:auto">
+                    <input id="indSearchInput" type="text" placeholder="🔍 搜尋現有族群,或輸入新族群名稱"
+                        oninput="indModalFilter()" autocomplete="off"
+                        style="width:100%;padding:8px 10px;border:1px solid #475569;border-radius:6px;background:#0f1729;color:#fff;font-size:14px;box-sizing:border-box">
+                    <div style="font-size:11px;color:#64748b;margin:8px 0 4px">點選下方族群可加入(可多選):</div>
+                    <div id="indSearchResults" style="display:flex;flex-wrap:wrap;gap:5px;max-height:240px;overflow-y:auto"></div>
+                </div>
+                <div style="padding:12px 16px;border-top:1px solid #334155;display:flex;gap:8px;justify-content:flex-end">
+                    <button onclick="indModalAddNew('${sym}')" style="background:#15803d;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;width:auto">＋ 加入輸入的新族群</button>
+                    <button onclick="document.getElementById('indEditModal').remove();showRecalcBar('族群已更新')" style="background:#7c3aed;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700;width:auto">完成</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+        window._indModalSym = sym;
+        indModalFilter();
+        setTimeout(()=>document.getElementById('indSearchInput')?.focus(), 50);
+    }
+    window.openIndModal = openIndModal;
+
+    function indModalFilter() {
+        const kw = (document.getElementById('indSearchInput')?.value || '').trim().toLowerCase();
+        const sym = window._indModalSym;
+        const cur = new Set(_indCurrentList(sym));
+        const all = getAllIndustries();
+        const matched = (kw ? all.filter(x => x.toLowerCase().includes(kw)) : all).filter(x => !cur.has(x)).slice(0, 60);
+        const box = document.getElementById('indSearchResults');
+        if (!box) return;
+        box.innerHTML = matched.length
+            ? matched.map(x=>`<span onclick="indModalAdd('${sym}','${x.replace(/'/g,"\\'")}')" style="cursor:pointer;background:#1e293b;border:1px solid #475569;color:#cbd5e1;padding:3px 8px;border-radius:4px;font-size:12px;white-space:nowrap">${x}</span>`).join('')
+            : '<span style="color:#64748b;font-size:12px">無相符,可按下方按鈕加入新族群</span>';
+    }
+    window.indModalFilter = indModalFilter;
+
+    function indModalAdd(sym, ind) {
+        let list = _indCurrentList(sym);
+        if (!list.includes(ind)) list.push(ind);
+        const map = getCustomIndustry();
+        map[sym] = list.join(',');
+        saveCustomIndustry(map);
+        if (typeof syncCustomIndustry === 'function') syncCustomIndustry();
+        openIndModal(sym);  // 重繪彈窗
+    }
+    window.indModalAdd = indModalAdd;
+
+    function indModalRemove(sym, ind) {
+        let list = _indCurrentList(sym).filter(x => x !== ind);
+        const map = getCustomIndustry();
+        map[sym] = list.join(',');
+        saveCustomIndustry(map);
+        if (typeof syncCustomIndustry === 'function') syncCustomIndustry();
+        openIndModal(sym);  // 重繪彈窗
+    }
+    window.indModalRemove = indModalRemove;
+
+    function indModalAddNew(sym) {
+        const inp = document.getElementById('indSearchInput');
+        const adds = (inp?.value || '').split(/[,，、]/).map(x=>x.trim()).filter(Boolean);
         if (!adds.length) return;
         let list = _indCurrentList(sym);
         adds.forEach(a => { if (!list.includes(a)) list.push(a); });
@@ -4730,9 +4865,10 @@
         map[sym] = list.join(',');
         saveCustomIndustry(map);
         if (typeof syncCustomIndustry === 'function') syncCustomIndustry();
-        showRecalcBar(`已為 ${sym} 新增「${adds.join('、')}」`);
+        _allIndCache = null;  // 清快取,讓新族群出現在搜尋
+        openIndModal(sym);
     }
-    window.indAddTag = indAddTag;
+    window.indModalAddNew = indModalAddNew;
     // 浮動重算提示列
     function showRecalcBar(msg) {
         let bar = document.getElementById('recalcBar');
