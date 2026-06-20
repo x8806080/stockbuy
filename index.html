@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cf</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ch</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4644,8 +4644,8 @@
         const wins = trades.filter(t => t.報酬率 > 0);
         const winRate = wins.length / trades.length * 100;
         const avgRet = trades.reduce((s,t)=>s+t.報酬率,0)/trades.length;
-        const maxWin = Math.max(...trades.map(t=>t.報酬率));
-        const maxLoss = Math.min(...trades.map(t=>t.報酬率));
+        const maxWin = Math.max(0, ...trades.map(t=>t.報酬率));
+        const maxLoss = Math.min(0, ...trades.map(t=>t.報酬率));
         // 出場原因分布
         const reasonStats = {};
         trades.forEach(t => {
@@ -4672,8 +4672,8 @@
                 ['交易筆數', `${trades.length}`, '#94a3b8'],
                 ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
                 ['平均報酬', `${avgRet>=0?'+':''}${avgRet.toFixed(2)}%`, avgRet>=0?'#4ade80':'#f87171'],
-                ['最大獲利', `+${maxWin.toFixed(1)}%`, '#4ade80'],
-                ['最大虧損', `${maxLoss.toFixed(1)}%`, '#f87171'],
+                ['最大獲利', `${maxWin>=0?'+':''}${maxWin.toFixed(1)}%`, maxWin>0?'#4ade80':'#94a3b8'],
+                ['最大虧損', `${maxLoss.toFixed(1)}%`, maxLoss<0?'#f87171':'#94a3b8'],
             ].map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
                 <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${k}</div>
                 <div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
@@ -4775,8 +4775,8 @@
             n: withPrice.length,
             winRate: withPrice.length ? wins.length/withPrice.length*100 : 0,
             avgRet: withPrice.length ? withPrice.reduce((s,r)=>s+r.報酬率,0)/withPrice.length : 0,
-            maxWin: withPrice.length ? Math.max(...withPrice.map(r=>r.報酬率)) : 0,
-            maxLoss: withPrice.length ? Math.min(...withPrice.map(r=>r.報酬率)) : 0,
+            maxWin: withPrice.length ? Math.max(0, ...withPrice.map(r=>r.報酬率)) : 0,
+            maxLoss: withPrice.length ? Math.min(0, ...withPrice.map(r=>r.報酬率)) : 0,
             wins: wins.length, loses: withPrice.length - wins.length,
         };
         return {
@@ -4888,8 +4888,8 @@
         const totalWins = allRecords.filter(r=>r.報酬率>0).length;
         const overallWinRate = totalN ? totalWins/totalN*100 : 0;
         const overallAvg = totalN ? allRecords.reduce((s,r)=>s+r.報酬率,0)/totalN : 0;
-        const overallMaxWin = totalN ? Math.max(...allRecords.map(r=>r.報酬率)) : 0;
-        const overallMaxLoss = totalN ? Math.min(...allRecords.map(r=>r.報酬率)) : 0;
+        const overallMaxWin = totalN ? Math.max(0, ...allRecords.map(r=>r.報酬率)) : 0;
+        const overallMaxLoss = totalN ? Math.min(0, ...allRecords.map(r=>r.報酬率)) : 0;
         // ── 模擬連續交易(每日平均報酬累乘,資金滾動)──
         let equity = 100;
         valid.forEach(d => { equity *= (1 + d.stats.avgRet/100); });
@@ -4918,8 +4918,8 @@
                 ['總樣本數', `${totalN} 筆`, '#94a3b8'],
                 ['每日勝率', `${dayWinRate.toFixed(1)}%`, dayWinRate>=50?'#4ade80':'#f87171'],
                 ['連續交易累積', `${totalReturn>=0?'+':''}${totalReturn.toFixed(1)}%`, tc],
-                ['最大單筆獲利', `+${overallMaxWin.toFixed(2)}%`, '#4ade80'],
-                ['最大單筆虧損', `${overallMaxLoss.toFixed(2)}%`, '#f87171'],
+                ['最大單筆獲利', `${overallMaxWin>=0?'+':''}${overallMaxWin.toFixed(2)}%`, overallMaxWin>=0?'#4ade80':'#f87171'],
+                ['最大單筆虧損', `${overallMaxLoss>=0?'+':''}${overallMaxLoss.toFixed(2)}%`, overallMaxLoss>=0?'#4ade80':'#f87171'],
             ].map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
                 <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${k}</div>
                 <div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
@@ -5064,8 +5064,8 @@
             <thead><tr style="background:var(--bg2)">
                 <th style="padding:8px;text-align:left">入場日</th><th style="padding:8px;text-align:left">出場日</th>
                 <th style="padding:8px;text-align:right">樣本</th><th style="padding:8px;text-align:right">勝率</th>
-                <th style="padding:8px;text-align:right">平均報酬</th><th style="padding:8px;text-align:right">最佳</th>
-                <th style="padding:8px;text-align:right">最差</th></tr></thead><tbody>`;
+                <th style="padding:8px;text-align:right">平均報酬</th><th style="padding:8px;text-align:right">最大獲利</th>
+                <th style="padding:8px;text-align:right">最大虧損</th></tr></thead><tbody>`;
         dayResults.forEach(d => {
             if (!d.stats) {
                 html += `<tr style="border-bottom:1px solid var(--border);color:#64748b">
@@ -5079,8 +5079,8 @@
                 <td style="padding:8px;text-align:right">${s.n}</td>
                 <td style="padding:8px;text-align:right;color:${s.winRate>=50?'#4ade80':'#f87171'}">${s.winRate.toFixed(0)}%</td>
                 <td style="padding:8px;text-align:right;font-weight:700;color:${s.avgRet>=0?'#4ade80':'#f87171'}">${s.avgRet>=0?'+':''}${s.avgRet.toFixed(2)}%</td>
-                <td style="padding:8px;text-align:right;color:#4ade80">+${s.maxWin.toFixed(1)}%</td>
-                <td style="padding:8px;text-align:right;color:#f87171">${s.maxLoss.toFixed(1)}%</td></tr>`;
+                <td style="padding:8px;text-align:right;color:${s.maxWin>0?'#4ade80':'#94a3b8'}">${s.maxWin>0?'+':''}${s.maxWin.toFixed(1)}%</td>
+                <td style="padding:8px;text-align:right;color:${s.maxLoss<0?'#f87171':'#94a3b8'}">${s.maxLoss.toFixed(1)}%</td></tr>`;
         });
         html += `</tbody></table></div>`;
 
@@ -5297,8 +5297,8 @@
         const wins    = withPrice.filter(r => r.報酬率 > 0);
         const loses   = withPrice.filter(r => r.報酬率 <= 0);
         const avgRet  = withPrice.length ? withPrice.reduce((s,r)=>s+r.報酬率,0)/withPrice.length : 0;
-        const maxWin  = withPrice.length ? Math.max(...withPrice.map(r=>r.報酬率)) : 0;
-        const maxLoss = withPrice.length ? Math.min(...withPrice.map(r=>r.報酬率)) : 0;
+        const maxWin  = withPrice.length ? Math.max(0, ...withPrice.map(r=>r.報酬率)) : 0;
+        const maxLoss = withPrice.length ? Math.min(0, ...withPrice.map(r=>r.報酬率)) : 0;
         const winRate = withPrice.length ? wins.length/withPrice.length*100 : 0;
 
         // 統計列
