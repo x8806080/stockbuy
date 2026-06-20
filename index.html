@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04by</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cc</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4479,8 +4479,13 @@
         const newerSorted = allD.filter(d => d > dateKey).sort();
         let exitDateKey = null;
         if (holdN > 0) {
-            exitDateKey = newerSorted.length >= holdN ? newerSorted[holdN-1]
-                        : (newerSorted.length ? newerSorted[newerSorted.length-1] : null);
+            // 嚴格要求:必須有滿 holdN 個交易日的未來資料才算數
+            // 若不足(入場日太接近資料庫最新日),直接排除此筆,避免出場日被迫拉到很遠的未來造成報酬率失真
+            if (newerSorted.length >= holdN) {
+                exitDateKey = newerSorted[holdN-1];
+            } else {
+                return { error: `資料不足${holdN}個交易日(僅有${newerSorted.length}天),略過(避免出場日失真)` };
+            }
         } else {
             exitDateKey = newerSorted.length ? newerSorted[newerSorted.length-1] : null;
         }
@@ -4624,9 +4629,22 @@
 
         // ── 按標籤拆解勝率(永遠基於全部TOP50,各標籤「單獨」算,供比較) ──
         const tagStats = {};
-        const tagList = ['雙動能共振','5日動能','一月動能','當日強勢','🔥熱門族群','🏆P90','🏛️月P90','⭐當日+月P90','⭐當日+月P70'];
+        // 標籤清單(精簡版:只保留樣本多、區別明顯的核心標籤)
+        const tagDefs = [
+            { label:'雙動能共振', key:'雙動能共振' },
+            { label:'5日動能',    key:'5日動能' },
+            { label:'一月動能',   key:'一月動能' },
+            { label:'當日強勢',   key:'當日強勢' },
+            { label:'🔥熱門族群', key:'🔥熱門族群' },
+            { label:'🏆P90',      key:'🏆P90' },
+            { label:'🏛️月P90',   key:'🏛️月P90' },
+            { label:'⭐當日+月P90', key:'⭐當日+月P90' },
+            { label:'⭐當日+月P70', key:'⭐當日+月P70' },
+        ];
+        const tagList = tagDefs.map(d => d.label);
+        const keyOf = label => (tagDefs.find(d => d.label === label) || {}).key || label;
         tagList.forEach(t => {
-            const recs = allFullRecords.filter(r => (r.狀態標註||'').includes(t));
+            const recs = allFullRecords.filter(r => (r.狀態標註||'').includes(keyOf(t)));
             if (recs.length) {
                 const w = recs.filter(r=>r.報酬率>0).length;
                 tagStats[t] = { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
@@ -4652,9 +4670,10 @@
         const matrixTags = tagList.filter(t => tagStats[t] && tagStats[t].n > 0);
         if (matrixTags.length >= 2) {
             const cellStat = (t1, t2) => {
+                const k1 = keyOf(t1), k2 = keyOf(t2);
                 const recs = (t1 === t2)
-                    ? allFullRecords.filter(r => (r.狀態標註||'').includes(t1))
-                    : allFullRecords.filter(r => (r.狀態標註||'').includes(t1) && (r.狀態標註||'').includes(t2));
+                    ? allFullRecords.filter(r => (r.狀態標註||'').includes(k1))
+                    : allFullRecords.filter(r => (r.狀態標註||'').includes(k1) && (r.狀態標註||'').includes(k2));
                 if (!recs.length) return null;
                 const w = recs.filter(r=>r.報酬率>0).length;
                 return { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
@@ -4690,6 +4709,57 @@
                 html += `</tr>`;
             });
             html += `</tbody></table></div>`;
+
+            // ── 自動標出勝率最高的前3個組合(含單標籤+兩兩交集) ──
+            const combos = [];
+            for (let i = 0; i < matrixTags.length; i++) {
+                for (let j = i; j < matrixTags.length; j++) {
+                    const t1 = matrixTags[i], t2 = matrixTags[j];
+                    const s = cellStat(t1, t2);
+                    if (!s) continue;
+                    combos.push({
+                        name: i === j ? t1 : `${t1} ∩ ${t2}`,
+                        isSingle: i === j,
+                        winRate: s.winRate, avg: s.avg, n: s.n,
+                    });
+                }
+            }
+            // 樣本足夠(n≥30)才納入排行,依勝率排序
+            const reliable = combos.filter(c => c.n >= 30).sort((a,b) => b.winRate - a.winRate);
+            const top3 = reliable.slice(0, 3);
+            // 也找出「樣本雖少但勝率超高」的潛力組合(n<30 但勝率≥85%)
+            const potential = combos.filter(c => c.n < 30 && c.n >= 5 && c.winRate >= 85)
+                .sort((a,b) => b.winRate - a.winRate).slice(0, 3);
+
+            if (top3.length) {
+                const medals = ['🥇','🥈','🥉'];
+                html += `<div style="margin:18px 0 8px;font-size:14px;font-weight:700;color:#fbbf24">🏆 勝率最高組合(樣本 n≥30,可信度高)</div>`;
+                html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">`;
+                top3.forEach((c, i) => {
+                    html += `<div style="display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid ${i===0?'#92400e':'var(--border)'};border-radius:8px;padding:10px 14px">
+                        <span style="font-size:22px">${medals[i]}</span>
+                        <div style="flex:1">
+                            <div style="font-size:14px;font-weight:700;color:#e2e8f0">${c.name}${c.isSingle?'<span style="font-size:11px;color:#64748b;font-weight:400">(單標籤)</span>':'<span style="font-size:11px;color:#5eead4;font-weight:400">(交集)</span>'}</div>
+                            <div style="font-size:11px;color:#64748b">樣本 n=${c.n}</div>
+                        </div>
+                        <div style="text-align:right">
+                            <div style="font-size:20px;font-weight:700;color:${c.winRate>=50?'#4ade80':'#f87171'}">${c.winRate.toFixed(1)}%</div>
+                            <div style="font-size:11px;color:${c.avg>=0?'#4ade80':'#f87171'}">平均${c.avg>=0?'+':''}${c.avg.toFixed(1)}%</div>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            if (potential.length) {
+                html += `<div style="margin:12px 0 6px;font-size:12px;color:#a78bfa">💡 潛力組合(勝率高但樣本少 n&lt;30,參考用,需更多資料驗證)</div>`;
+                html += `<div style="font-size:12px;color:#94a3b8;display:flex;flex-direction:column;gap:4px;margin-bottom:8px">`;
+                potential.forEach(c => {
+                    html += `<div style="display:flex;justify-content:space-between;padding:4px 10px;background:var(--bg2);border-radius:5px">
+                        <span>${c.name}</span>
+                        <span><b style="color:#4ade80">${c.winRate.toFixed(0)}%</b> <span style="color:#64748b">n=${c.n}</span></span></div>`;
+                });
+                html += `</div>`;
+            }
         }
 
         html += `<div style="margin:18px 0 8px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每日明細(哪天賺哪天賠)</div>`;
@@ -4747,6 +4817,7 @@
         const holdN = parseInt(document.getElementById('btHoldDays').value) || 0;
         const priceDateEl = document.getElementById('btPriceDate');
         let priceDateStr = priceDateEl?.value ? priceDateEl.value.replace(/-/g,'') : null;
+        let insufficientHoldWarning = '';
 
         // 若選了持有交易日(非0且非手動指定),自動算出場日
         if (holdN > 0 && !priceDateStr) {
@@ -4755,7 +4826,8 @@
             if (newerSorted.length >= holdN) {
                 priceDateStr = newerSorted[holdN - 1];   // 第 N 個交易日
             } else if (newerSorted.length > 0) {
-                priceDateStr = newerSorted[newerSorted.length - 1];  // 不足N天,用最後一天
+                priceDateStr = newerSorted[newerSorted.length - 1];  // 不足N天,用最後一天(僅提示,不阻擋單日測試)
+                insufficientHoldWarning = `⚠️ 資料庫中入場日後僅有 ${newerSorted.length} 個交易日(不足設定的${holdN}日),已用最後可用日期當出場價,實際持有天數會少於設定值。`;
             }
         }
 
@@ -4934,7 +5006,11 @@
 
         // 統計列
         const summaryColor = avgRet >= 0 ? '#4ade80' : '#f87171';
-        let html = `
+        let html = '';
+        if (insufficientHoldWarning) {
+            html += `<div style="background:#3f2d12;border:1px solid #92400e;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#fbbf24">${insufficientHoldWarning}</div>`;
+        }
+        html += `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
             ${[
                 ['入場日期', label, '#60a5fa'],
