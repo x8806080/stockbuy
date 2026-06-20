@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bm</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bn</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1352,6 +1352,7 @@
         const files = document.getElementById('csvFiles').files;
         if (files.length === 0) { alert("請先選擇 CSV 檔案！"); return; }
 
+        window._currentHistDate = null;   // 進入當日分析模式,清除歷史標記
         document.getElementById('loadingStatus').style.display = 'block';
         document.getElementById('outputArea').innerHTML = '';
         window._prevDayPayload = null; // 重置前日資料
@@ -3911,6 +3912,7 @@
             msg.textContent = '載入中…';
             const payload = await loadDailyResult(dateKey);
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            window._currentHistDate = dateKey;   // 標記為歷史模式
             renderPayloadToOutput(payload, label);
             msg.textContent = `已載入 ${label}`;
         } catch(e) {
@@ -4648,10 +4650,30 @@
             document.body.appendChild(bar);
         }
         bar.innerHTML = `<span style="color:#c7d2fe;font-size:13px">${msg}</span>
-            <button onclick="runAnalysis();this.parentNode.remove()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🔄 重算套用</button>
+            <button onclick="recalcWithCustomInd();this.parentNode.remove()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🔄 重算套用</button>
             <button onclick="this.parentNode.remove()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;width:auto">×</button>`;
     }
     window.showRecalcBar = showRecalcBar;
+
+    // 智慧重算:歷史模式→重新載入該日期(套用最新族群);當日模式→跑 runAnalysis
+    async function recalcWithCustomInd() {
+        const hasCSV = document.getElementById('csvFiles')?.files.length > 0;
+        // 判斷當前顯示的是歷史資料還是當日分析
+        // 優先:若有載入歷史日期且分析分頁無當日輸出 → 重載歷史
+        if (window._currentHistDate) {
+            // 歷史模式:重新載入該日期,renderPayloadToOutput 會套用最新 customIndustry
+            switchTab && switchTab('history');
+            await loadSingleDate(window._currentHistDate);
+            return;
+        }
+        if (hasCSV) {
+            runAnalysis();
+            return;
+        }
+        // 兩者皆無:提示
+        alert('找不到可重算的資料來源。\\n• 若要重算歷史資料,請先在「歷史查詢」分頁載入某一天\\n• 若要重算當日,請先在「分析」分頁上傳 CSV');
+    }
+    window.recalcWithCustomInd = recalcWithCustomInd;
 
     function getCustomIndustry() {
         try { return JSON.parse(localStorage.getItem(CUSTOM_IND_KEY)) || {}; } catch { return {}; }
