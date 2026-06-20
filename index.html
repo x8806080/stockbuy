@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bo</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bs</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -745,9 +745,10 @@
                             </select>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label>最低評分：</label>
-                            <input type="number" id="btMinScore" value="70" min="0" max="200"
+                            <label>取評分前幾名：</label>
+                            <input type="number" id="btTopN" value="50" min="1" max="50"
                                 style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                            <span style="font-size:11px;color:var(--text-dim)">名(不看絕對分數)</span>
                         </div>
                     </div>
                     <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">
@@ -2632,15 +2633,27 @@
     async function repoPut(url, contentObj, sha, message) {
         const jsonStr = JSON.stringify(contentObj, null, 2);
         const sizeKB  = (jsonStr.length / 1024).toFixed(1);
-        console.log(`PUT ${url.split('/').pop()} | size=${sizeKB}KB | sha=${sha?sha.slice(0,7):'new'}`);
         const content = btoa(unescape(encodeURIComponent(jsonStr)));
-        const body = JSON.stringify({ message, content, branch: REPO_CONFIG.BRANCH, ...(sha?{sha}:{}) });
-        const r = await fetch(url, { method:'PUT', headers: repoHeaders(), body });
-        if (!r.ok) {
+        // 409 衝突(SHA過期)自動重試:重抓最新 SHA 再寫,解決 GitHub 最終一致性延遲
+        let curSha = sha;
+        for (let attempt = 0; attempt < 6; attempt++) {
+            console.log(`PUT ${url.split('/').pop()} | size=${sizeKB}KB | sha=${curSha?curSha.slice(0,7):'new'}${attempt>0?` (retry ${attempt})`:''}`);
+            const body = JSON.stringify({ message, content, branch: REPO_CONFIG.BRANCH, ...(curSha?{sha:curSha}:{}) });
+            const r = await fetch(url, { method:'PUT', headers: repoHeaders(), body });
+            if (r.ok) return r.json();
             const errText = await r.text();
+            // 409 衝突 或 422(SHA問題) → 重抓最新 SHA 再試
+            if ((r.status === 409 || r.status === 422) && attempt < 5) {
+                await new Promise(res => setTimeout(res, 400 * (attempt + 1)));  // 漸進延遲
+                try {
+                    const latest = await repoGet(url);
+                    curSha = latest?.sha || null;  // 重抓最新 SHA(可能變 null=檔案被刪)
+                } catch(e) { /* 抓不到就用原 sha 再試 */ }
+                continue;
+            }
             throw new Error(`HTTP ${r.status}: ${errText.slice(0,200)}`);
         }
-        return r.json();
+        throw new Error(`寫入失敗:重試多次仍衝突(${url.split('/').pop()})`);
     }
 
     // 刪除 repo 檔案(GitHub Contents API DELETE)
@@ -2708,14 +2721,15 @@
     }
     window.deleteSelectedHistDates = deleteSelectedHistDates;
 
-    async function saveDailyResult(payload, dateKey) {
+    async function saveDailyResult(payload, dateKey, skipIndex) {
         if (!hasRepo()) return;
         // 步驟1：存每日分析檔
         const existing = await repoGet(dailyFileURL(dateKey));
         await repoPut(dailyFileURL(dateKey), payload, existing?.sha, `analysis ${dateKey}`);
         console.log(`✅ data/daily/${dateKey}.json 已寫入`);
 
-        // 步驟2：更新索引
+        // 步驟2：更新索引(批次匯入時 skipIndex=true,最後統一更新一次)
+        if (skipIndex) return;
         const idxData = await repoGet(dailyIndexURL());
         let idx = [];
         if (idxData) {
@@ -2727,6 +2741,21 @@
         if (idx.length > 365) idx = idx.slice(0, 365);
         await repoPut(dailyIndexURL(), idx, idxData?.sha, `update index ${dateKey}`);
         console.log(`✅ data/daily/index.json 已更新（${idx.length} 筆）`);
+    }
+
+    // 批次結束後統一更新索引(把多個 dateKey 一次加入)
+    async function updateDailyIndexBatch(dateKeys) {
+        if (!hasRepo() || !dateKeys.length) return;
+        const idxData = await repoGet(dailyIndexURL());
+        let idx = [];
+        if (idxData) {
+            try { idx = decodeGitHubContent(idxData.content); } catch(e) {}
+        }
+        dateKeys.forEach(dk => { if (!idx.includes(dk)) idx.push(dk); });
+        idx = [...new Set(idx)].sort().reverse();
+        if (idx.length > 365) idx = idx.slice(0, 365);
+        await repoPut(dailyIndexURL(), idx, idxData?.sha, `batch update index (${dateKeys.length} dates)`);
+        console.log(`✅ index.json 批次更新（共 ${idx.length} 筆）`);
     }
 
     async function loadDailyIndex() {
@@ -3514,6 +3543,13 @@
         const SC = getScoreConfig();
         const label = dateLabel || date || '';
 
+        // 統一設定歷史模式標記(所有歷史載入都會經過這裡,供族群編輯重算用)
+        // 從 label(如 2026/06/19)反推 dateKey(20260619)
+        const dkMatch = (label || '').match(/(\d{4})\D?(\d{2})\D?(\d{2})/);
+        if (dkMatch) {
+            window._currentHistDate = dkMatch[1] + dkMatch[2] + dkMatch[3];
+        }
+
         // ── 相容舊資料：若缺少比值pct欄位，用買超÷市值即時補算 ──
         function patchRatios(arr) {
             (arr||[]).forEach(r => {
@@ -3771,6 +3807,7 @@
             const dateKey = dates[0];
             const payload = await loadDailyResult(dateKey);
             const label = dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8);
+            window._currentHistDate = dateKey;   // 標記歷史模式,供族群編輯重算用
             renderPayloadToOutput(payload, label);
             msg.textContent = `已載入 ${label} 完整報告`;
         } else {
@@ -3894,6 +3931,7 @@
             html += '</div>';
 
             container.innerHTML = html;
+            window._currentHistDate = '__MULTI__';   // 多選模式標記,重算時重跑共振比對
             msg.textContent = `完成（${total} 日，聯集 ${Object.keys(unionMap).length} 檔）`;
         }
         } catch(e) {
@@ -4000,6 +4038,7 @@
             html += '<p style="color:var(--text-dim);text-align:center;padding:20px">無共振標的</p>';
 
         document.getElementById('histViewArea').innerHTML = html;
+        window._currentHistDate = '__RESONANCE__';   // 共振比對模式標記
         msg.textContent = `完成（${dates.length} 個日期，聯集 ${totalUniq} 檔）`;
     }
 
@@ -4239,6 +4278,7 @@
 
         const existingIdx = await loadDailyIndex().catch(()=>[]);
         let okCount = 0, skipCount = 0, failCount = 0;
+        const savedDates = [];   // 成功存入的日期,最後統一更新索引
 
         for (const t of tasks) {
             if (!overwrite && existingIdx.includes(t.dateKey)) {
@@ -4251,7 +4291,8 @@
                 const rows = parseFinalOutputCSV(text);
                 if (!rows.length) { throw new Error('解析後無有效資料列'); }
                 const payload = computeHistDayPayload(rows, t.dateKey);
-                await saveDailyResult(payload, t.dateKey);
+                await saveDailyResult(payload, t.dateKey, true);   // skipIndex=true,索引最後統一更新
+                savedDates.push(t.dateKey);
                 const p90n = payload.top50.filter(r=>r.狀態標註.includes('P90')).length;
                 const dualn = payload.top50.filter(r=>r.狀態標註.includes('雙動能共振')).length;
                 log.innerHTML += `<div style="color:#4ade80">✅ ${t.dateKey}：${rows.length}檔解析,TOP50中 P90系${p90n}檔/雙動能${dualn}檔</div>`;
@@ -4261,6 +4302,18 @@
                 failCount++;
             }
             log.scrollTop = log.scrollHeight;
+            await new Promise(res => setTimeout(res, 350));   // 寫入間隔,降低 GitHub SHA 衝突
+        }
+
+        // 統一更新索引(一次寫入,避免連續寫 index.json 撞 SHA)
+        if (savedDates.length) {
+            log.innerHTML += `<div style="color:#fbbf24">📇 更新日期索引...</div>`;
+            try {
+                await updateDailyIndexBatch(savedDates);
+                log.innerHTML += `<div style="color:#86efac">✓ 索引已更新(+${savedDates.length} 天)</div>`;
+            } catch(e) {
+                log.innerHTML += `<div style="color:#f87171">⚠️ 索引更新失敗:${e.message}(資料已存,可重新匯入修復索引)</div>`;
+            }
         }
 
         log.innerHTML += `<div style="color:#86efac;margin-top:8px;font-weight:700">🏁 完成：成功 ${okCount}，略過 ${skipCount}，失敗 ${failCount}</div>`;
@@ -4387,7 +4440,12 @@
         );
         const holdDays = Math.round((priceDate - entryDate) / (1000*60*60*24));
         const minHold = parseInt(document.getElementById('btHoldDays').value) || 0;
-        const minScore = parseInt(document.getElementById('btMinScore').value) || 0;
+        const topN = parseInt(document.getElementById('btTopN').value) || 50;
+        // 取評分前 N 名(不看絕對分數):依綜合評分排序後取前 topN 名的代號集合
+        const rankedTop = entryPayload.top50.slice()
+            .sort((a,b) => (b.綜合評分||0) - (a.綜合評分||0))
+            .slice(0, topN);
+        const topNSyms = new Set(rankedTop.map(r => r.代號));
         // 取得所有勾選的標籤(複選 AND)
         const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb => cb.value);
 
@@ -4460,7 +4518,7 @@
 
         // 檢查入場 TOP50 有哪些股票在 todayPrices 缺漏(無 TWSE 補抓,缺漏就是缺漏)
         const neededSyms = entryPayload.top50
-            .filter(r => (r.綜合評分||0) >= minScore && passTagFilter(r))
+            .filter(r => topNSyms.has(r.代號) && passTagFilter(r))
             .map(r => r.代號);
         const missingSyms = neededSyms.filter(s => !todayPrices[s]);
 
@@ -4505,7 +4563,7 @@
         // 入場價對照（優先用 priceMap）
         const entryPriceMap = entryPayload.priceMap || {};
         const records = entryPayload.top50
-            .filter(r => (r.綜合評分||0) >= minScore && passTagFilter(r))
+            .filter(r => topNSyms.has(r.代號) && passTagFilter(r))
             .map(r => {
                 const entryPrice  = r.收盤價 || entryPriceMap[r.代號] || null;
                 const currentPrice = todayPrices[r.代號] || null;
@@ -4542,7 +4600,7 @@
             ${[
                 ['入場日期', label, '#60a5fa'],
                 ['現價日期', usedRepoDate || nowLabel, '#60a5fa'],
-                ['篩選條件', selectedTags.length ? selectedTags.join(' + ') : `評分≥${minScore}`, '#a78bfa'],
+                ['篩選條件', selectedTags.length ? selectedTags.join(' + ') : `評分前${topN}名`, '#a78bfa'],
                 ['持有天數', `${holdDays} 天`, '#94a3b8'],
                 ['有效樣本', `${withPrice.length} 檔`, '#94a3b8'],
                 ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
@@ -4674,9 +4732,14 @@
         // 判斷當前顯示的是歷史資料還是當日分析
         // 優先:若有載入歷史日期且分析分頁無當日輸出 → 重載歷史
         if (window._currentHistDate) {
-            // 歷史模式:重新載入該日期,renderPayloadToOutput 會套用最新 customIndustry
             switchTab && switchTab('history');
-            await loadSingleDate(window._currentHistDate);
+            if (window._currentHistDate === '__MULTI__') {
+                await loadHistoryView();
+            } else if (window._currentHistDate === '__RESONANCE__') {
+                await loadResonanceAnalysis();
+            } else {
+                await loadSingleDate(window._currentHistDate);
+            }
             return;
         }
         if (hasCSV) {
@@ -4684,7 +4747,7 @@
             return;
         }
         // 兩者皆無:提示
-        alert('找不到可重算的資料來源。\\n• 若要重算歷史資料,請先在「歷史查詢」分頁載入某一天\\n• 若要重算當日,請先在「分析」分頁上傳 CSV');
+        alert('找不到可重算的資料來源。\n• 若要重算歷史資料,請先在「歷史查詢」分頁載入某一天\n• 若要重算當日,請先在「分析」分頁上傳 CSV');
     }
     window.recalcWithCustomInd = recalcWithCustomInd;
 
