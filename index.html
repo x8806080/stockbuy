@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bx</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04by</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4647,7 +4647,51 @@
         });
         html += `</tbody></table></div>`;
 
-        // ── 每日明細 ──
+        // ── 標籤交集矩陣(對角線=單標籤,其餘=兩標籤交集) ──
+        // 只取有樣本的標籤進矩陣(避免空格太多)
+        const matrixTags = tagList.filter(t => tagStats[t] && tagStats[t].n > 0);
+        if (matrixTags.length >= 2) {
+            const cellStat = (t1, t2) => {
+                const recs = (t1 === t2)
+                    ? allFullRecords.filter(r => (r.狀態標註||'').includes(t1))
+                    : allFullRecords.filter(r => (r.狀態標註||'').includes(t1) && (r.狀態標註||'').includes(t2));
+                if (!recs.length) return null;
+                const w = recs.filter(r=>r.報酬率>0).length;
+                return { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
+            };
+            // 短標籤名(矩陣表頭省空間)
+            const shortName = t => t.replace('雙動能共振','雙動能').replace('當日強勢','當日強').replace('🔥熱門族群','🔥族群').replace('⭐當日+月','⭐').replace('一月動能','月動能').replace('5日動能','5日動');
+
+            html += `<div style="margin:22px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🔲 標籤交集矩陣</div>`;
+            html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">對角線(深色)=單一標籤;其餘格子=兩標籤交集。每格顯示「勝率 / 平均報酬 / 樣本數」。綠=勝率≥50%,紅=&lt;50%。樣本數太少(&lt;5)參考價值低。</div>`;
+            html += `<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap">
+                <thead><tr><th style="padding:4px 6px;position:sticky;left:0;background:var(--bg3);z-index:2"></th>`;
+            matrixTags.forEach(t => {
+                html += `<th style="padding:4px 6px;text-align:center;color:#94a3b8;font-weight:600;min-width:70px">${shortName(t)}</th>`;
+            });
+            html += `</tr></thead><tbody>`;
+            matrixTags.forEach(t1 => {
+                html += `<tr><th style="padding:4px 6px;text-align:left;color:#94a3b8;font-weight:600;position:sticky;left:0;background:var(--bg3);z-index:1">${shortName(t1)}</th>`;
+                matrixTags.forEach(t2 => {
+                    const s = cellStat(t1, t2);
+                    const isDiag = t1 === t2;
+                    if (!s) {
+                        html += `<td style="padding:3px 5px;text-align:center;color:#475569;border:1px solid var(--border)">-</td>`;
+                        return;
+                    }
+                    const wc = s.winRate>=50 ? '#4ade80' : '#f87171';
+                    const ac = s.avg>=0 ? '#4ade80' : '#f87171';
+                    const bg = isDiag ? 'background:#1e293b;' : (s.n<5 ? 'opacity:0.5;' : '');
+                    html += `<td style="padding:3px 5px;text-align:center;border:1px solid var(--border);${bg}">
+                        <div style="color:${wc};font-weight:700">${s.winRate.toFixed(0)}%</div>
+                        <div style="color:${ac};font-size:10px">${s.avg>=0?'+':''}${s.avg.toFixed(1)}%</div>
+                        <div style="color:#64748b;font-size:9px">n=${s.n}</div></td>`;
+                });
+                html += `</tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
         html += `<div style="margin:18px 0 8px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每日明細(哪天賺哪天賠)</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
             <thead><tr style="background:var(--bg2)">
