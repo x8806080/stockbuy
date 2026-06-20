@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ce</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cf</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -746,11 +746,23 @@
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             🎯 策略停利回測
                         </button>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label title="獲利<10%時,連續離開TOP50幾日就出場">離榜出場日(獲利&lt;10%)：</label>
-                            <input type="number" id="stratExitN1" value="3" min="1" max="30"
-                                style="width:55px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                            <span style="font-size:11px;color:#64748b">日(10-100%固定10日,&gt;100%固定20日)</span>
+                        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px">
+                            <span style="font-weight:600;color:#f97316">離榜出場日設定:</span>
+                            <span style="display:flex;align-items:center;gap:4px">
+                                <label title="獲利<10%時,連續離開TOP50幾日就出場">獲利&lt;10%:</label>
+                                <input type="number" id="stratExitN1" value="3" min="1" max="120"
+                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
+                            </span>
+                            <span style="display:flex;align-items:center;gap:4px">
+                                <label title="獲利10-100%時,連續離開TOP50幾日就出場">10-100%:</label>
+                                <input type="number" id="stratExitN2" value="10" min="1" max="120"
+                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
+                            </span>
+                            <span style="display:flex;align-items:center;gap:4px">
+                                <label title="獲利>100%時,連續離開TOP50幾日就出場">&gt;100%:</label>
+                                <input type="number" id="stratExitN3" value="20" min="1" max="120"
+                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
+                            </span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>持有交易日：</label>
@@ -4503,14 +4515,14 @@
 
         const topN = parseInt(document.getElementById('btTopN').value) || 50;
         const stopLossPct = 10;  // 固定 -10% 停損
-        const exitN1 = parseInt(document.getElementById('stratExitN1')?.value) || 3;   // 獲利<10% 的離開天數(可自訂)
-        const exitN2 = 10;  // 10-100% → 2週
-        const exitN3 = 20;  // ≥100% → 1個月
+        const exitN1 = parseInt(document.getElementById('stratExitN1')?.value) || 3;   // 獲利<10%
+        const exitN2 = parseInt(document.getElementById('stratExitN2')?.value) || 10;  // 10-100%
+        const exitN3 = parseInt(document.getElementById('stratExitN3')?.value) || 20;  // ≥100%
         const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value);
 
         // 快取指紋
         const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
-        const cacheKey = ['STRAT', start, end, topN, exitN1, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
         if (!forceRecalc) {
             const cache = getBtCache();
             if (cache[cacheKey]) {
