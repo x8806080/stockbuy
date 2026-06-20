@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cd</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ce</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -742,6 +742,16 @@
                             title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
                             🗑️ 清快取
                         </button>
+                        <button onclick="runStrategyBacktest()"
+                            style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
+                            🎯 策略停利回測
+                        </button>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
+                            <label title="獲利<10%時,連續離開TOP50幾日就出場">離榜出場日(獲利&lt;10%)：</label>
+                            <input type="number" id="stratExitN1" value="3" min="1" max="30"
+                                style="width:55px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                            <span style="font-size:11px;color:#64748b">日(10-100%固定10日,&gt;100%固定20日)</span>
+                        </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>持有交易日：</label>
                             <input type="number" id="btHoldDays" value="5" min="0" max="120"
@@ -4471,6 +4481,229 @@
     // 可重用核心:計算單一入場日的回測 records(供單日+批次區間用)
     // 回傳 { records, withPrice, stats, label, exitLabel, exitDateKey }
     // ════════════════════════════════════════════════
+    // ════════════════════════════════════════════════
+    // 策略停利回測(收盤近似版):逐日追蹤每檔,依獲利分層+離開TOP50天數出場
+    // ════════════════════════════════════════════════
+    // 規則:
+    //  獲利≤-10% → 當天停損(-10%)
+    //  獲利<10%  → 連續離開TOP50 exitN1 日出場
+    //  10-100%   → 連續離開TOP50 10 日出場
+    //  獲利≥100% → 連續離開TOP50 20 日出場
+    //  連續離開計數,中間回TOP50歸零;觸發當天收盤算報酬
+    async function runStrategyBacktest(forceRecalc) {
+        const msg = document.getElementById('backtestMsg');
+        const result = document.getElementById('backtestResult');
+        const sel = getCalSelected('backtestDateList');
+        if (!sel || !sel.length) { alert('請在日曆點選起始日與結束日'); return; }
+        const allD = (await loadDailyIndex().catch(()=>[])).slice().sort();
+        const start = sel.slice().sort()[0];
+        const end = sel.slice().sort()[sel.length-1];
+        const entryDates = allD.filter(d => d >= start && d <= end);
+        if (!entryDates.length) { alert('區間內無資料'); return; }
+
+        const topN = parseInt(document.getElementById('btTopN').value) || 50;
+        const stopLossPct = 10;  // 固定 -10% 停損
+        const exitN1 = parseInt(document.getElementById('stratExitN1')?.value) || 3;   // 獲利<10% 的離開天數(可自訂)
+        const exitN2 = 10;  // 10-100% → 2週
+        const exitN3 = 20;  // ≥100% → 1個月
+        const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value);
+
+        // 快取指紋
+        const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
+        const cacheKey = ['STRAT', start, end, topN, exitN1, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        if (!forceRecalc) {
+            const cache = getBtCache();
+            if (cache[cacheKey]) {
+                const c = cache[cacheKey];
+                renderStrategyResult(c.trades, c.meta);
+                msg.innerHTML = `⚡ 已從快取載入　<a href="#" onclick="runStrategyBacktest(true);return false" style="color:#a78bfa">🔄 重新計算</a>`;
+                return;
+            }
+        }
+
+        result.innerHTML = '';
+        msg.textContent = '載入區間資料中…';
+
+        // 一次載入所有交易日的 payload(priceMap + top50名單),建快取
+        // 用「所有有資料日期」而非只區間內,因為出場可能在區間結束後
+        const allDatesSorted = allD.slice().sort();
+        const dayData = {};  // dateKey → { priceMap, topNSet }
+        for (let i = 0; i < allDatesSorted.length; i++) {
+            const dk = allDatesSorted[i];
+            msg.textContent = `載入資料 ${i+1}/${allDatesSorted.length}…`;
+            try {
+                const p = await loadDailyResult(dk);
+                if (!p) continue;
+                // 取該日評分前 topN 名的代號集合
+                const ranked = (p.top50||[]).slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN);
+                dayData[dk] = {
+                    priceMap: p.priceMap || {},
+                    topNSet: new Set(ranked.map(r=>r.代號)),
+                    top50: p.top50 || [],
+                };
+            } catch(e) { /* 跳過 */ }
+        }
+
+        // 對每個入場日,取當天 TOP-N 符合標籤的標的,逐檔追蹤出場
+        const trades = [];
+        const passTag = r => !selectedTags.length || selectedTags.every(t => (r.狀態標註||'').includes(t));
+        for (const entryDk of entryDates) {
+            const ed = dayData[entryDk];
+            if (!ed) continue;
+            const ranked = ed.top50.slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN).filter(passTag);
+            const futureDates = allDatesSorted.filter(d => d > entryDk);  // 入場後的交易日
+            for (const stock of ranked) {
+                const sym = stock.代號;
+                const entryPrice = stock.收盤價 || ed.priceMap[sym];
+                if (!entryPrice || entryPrice <= 0) continue;
+                const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
+                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3 });
+                trades.push(t);
+            }
+        }
+
+        const meta = { start, end, topN, exitN1, exitN2, exitN3, selectedTags, totalEntries: trades.length };
+        renderStrategyResult(trades, meta);
+        setBtCache(cacheKey, { trades, meta });
+        msg.innerHTML = `策略回測完成（${trades.length} 筆交易）　<span style="color:#64748b;font-size:11px">已存快取</span>`;
+    }
+    window.runStrategyBacktest = runStrategyBacktest;
+
+    // 追蹤單檔從入場到出場
+    function traceExit(sym, name, entryPrice, entryDk, entryTags, futureDates, dayData, cfg) {
+        let leftDays = 0;       // 連續離開TOP50天數
+        let lastClose = entryPrice;
+        let peakRet = 0;
+        for (const dk of futureDates) {
+            const dd = dayData[dk];
+            if (!dd) continue;
+            const close = dd.priceMap[sym];
+            if (close == null) {
+                // 當天無此股收盤(可能停牌或資料缺),沿用上一個收盤,不計離開天數變化
+                continue;
+            }
+            lastClose = close;
+            const ret = (close - entryPrice) / entryPrice * 100;
+            peakRet = Math.max(peakRet, ret);
+
+            // 規則1:停損 -10%(優先)
+            if (ret <= -cfg.stopLossPct) {
+                return mkTrade(sym, name, entryPrice, -cfg.stopLossPct, entryDk, dk, entryTags, '停損-10%', peakRet);
+            }
+
+            // 是否在當天 TOP-N
+            const inTop = dd.topNSet.has(sym);
+            if (inTop) {
+                leftDays = 0;   // 回到榜上,歸零
+            } else {
+                leftDays++;
+                // 依當下獲利決定容忍天數
+                let tolerance;
+                if (ret < 10) tolerance = cfg.exitN1;
+                else if (ret < 100) tolerance = cfg.exitN2;
+                else tolerance = cfg.exitN3;
+                if (leftDays >= tolerance) {
+                    const reason = ret < 10 ? `離榜${cfg.exitN1}日(獲利<10%)`
+                                 : ret < 100 ? `離榜${cfg.exitN2}日(獲利10-100%)`
+                                 : `離榜${cfg.exitN3}日(獲利>100%)`;
+                    return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, reason, peakRet);
+                }
+            }
+        }
+        // 沒觸發任何出場 → 持有至今(用最後收盤)
+        const finalRet = (lastClose - entryPrice) / entryPrice * 100;
+        return mkTrade(sym, name, entryPrice, finalRet, entryDk, futureDates[futureDates.length-1]||entryDk, entryTags, '持有中(未出場)', peakRet);
+    }
+
+    function mkTrade(sym, name, entryPrice, ret, entryDk, exitDk, tags, reason, peakRet) {
+        const fmt = dk => dk ? dk.slice(4,6)+'/'+dk.slice(6,8) : '—';
+        // 持有交易日數(粗略:用日期差非交易日差,僅供參考)
+        return {
+            代號:sym, 名稱:name, 入場價:entryPrice, 報酬率:ret,
+            入場日:entryDk, 出場日:exitDk, 入場日標:fmt(entryDk), 出場日標:fmt(exitDk),
+            出場原因:reason, 標籤:tags, 期間最高報酬:peakRet,
+        };
+    }
+
+    function renderStrategyResult(trades, meta) {
+        const result = document.getElementById('backtestResult');
+        if (!trades.length) { result.innerHTML = '<div style="padding:20px;color:var(--text-dim)">無交易資料</div>'; return; }
+
+        const wins = trades.filter(t => t.報酬率 > 0);
+        const winRate = wins.length / trades.length * 100;
+        const avgRet = trades.reduce((s,t)=>s+t.報酬率,0)/trades.length;
+        const maxWin = Math.max(...trades.map(t=>t.報酬率));
+        const maxLoss = Math.min(...trades.map(t=>t.報酬率));
+        // 出場原因分布
+        const reasonStats = {};
+        trades.forEach(t => {
+            const key = t.出場原因.replace(/\d+/g, 'N');  // 歸類(離榜N日)
+            if (!reasonStats[key]) reasonStats[key] = { n:0, totRet:0, wins:0 };
+            reasonStats[key].n++; reasonStats[key].totRet += t.報酬率;
+            if (t.報酬率>0) reasonStats[key].wins++;
+        });
+
+        const startL = meta.start.slice(0,4)+'/'+meta.start.slice(4,6)+'/'+meta.start.slice(6,8);
+        const endL = meta.end.slice(0,4)+'/'+meta.end.slice(4,6)+'/'+meta.end.slice(6,8);
+
+        let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">🎯 策略停利回測:${startL} ~ ${endL}</div>`;
+        html += `<div style="margin-bottom:12px;font-size:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;line-height:1.7">
+            <b style="color:#fbbf24">停利規則(收盤近似版):</b><br>
+            • 獲利≤-10% → 停損出場<br>
+            • 獲利&lt;10% → 連續離開TOP${meta.topN} <b>${meta.exitN1}日</b>出場<br>
+            • 獲利10-100% → 連續離開TOP${meta.topN} <b>${meta.exitN2}日</b>出場<br>
+            • 獲利≥100% → 連續離開TOP${meta.topN} <b>${meta.exitN3}日</b>出場
+            ${meta.selectedTags.length?`<br>• 篩選:${meta.selectedTags.join(' ∩ ')}`:''}</div>`;
+
+        html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">` +
+            [
+                ['交易筆數', `${trades.length}`, '#94a3b8'],
+                ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
+                ['平均報酬', `${avgRet>=0?'+':''}${avgRet.toFixed(2)}%`, avgRet>=0?'#4ade80':'#f87171'],
+                ['最大獲利', `+${maxWin.toFixed(1)}%`, '#4ade80'],
+                ['最大虧損', `${maxLoss.toFixed(1)}%`, '#f87171'],
+            ].map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${k}</div>
+                <div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
+
+        // 出場原因統計
+        html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📤 出場原因分布</div>`;
+        html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--bg2)"><th style="padding:8px;text-align:left">出場原因</th>
+            <th style="padding:8px;text-align:right">筆數</th><th style="padding:8px;text-align:right">佔比</th>
+            <th style="padding:8px;text-align:right">勝率</th><th style="padding:8px;text-align:right">平均報酬</th></tr></thead><tbody>`;
+        Object.entries(reasonStats).sort((a,b)=>b[1].n-a[1].n).forEach(([r,s])=>{
+            const avg = s.totRet/s.n, wr = s.wins/s.n*100;
+            html += `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:8px">${r}</td>
+                <td style="padding:8px;text-align:right">${s.n}</td>
+                <td style="padding:8px;text-align:right;color:#94a3b8">${(s.n/trades.length*100).toFixed(0)}%</td>
+                <td style="padding:8px;text-align:right;color:${wr>=50?'#4ade80':'#f87171'}">${wr.toFixed(0)}%</td>
+                <td style="padding:8px;text-align:right;color:${avg>=0?'#4ade80':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+
+        // 交易明細(報酬排序,前100筆)
+        html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📋 交易明細(報酬排序,前100筆)</div>`;
+        html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg2)">
+            <th style="padding:6px;text-align:left">代號</th><th style="padding:6px;text-align:left">名稱</th>
+            <th style="padding:6px;text-align:left">入場</th><th style="padding:6px;text-align:left">出場</th>
+            <th style="padding:6px;text-align:right">報酬</th><th style="padding:6px;text-align:right">期間高點</th>
+            <th style="padding:6px;text-align:left">出場原因</th></tr></thead><tbody>`;
+        trades.slice().sort((a,b)=>b.報酬率-a.報酬率).slice(0,100).forEach(t=>{
+            html += `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px">${t.代號}</td><td style="padding:6px">${t.名稱||''}</td>
+                <td style="padding:6px;color:#94a3b8">${t.入場日標}</td><td style="padding:6px;color:#94a3b8">${t.出場日標}</td>
+                <td style="padding:6px;text-align:right;font-weight:700;color:${t.報酬率>=0?'#4ade80':'#f87171'}">${t.報酬率>=0?'+':''}${t.報酬率.toFixed(1)}%</td>
+                <td style="padding:6px;text-align:right;color:#64748b">+${t.期間最高報酬.toFixed(0)}%</td>
+                <td style="padding:6px;font-size:11px;color:#a78bfa">${t.出場原因}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+
+        result.innerHTML = html;
+    }
+
     async function computeDayBacktest(dateKey, opts) {
         const { holdN, topN, selectedTags, stopLoss } = opts;
         let entryPayload;
