@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cc</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cd</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -737,6 +737,10 @@
                         <button onclick="runRangeBacktest()"
                             style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             📈 批次區間回測
+                        </button>
+                        <button onclick="if(confirm('清除所有回測快取?')){clearBtCache();document.getElementById('backtestMsg').textContent='✓ 快取已清除';}"
+                            title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
+                            🗑️ 清快取
                         </button>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>持有交易日：</label>
@@ -4541,7 +4545,36 @@
     // ════════════════════════════════════════════════
     // 批次區間回測:區間內每天當入場日,彙總統計
     // ════════════════════════════════════════════════
-    async function runRangeBacktest() {
+    // ── 回測結果快取(localStorage,同條件免重算) ──
+    const BT_CACHE_KEY = 'btRangeCache_v1';
+    function getBtCache() {
+        try { return JSON.parse(localStorage.getItem(BT_CACHE_KEY) || '{}'); }
+        catch(e) { return {}; }
+    }
+    function makeBtCacheKey(meta, dataFingerprint) {
+        // 條件 + 資料指紋(最新日期),資料更新後 key 改變→舊快取自動失效
+        return [meta.start, meta.end, meta.holdN, meta.topN, meta.stopLoss,
+                (meta.selectedTags||[]).slice().sort().join('+'), dataFingerprint].join('|');
+    }
+    function setBtCache(key, payload) {
+        try {
+            const cache = getBtCache();
+            cache[key] = { ...payload, savedAt: Date.now() };
+            // 最多保留 20 筆快取(避免 localStorage 爆),刪最舊的
+            const keys = Object.keys(cache);
+            if (keys.length > 20) {
+                keys.sort((a,b)=>(cache[a].savedAt||0)-(cache[b].savedAt||0));
+                delete cache[keys[0]];
+            }
+            localStorage.setItem(BT_CACHE_KEY, JSON.stringify(cache));
+        } catch(e) { console.warn('快取儲存失敗(可能超出localStorage容量):', e.message); }
+    }
+    function clearBtCache() {
+        try { localStorage.removeItem(BT_CACHE_KEY); } catch(e) {}
+    }
+    window.clearBtCache = clearBtCache;
+
+    async function runRangeBacktest(forceRecalc) {
         const msg = document.getElementById('backtestMsg');
         const result = document.getElementById('backtestResult');
         // 取得起訖日(從日曆 range 選取)
@@ -4561,6 +4594,22 @@
             stopLoss: parseFloat(document.getElementById('btStopLoss')?.value) || 0,
         };
 
+        // 資料指紋:repo 最新日期(資料有更新時快取自動失效)
+        const dataFingerprint = allD.length ? allD[allD.length-1] + '_' + allD.length : 'none';
+        const cacheKey = makeBtCacheKey({ start, end, ...opts }, dataFingerprint);
+
+        // 查快取(除非強制重算)
+        if (!forceRecalc) {
+            const cache = getBtCache();
+            if (cache[cacheKey]) {
+                const c = cache[cacheKey];
+                const savedDate = new Date(c.savedAt).toLocaleString('zh-TW');
+                renderRangeResult(c.dayResults, c.allRecords, c.allFullRecords, c.meta);
+                msg.innerHTML = `⚡ 已從快取載入(${savedDate}運算)　<a href="#" onclick="runRangeBacktest(true);return false" style="color:#a78bfa">🔄 重新計算</a>`;
+                return;
+            }
+        }
+
         result.innerHTML = '';
         const dayResults = [];
         const allRecords = [];      // 篩選後的(供主統計+每日明細)
@@ -4578,8 +4627,11 @@
             r.withPrice.forEach(rec => allRecords.push({ ...rec, 入場日:dk }));
         }
 
-        renderRangeResult(dayResults, allRecords, allFullRecords, { start, end, ...opts, totalDays: entryDates.length });
-        msg.textContent = `批次回測完成（${entryDates.length} 個入場日）`;
+        const meta = { start, end, ...opts, totalDays: entryDates.length };
+        renderRangeResult(dayResults, allRecords, allFullRecords, meta);
+        // 存快取
+        setBtCache(cacheKey, { dayResults, allRecords, allFullRecords, meta });
+        msg.innerHTML = `批次回測完成（${entryDates.length} 個入場日）　<span style="color:#64748b;font-size:11px">已存快取,下次同條件免重算</span>`;
     }
     window.runRangeBacktest = runRangeBacktest;
 
