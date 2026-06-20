@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bk</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bm</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -689,27 +689,6 @@
 
     <!-- ══ 績效回測追蹤 ══ -->
     <div id="tab-backtest" data-tab="backtest" style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
-        <!-- ══ 官方歷史資料自動建置 ══ -->
-        <details style="margin-bottom:16px;border:1px solid #166534;border-radius:8px;background:#0c1812">
-            <summary style="padding:10px 14px;cursor:pointer;color:#86efac;font-weight:700;font-size:14px">🛰️ 官方歷史資料自動建置(從證交所抓三大法人+收盤)</summary>
-            <div style="padding:12px 14px">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.7">
-                    透過證交所公開 API 自動抓取歷史資料,補足回測所需。<br>
-                    • <b style="color:#86efac">三大法人/投信買超</b>:T86(全市場一次,快)<br>
-                    • <b style="color:#86efac">收盤價</b>:STOCK_DAY_ALL(算漲幅+轉金額)<br>
-                    • <b style="color:#fbbf24">相關產業</b>:內建 stock_info 對照表
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
-                    <div style="display:flex;flex-direction:column;gap:3px">
-                        <label style="font-size:11px;color:#64748b">回補天數(交易日)</label>
-                        <input id="histBuildDays" type="number" value="20" min="1" max="60" style="width:90px;padding:7px;border:1px solid #334155;border-radius:5px;background:#1a2540;color:#fff;font-size:14px">
-                    </div>
-                    <button onclick="testFetchT86()" style="background:#0891b2;color:#fff;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🧪 測試抓今日T86</button>
-                    <button onclick="buildHistoricalData()" style="background:#15803d;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-size:13px;cursor:pointer;font-weight:700;width:auto">🚀 開始建置歷史資料</button>
-                </div>
-                <div id="histBuildLog" style="font-size:12px;color:#cbd5e1;max-height:200px;overflow-y:auto;background:#0a0e1a;border-radius:6px;padding:8px;display:none"></div>
-            </div>
-        </details>
 
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0;color:var(--accent2);font-size:16px;border:none;padding:0">
@@ -734,7 +713,7 @@
                     <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">② 選擇現價來源</div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
-                            <input type="radio" name="priceSource" value="twse" checked style="accent-color:#10b981"> 自動抓取（TWSE 當日收盤）
+                            <input type="radio" name="priceSource" value="twse" checked style="accent-color:#10b981"> 從歷史資料庫讀取(快照收盤價)
                         </label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
                             <input type="radio" name="priceSource" value="csv" style="accent-color:#10b981"> 上傳 CSV
@@ -888,6 +867,12 @@
                 <label>→ 得分</label>
                 <input type="number" id="corp1m_scoreC" value="10">
             </div>
+            <div style="font-size:12px;color:#888;margin:4px 0 8px 0">📦 市值缺漏時退回絕對金額保底門檻（百萬）：</div>
+            <div class="score-row">
+                <label>保底 A（>）</label><input type="number" id="corp1m_fallbackA" value="20000"><span class="unit">百萬</span>
+                <label>保底 B（≥）</label><input type="number" id="corp1m_fallbackB" value="5000"><span class="unit">百萬</span>
+                <label>保底 C（≥）</label><input type="number" id="corp1m_fallbackC" value="2000"><span class="unit">百萬</span>
+            </div>
 
             <div class="editor-section-title">④ 基礎權重 — 投信動向（投信週買超 ÷ 市值 比值，門檻設0=自動由漲幅TOP40推算）</div>
             <div style="font-size:12px;color:#888;margin:4px 0 8px 0">💡 門檻填 0 = 自動用 P90/P70/P50 比值分位數；填小數可手動覆蓋（如 0.03 = 3%）</div>
@@ -1004,6 +989,28 @@
         <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
     </div>
 
+    <!-- ══════════════ 批次匯入歷史資料 ══════════════ -->
+    <details data-tab="analysis" style="background:var(--bg3);border:1px solid #166534;border-radius:12px;padding:0;margin-bottom:20px">
+        <summary style="padding:14px 16px;cursor:pointer;color:#86efac;font-weight:700;font-size:15px">📦 批次匯入歷史資料(final_output_YYYYMMDD.csv,可一次選多檔)</summary>
+        <div style="padding:0 16px 16px 16px">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.7">
+                上傳多個 <code style="background:#1a2540;padding:1px 5px;border-radius:3px">final_output_YYYYMMDD.csv</code> 格式檔案,自動依檔名日期分別分析、存入對應的歷史資料。<br>
+                欄位:代號、名稱、當日收盤價、當日/5日/1個月買賣超金額(萬元)、當日/5日/1個月漲幅(%)、當日/5日/1個月買超(張)<br>
+                <span style="color:#fbbf24">⚠️ 市值與相關產業自動由內建字典對應(1834檔):有市值者法人P90/月P90用「買超÷市值」分位計算,查無市值者退回絕對金額保底。無投信獨立欄位,投信P90不計算。相關產業優先序:網頁手改 > 字典 > CSV。</span>
+            </div>
+            <div class="upload-row" style="margin-bottom:10px">
+                <input type="file" id="batchHistFiles" multiple accept=".csv" style="flex:1;min-width:0">
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button onclick="runBatchHistImport()" style="background:#15803d;width:auto;padding:10px 20px">🚀 開始批次匯入</button>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer">
+                    <input type="checkbox" id="batchOverwrite" checked style="width:14px;height:14px"> 覆蓋已存在的同日期資料
+                </label>
+            </div>
+            <div id="batchHistLog" style="font-size:12px;color:#cbd5e1;max-height:260px;overflow-y:auto;background:#0a0e1a;border-radius:6px;padding:10px;margin-top:10px;display:none"></div>
+        </div>
+    </details>
+
     <div id="outputArea" data-tab="analysis">
     <div class="pdf-header" style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:16px">
         <div style="font-size:18pt;font-weight:700;color:#1e3a5f">籌碼先行動能待發 — 量化策略分析報告</div>
@@ -1048,6 +1055,7 @@
             corp1m: {
                 thrA: v('corp1m_thrA'), thrB: v('corp1m_thrB'), thrC: v('corp1m_thrC'),
                 scoreA: v('corp1m_scoreA'), scoreB: v('corp1m_scoreB'), scoreC: v('corp1m_scoreC'),
+                fallbackA: v('corp1m_fallbackA'), fallbackB: v('corp1m_fallbackB'), fallbackC: v('corp1m_fallbackC'),
             },
             trust: {
                 thrA: v('trust_thrA'), thrB: v('trust_thrB'), thrC: v('trust_thrC'),
@@ -1088,6 +1096,7 @@
         corp_fallbackA:6000, corp_fallbackB:1000, corp_fallbackC:500,
         momentum_both:20, momentum_5d:10, momentum_1m:10, momentum_day:10, momentum_topPct:10, momentum_dayPct:10, momentum_comboP90:15, momentum_comboP70:8,
         corp1m_thrA:3000, corp1m_scoreA:15, corp1m_thrB:1000, corp1m_scoreB:10,
+        corp1m_fallbackA:20000, corp1m_fallbackB:5000, corp1m_fallbackC:2000,
         corp1m_thrC:500,  corp1m_scoreC:5,
         trust_rankA:10, trust_scoreA:10, trust_rankB:20, trust_scoreB:7, trust_scoreC:3,
         rev_thrA:80, rev_scoreA:5, rev_thrB:30, rev_scoreB:3,
@@ -1768,7 +1777,7 @@
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
             if (rDayIn)        { score += m.day;    tags.push('當日強勢'); }
 
-            // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位）
+            // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位；市值缺漏時退回絕對金額保底）
             const ratio1m = row.市值 > 0 ? (corp1m / row.市值) : 0;
             row.法人月市值比pct = row.市值 > 0 ? (ratio1m*100).toFixed(3) + '%' : '-';
             let monthLevel = '';   // 記錄月分位等級,供組合獎勵用
@@ -1780,6 +1789,13 @@
                 if      (m_tA > 0 && ratio1m >= m_tA) { score += c1.scoreA; tags.push('🏛️月P90'); monthLevel = 'P90'; }
                 else if (m_tB > 0 && ratio1m >= m_tB) { score += c1.scoreB; tags.push('月比P70'); monthLevel = 'P70'; }
                 else if (m_tC > 0 && ratio1m >= m_tC) { score += c1.scoreC; tags.push('月比P50'); monthLevel = 'P50'; }
+            } else if (corp1m > 0) {
+                // 無市值保底：用絕對金額門檻(百萬)
+                const c1 = SC.corp1m;
+                const f1A = c1.fallbackA || 20000, f1B = c1.fallbackB || 5000, f1C = c1.fallbackC || 2000;
+                if      (corp1m > f1A)  { score += c1.scoreA; tags.push(`月法人>${f1A/100}億(無市值)`); monthLevel = 'P90'; }
+                else if (corp1m >= f1B) { score += c1.scoreB; tags.push(`月法人${c1.scoreB}分(無市值)`); monthLevel = 'P70'; }
+                else if (corp1m >= f1C) { score += c1.scoreC; tags.push(`月法人>=${f1C/100}億(無市值)`); monthLevel = 'P50'; }
             }
             // ⭐ 組合獎勵:當日強勢 + 月P90/P70(在各自加分之外額外加)
             if (rDayIn && monthLevel === 'P90') { score += m.comboP90; tags.push('⭐當日+月P90'); }
@@ -4018,6 +4034,243 @@
     // 從 TWSE 抓取當日全市場收盤價
     // 使用 allorigins.win CORS proxy → TWSE STOCK_DAY_ALL
     // 相容性 fetch + timeout:用 Promise.race(完全不傳 signal,避免 corsproxy 的 postMessage clone AbortSignal 失敗)
+    // ════════════════════════════════════════════════════
+    // 📦 批次匯入歷史資料(final_output_YYYYMMDD.csv)
+    // ════════════════════════════════════════════════════
+
+    // 依數值排序取前 pct% 的代號集合(與 runAnalysis 的 topByPct 不同：
+    // 這裡用實際數值排序，因為 final_output CSV 不保證已依漲幅排序)
+    function topByPctValue(rows, field, pct) {
+        const valid = rows.filter(r => r[field] !== null && !isNaN(r[field]));
+        if (!valid.length) return new Set();
+        const sorted = valid.slice().sort((a,b) => b[field] - a[field]);
+        const cutoff = Math.max(1, Math.ceil(sorted.length * pct / 100));
+        return new Set(sorted.slice(0, cutoff).map(r => r.代號));
+    }
+
+    function parseFinalOutputCSV(text) {
+        const parsed = parseCSVText(text);
+        const num = v => { const n = parseFloat((v||'').toString().replace(/,/g,'')); return isNaN(n) ? null : n; };
+        const customInd = (typeof getCustomIndustry === 'function') ? getCustomIndustry() : {};
+        return parsed.data.map(row => {
+            const sym = (row['代號']||'').trim();
+            if (!sym) return null;
+            const dict = STOCK_DICT[sym] || {};
+            // 相關產業優先序:網頁手改 > 字典檔 > CSV原始
+            const ind = customInd[sym] || dict.i || (row['相關產業']||'').trim() || '';
+            // 市值來自字典檔(億)
+            const mcap = dict.m || 0;
+            return {
+                代號: sym,
+                名稱: (row['名稱']||'').trim(),
+                收盤價: num(row['當日收盤價']),
+                當日金額萬: num(row['當日買賣超金額(萬元)']) || 0,
+                金額5日萬:  num(row['5日買賣超金額(萬元)']) || 0,
+                金額1月萬:  num(row['1個月買賣超金額(萬元)']) || 0,
+                當日漲幅:   num(row['當日漲幅(%)']),
+                漲幅5日:    num(row['5日漲幅(%)']),
+                漲幅1月:    num(row['1個月漲幅(%)']),
+                當日張:     num(row['當日買超(張)']) || 0,
+                張5日:      num(row['5日買超(張)']) || 0,
+                張1月:      num(row['1個月買超(張)']) || 0,
+                相關產業:   ind,
+                市值億:     mcap,
+            };
+        }).filter(Boolean);
+    }
+
+    // 計算單一日期的完整分析 payload(動能 + 法人市值比P90 + 族群統計)
+    function computeHistDayPayload(rows, dateKey) {
+        const SC = getScoreConfig();
+        const m = SC.momentum, c = SC.corp, c1 = SC.corp1m, tt = SC.trust;
+
+        const rise5dTop  = topByPctValue(rows, '漲幅5日', m.topPct);
+        const rise1mTop  = topByPctValue(rows, '漲幅1月', m.topPct);
+        const riseDayTop = topByPctValue(rows, '當日漲幅', m.dayPct);
+
+        // 計算每檔的市值比值(買超百萬 ÷ 市值百萬;市值億×100=百萬)
+        rows.forEach(r => {
+            const mcapM = (r.市值億 || 0) * 100;   // 億→百萬
+            r._corp5  = r.金額5日萬 / 100;          // 萬→百萬
+            r._corp1m = r.金額1月萬 / 100;
+            r._ratio5  = mcapM > 0 ? (r._corp5  / mcapM) : 0;
+            r._ratio1m = mcapM > 0 ? (r._corp1m / mcapM) : 0;
+        });
+
+        // 自動分位門檻:用 5日漲幅前N%(進榜標的)的比值算 P90/P70/P50(同當日分析邏輯)
+        const benchRows = rows.filter(r => rise5dTop.has(r.代號) || rise1mTop.has(r.代號));
+        function pctOf(field, p) {
+            const arr = benchRows.map(r => r[field]).filter(v => v > 0).sort((a,b)=>a-b);
+            if (!arr.length) return 0;
+            return arr[Math.max(0, Math.floor(arr.length * p / 100) - 1)];
+        }
+        const auto5A = pctOf('_ratio5', 90),  auto5B = pctOf('_ratio5', 70),  auto5C = pctOf('_ratio5', 50);
+        const auto1A = pctOf('_ratio1m', 90), auto1B = pctOf('_ratio1m', 70), auto1C = pctOf('_ratio1m', 50);
+
+        // 族群統計用標的：5日漲幅前N%
+        const indMap = {};
+        rows.forEach(r => {
+            if (!rise5dTop.has(r.代號) || !r.相關產業) return;
+            splitIndsStandalone(r.相關產業).forEach(ind => {
+                if (!indMap[ind]) indMap[ind] = { count:0, corpSum:0 };
+                indMap[ind].count++;
+                indMap[ind].corpSum += r._corp5;
+            });
+        });
+        const sortedInds = Object.entries(indMap).sort((a,b)=>b[1].corpSum-a[1].corpSum);
+        const top5Inds = new Set(sortedInds.slice(0,5).map(([k])=>k));
+
+        const f5A=c.fallbackA||6000, f5B=c.fallbackB||1000, f5C=c.fallbackC||500;
+        const f1A=c1.fallbackA||20000, f1B=c1.fallbackB||5000, f1C=c1.fallbackC||2000;
+
+        rows.forEach(r => {
+            let score = 0; const tags = [];
+            const hasMcap = (r.市值億 || 0) > 0;
+
+            // 法人5日 P90/P70/P50:有市值用比值分位,無市值用絕對金額保底
+            if (hasMcap && r._ratio5 > 0) {
+                if      (auto5A > 0 && r._ratio5 >= auto5A) { score += c.scoreA; tags.push('🏆P90'); }
+                else if (auto5B > 0 && r._ratio5 >= auto5B) { score += c.scoreB; tags.push('P70'); }
+                else if (auto5C > 0 && r._ratio5 >= auto5C) { score += c.scoreC; tags.push('P50'); }
+                r.法人市值比pct = (r._ratio5*100).toFixed(3) + '%';
+            } else if (r._corp5 > 0) {
+                if      (r._corp5 > f5A)  { score += c.scoreA; tags.push('🏆P90'); }
+                else if (r._corp5 >= f5B) { score += c.scoreB; tags.push('P70'); }
+                else if (r._corp5 >= f5C) { score += c.scoreC; tags.push('P50'); }
+                r.法人市值比pct = '-';
+            }
+
+            // 法人月 P90/P70/P50
+            let monthLevel = '';
+            if (hasMcap && r._ratio1m > 0) {
+                if      (auto1A > 0 && r._ratio1m >= auto1A) { score += c1.scoreA; tags.push('🏛️月P90'); monthLevel='P90'; }
+                else if (auto1B > 0 && r._ratio1m >= auto1B) { score += c1.scoreB; tags.push('月比P70'); monthLevel='P70'; }
+                else if (auto1C > 0 && r._ratio1m >= auto1C) { score += c1.scoreC; tags.push('月比P50'); monthLevel='P50'; }
+                r.法人月市值比pct = (r._ratio1m*100).toFixed(3) + '%';
+            } else if (r._corp1m > 0) {
+                if      (r._corp1m > f1A)  { score += c1.scoreA; tags.push('🏛️月P90'); monthLevel='P90'; }
+                else if (r._corp1m >= f1B) { score += c1.scoreB; tags.push('月比P70'); monthLevel='P70'; }
+                else if (r._corp1m >= f1C) { score += c1.scoreC; tags.push('月比P50'); monthLevel='P50'; }
+                r.法人月市值比pct = '-';
+            }
+
+            // 動能
+            const r5In = rise5dTop.has(r.代號), r1mIn = rise1mTop.has(r.代號), rDayIn = riseDayTop.has(r.代號);
+            if (r5In && r1mIn) { score += m.both; tags.push('雙動能共振'); }
+            else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
+            else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
+            if (rDayIn)        { score += m.day; tags.push('當日強勢'); }
+
+            // 組合獎勵
+            if (rDayIn && monthLevel==='P90') { score += m.comboP90; tags.push('⭐當日+月P90'); }
+            else if (rDayIn && monthLevel==='P70') { score += m.comboP70; tags.push('⭐當日+月P70'); }
+
+            // 族群共振加分
+            const myInds = splitIndsStandalone(r.相關產業);
+            if (myInds.some(i => top5Inds.has(i))) score += SC.sector?.score || 0;
+
+            r.綜合評分 = score;
+            r.狀態標註 = tags.join(' / ');
+        });
+
+        rows.sort((a,b) => b.綜合評分 - a.綜合評分);
+        const top50 = rows.slice(0, 50);
+
+        const slim = r => ({
+            代號:r.代號, 名稱:r.名稱, 相關產業:r.相關產業, 綜合評分:r.綜合評分, 狀態標註:r.狀態標註,
+            收盤價:r.收盤價, 法人市值比pct:r.法人市值比pct||'-', 法人月市值比pct:r.法人月市值比pct||'-', 投信市值比pct:'-',
+            三大法人5日買超: r._corp5, 法人一月買超: r._corp1m, 投信週買超: 0,
+            市值億: r.市值億||0, 營收年增: 0,
+            布林σ位置:null, 布林上軌:null, 布林中軌:null, 布林下軌:null,
+        });
+
+        return {
+            date: `批次匯入 ${dateKey}`,
+            source: 'batch_final_output',
+            thrA: auto5A||f5A/100, thrB: auto5B||f5B/100, thrC: auto5C||f5C/100,
+            top50: top50.map(slim),
+            inv: [], top20: top50.slice(0,20).map(slim),
+            inds: sortedInds.slice(0,8).map(([k,v])=>({ind:k,count:v.count,corp:v.corpSum})),
+            resonance: [],
+            etfRes: [],
+            rise5d: [...rise5dTop],
+            rise1m: [...rise1mTop],
+            riseDay: [...riseDayTop],
+            priceMap: Object.fromEntries(rows.filter(r=>r.收盤價>0).map(r=>[r.代號, r.收盤價])),
+            riseStart: [], morgan5d: [], trustRank: [],
+            rise5dRank: rows.filter(r=>rise5dTop.has(r.代號)).sort((a,b)=>b.漲幅5日-a.漲幅5日).slice(0,50)
+                .map(r=>({代號:r.代號,名稱:r.名稱,相關產業:r.相關產業,漲幅:r.漲幅5日,綜合評分:r.綜合評分,
+                    法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:'-',收盤價:r.收盤價,營收年增:0,
+                    布林σ位置:null,布林上軌:null,布林中軌:null,布林下軌:null,狀態標註:r.狀態標註})),
+            rise1mRank: rows.filter(r=>rise1mTop.has(r.代號)).sort((a,b)=>b.漲幅1月-a.漲幅1月).slice(0,50)
+                .map(r=>({代號:r.代號,名稱:r.名稱,相關產業:r.相關產業,漲幅:r.漲幅1月,綜合評分:r.綜合評分,
+                    法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:'-',收盤價:r.收盤價,營收年增:0,
+                    布林σ位置:null,布林上軌:null,布林中軌:null,布林下軌:null,狀態標註:r.狀態標註})),
+        };
+    }
+
+    // 獨立版相關產業切分(批次匯入用,不依賴 runAnalysis 內部變數)
+    function splitIndsStandalone(s) {
+        return (s||'').replace(/\u3000/g,' ').trim().split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
+    }
+
+    // 批次匯入主流程
+    async function runBatchHistImport() {
+        const fileEl = document.getElementById('batchHistFiles');
+        const log = document.getElementById('batchHistLog');
+        log.style.display = 'block';
+        const files = [...(fileEl?.files || [])];
+        if (!files.length) { alert('請選擇 CSV 檔案'); return; }
+        if (!hasRepo()) { log.innerHTML = '<div style="color:#f87171">❌ 尚未設定 GitHub repo 同步,無法存入歷史資料</div>'; return; }
+
+        const overwrite = document.getElementById('batchOverwrite')?.checked;
+        log.innerHTML = `<div style="color:#fbbf24">📦 共 ${files.length} 個檔案,開始解析...</div>`;
+
+        // 解析檔名日期、排序
+        const tasks = [];
+        for (const f of files) {
+            const m = f.name.match(/(\d{8})/);
+            if (!m) {
+                log.innerHTML += `<div style="color:#f87171">⚠️ ${f.name}：檔名找不到8位數日期(YYYYMMDD),跳過</div>`;
+                continue;
+            }
+            tasks.push({ file: f, dateKey: m[1] });
+        }
+        tasks.sort((a,b) => a.dateKey.localeCompare(b.dateKey));
+
+        const existingIdx = await loadDailyIndex().catch(()=>[]);
+        let okCount = 0, skipCount = 0, failCount = 0;
+
+        for (const t of tasks) {
+            if (!overwrite && existingIdx.includes(t.dateKey)) {
+                log.innerHTML += `<div style="color:#64748b">⏭️ ${t.dateKey}：已存在,略過(未勾選覆蓋)</div>`;
+                skipCount++;
+                continue;
+            }
+            try {
+                const text = await t.file.text();
+                const rows = parseFinalOutputCSV(text);
+                if (!rows.length) { throw new Error('解析後無有效資料列'); }
+                const payload = computeHistDayPayload(rows, t.dateKey);
+                await saveDailyResult(payload, t.dateKey);
+                const p90n = payload.top50.filter(r=>r.狀態標註.includes('P90')).length;
+                const dualn = payload.top50.filter(r=>r.狀態標註.includes('雙動能共振')).length;
+                log.innerHTML += `<div style="color:#4ade80">✅ ${t.dateKey}：${rows.length}檔解析,TOP50中 P90系${p90n}檔/雙動能${dualn}檔</div>`;
+                okCount++;
+            } catch(e) {
+                log.innerHTML += `<div style="color:#f87171">❌ ${t.dateKey}：${e.message}</div>`;
+                failCount++;
+            }
+            log.scrollTop = log.scrollHeight;
+        }
+
+        log.innerHTML += `<div style="color:#86efac;margin-top:8px;font-weight:700">🏁 完成：成功 ${okCount}，略過 ${skipCount}，失敗 ${failCount}</div>`;
+        // 重新整理日期清單(回測/歷史查詢的日曆)
+        if (typeof initHistDateSelect === 'function') await initHistDateSelect();
+        if (typeof initBacktestDateList === 'function') await initBacktestDateList();
+    }
+    window.runBatchHistImport = runBatchHistImport;
+
     async function fetchWithTimeout(url, ms) {
         const timeout = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('逾時')), ms || 15000)
@@ -4025,202 +4278,7 @@
         return Promise.race([ fetch(url), timeout ]);
     }
 
-    // ── 從證交所抓三大法人買賣超(T86,全市場一次回傳) ──
-    async function fetchT86(dateStr) {
-        const url = `https://www.twse.com.tw/fund/T86?response=json&date=${dateStr}&selectType=ALL`;
-        // T86 全市場回應大(>1MB);allorigins /raw 避免 /get 的 413 限制
-        const proxies = [
-            { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, wrap: false },
-            { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, wrap: false },
-            { url: `https://thingproxy.freeboard.io/fetch/${url}`, wrap: false },
-            { url: `https://corsproxy.io/?url=${encodeURIComponent(url)}`, wrap: false },
-            { url: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, wrap: true },
-        ];
-        let lastErr = '';
-        for (const p of proxies) {
-            try {
-                const res = await fetchWithTimeout(p.url, 20000);
-                if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
-                const text = await res.text();
-                let data;
-                try {
-                    if (p.wrap) {
-                        const w = JSON.parse(text);
-                        data = typeof w.contents === 'string' ? JSON.parse(w.contents) : w;
-                    } else {
-                        data = JSON.parse(text);
-                    }
-                } catch (pe) { lastErr = '回應非JSON(proxy錯誤頁)'; continue; }
-                if (data?.stat === 'OK' && data?.data) {
-                    const result = {};
-                    data.data.forEach(row => {
-                        const sym = (row[0]||'').trim();
-                        if (!sym || !/^\d{4}$/.test(sym)) return;
-                        const ps = v => parseFloat((v||'0').toString().replace(/,/g,'')) || 0;
-                        result[sym] = {
-                            名稱: (row[1]||'').trim(),
-                            投信買賣超股數: ps(row[10]),
-                            三大法人買賣超股數: ps(row[18]),
-                        };
-                    });
-                    if (Object.keys(result).length > 0) return result;
-                    lastErr = '解析後無有效資料';
-                } else {
-                    lastErr = (data?.stat || '無資料').replace(/很抱歉，?/,'');
-                }
-            } catch(e) {
-                lastErr = e.message;
-            }
-        }
-        throw new Error(lastErr);
-    }
 
-    // 測試:抓最近交易日 T86(今天沒有就往前找)
-    async function testFetchT86() {
-        const log = document.getElementById('histBuildLog');
-        log.style.display = 'block';
-        log.innerHTML = `<div style="color:#fbbf24">🧪 測試抓取 T86(自動找最近有資料的交易日)...</div>`;
-        // 從昨天往前試最多 10 天(今天常未收盤)
-        for (let back = 1; back < 11; back++) {
-            const d = new Date();
-            d.setDate(d.getDate() - back);
-            const dow = d.getDay();
-            if (dow === 0 || dow === 6) continue;  // 跳過週末
-            const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-            log.innerHTML += `<div style="color:#94a3b8;font-size:11px">嘗試 ${dateStr}...</div>`;
-            try {
-                const t0 = Date.now();
-                const data = await fetchT86(dateStr);
-                const dt = ((Date.now()-t0)/1000).toFixed(1);
-                const syms = Object.keys(data);
-                const sample = syms.slice(0,5).map(s => `${s} ${data[s].名稱}(法人${(data[s].三大法人買賣超股數/1000).toFixed(0)}張/投信${(data[s].投信買賣超股數/1000).toFixed(0)}張)`).join('<br>');
-                log.innerHTML = `<div style="color:#4ade80">✅ 成功!日期 ${dateStr},共 ${syms.length} 檔,耗時 ${dt} 秒</div>
-                    <div style="color:#94a3b8;margin-top:6px;font-size:11px">範例:<br>${sample}</div>
-                    <div style="color:#86efac;margin-top:6px">→ T86 可透過 proxy 抓取,歷史建置可行!告訴我就接著做完整流程。</div>`;
-                return;
-            } catch(e) {
-                log.innerHTML += `<div style="color:#64748b;font-size:11px">  ↳ ${e.message}</div>`;
-            }
-        }
-        log.innerHTML += `<div style="color:#f87171;margin-top:6px">❌ 最近7天都抓不到。可能所有 proxy 暫時失效,或證交所擋了。稍後再試,或把這訊息截圖給我。</div>`;
-    }
-    window.testFetchT86 = testFetchT86;
-
-    async function buildHistoricalData() {
-        const log = document.getElementById('histBuildLog');
-        log.style.display = 'block';
-        const days = parseInt(document.getElementById('histBuildDays').value) || 20;
-        log.innerHTML = `<div style="color:#fbbf24">🚀 準備建置最近 ${days} 個交易日的歷史資料...</div>
-            <div style="color:#94a3b8;margin-top:6px;font-size:11px">⚠️ 完整版開發中。請先用「🧪 測試抓今日T86」確認 proxy 可用,我再接著做完整流程。</div>`;
-    }
-    window.buildHistoricalData = buildHistoricalData;
-
-    // ── TWSE 收盤價抓取（今日 / 歷史兩模式）──────────────────
-    // dateStr: YYYYMMDD，空白=今天
-    // symbols: 若為歷史日期，只抓這些代號（避免50次全抓）
-    // onProgress(done, total, sym): 進度回呼
-    async function fetchTWSEPrices(dateStr, symbols, onProgress) {
-        const todayStr = (() => {
-            const n = new Date();
-            return `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
-        })();
-        const targetDate = dateStr || todayStr;
-        const isToday    = targetDate === todayStr;
-        const priceMap   = {};
-
-        // ── 模式 A：今日 → STOCK_DAY_ALL（全市場，5秒完成）──
-        if (isToday) {
-            const twseUrl = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json`;
-            // 多個備用 proxy，依序嘗試
-            const proxies = [
-                `https://api.allorigins.win/get?url=${encodeURIComponent(twseUrl)}`,
-                `https://corsproxy.io/?${encodeURIComponent(twseUrl)}`,
-                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(twseUrl)}`,
-            ];
-            let lastErr = '';
-            for (const proxy of proxies) {
-                try {
-                    const res = await fetchWithTimeout(proxy, 15000);
-                    if (!res.ok) { lastErr = `HTTP ${res.status}`; continue; }
-                    const text = await res.text();
-                    // allorigins 回傳 {contents:...}，其他直接回傳 JSON
-                    let data;
-                    try { const wrap = JSON.parse(text); data = typeof wrap.contents === 'string' ? JSON.parse(wrap.contents) : wrap; }
-                    catch { data = JSON.parse(text); }
-                    if (data?.data) {
-                        data.data.forEach(row => {
-                            const sym   = (row[0]||'').trim();
-                            const price = parseFloat((row[8]||'0').replace(/,/g,''));
-                            if (sym && price > 0) priceMap[sym] = price;
-                        });
-                        if (Object.keys(priceMap).length > 0) {
-                            console.log(`✅ TWSE STOCK_DAY_ALL (${proxy.split('?')[0].split('/').pop()}): ${Object.keys(priceMap).length} 檔`);
-                            return priceMap;
-                        }
-                    }
-                    lastErr = 'TWSE 無資料';
-                } catch(e) {
-                    lastErr = e.message;
-                    console.warn('proxy 失敗:', proxy.split('?')[0], e.message);
-                }
-            }
-            throw new Error(`今日收盤抓取失敗（所有 proxy 均失敗）：${lastErr}`);
-        }
-
-        // ── 模式 B：歷史日期 → 逐支查 STOCK_DAY（批次，有延遲）──
-        // TWSE API：傳入月份第一天即可取得整個月資料，再找目標日
-        const yyyymm   = targetDate.slice(0,6) + '01'; // e.g. 20260601
-        // 目標日的民國格式（用於比對 TWSE 回傳的日期欄）
-        const twYear   = parseInt(targetDate.slice(0,4)) - 1911;
-        const twMonth  = targetDate.slice(4,6);
-        const twDay    = targetDate.slice(6,8);
-        const twDateRE = new RegExp(`^${twYear}/${twMonth}/${twDay}$`);
-
-        const syms    = symbols || [];
-        const total   = syms.length;
-        const BATCH   = 5;    // 每批 5 支
-        const DELAY   = 1200; // 每批間隔 1.2 秒（TWSE 限制每 5 秒 3 次）
-        const PROXIES = [
-            'https://api.allorigins.win/get?url=',
-            'https://corsproxy.io/?',
-        ];
-        let proxyIdx = 0;
-        const getProxy = () => PROXIES[proxyIdx % PROXIES.length];
-
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-        let done = 0;
-        for (let i = 0; i < syms.length; i += BATCH) {
-            const batch = syms.slice(i, i + BATCH);
-            await Promise.all(batch.map(async sym => {
-                try {
-                    const url    = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date=${yyyymm}&stockNo=${sym}&response=json`;
-                    const pUrl   = getProxy() + encodeURIComponent(url);
-                    const res    = await fetchWithTimeout(pUrl, 10000);
-                    if (!res.ok) { proxyIdx++; return; }
-                    const text   = await res.text();
-                    let data;
-                    try { const wrap=JSON.parse(text); data=typeof wrap.contents==='string'?JSON.parse(wrap.contents):wrap; }
-                    catch { data=JSON.parse(text); }
-                    if (!data?.data) return;
-                    // 找目標日（TWSE 日期格式：民國 YYY/MM/DD）
-                    const row = data.data.find(r => twDateRE.test((r[0]||'').trim()));
-                    if (row) {
-                        const price = parseFloat((row[6]||'0').replace(/,/g,''));
-                        if (price > 0) priceMap[sym] = price;
-                    }
-                } catch(e) {
-                    console.warn(`${sym} 抓取失敗:`, e.message);
-                }
-                done++;
-                if (onProgress) onProgress(done, total, sym);
-            }));
-            if (i + BATCH < syms.length) await sleep(DELAY);
-        }
-
-        console.log(`✅ 歷史收盤（${targetDate}）抓取完成：${Object.keys(priceMap).length}/${total} 檔`);
-        return priceMap;
-    }
 
     // 初始化回測日期清單（與歷史查詢共用 index.json）
     async function initBacktestDateList() {
@@ -4390,87 +4448,19 @@
             }
         }
 
-        // 檢查入場 TOP50 有哪些股票在 todayPrices 缺漏
+        // 檢查入場 TOP50 有哪些股票在 todayPrices 缺漏(無 TWSE 補抓,缺漏就是缺漏)
         const neededSyms = entryPayload.top50
             .filter(r => (r.綜合評分||0) >= minScore && passTagFilter(r))
             .map(r => r.代號);
         const missingSyms = neededSyms.filter(s => !todayPrices[s]);
 
-        // 資料庫已有部分，但仍缺漏 → 用 TWSE 補抓缺的部分
-        if (priceSource === 'twse' && Object.keys(todayPrices).length > 0 && missingSyms.length > 0 && priceDateStr) {
-            msg.innerHTML = `資料庫已有 ${Object.keys(todayPrices).length} 檔，TWSE 補抓缺漏 ${missingSyms.length} 檔…<br>
-                <div style="background:var(--border);border-radius:4px;height:8px;margin-top:6px;overflow:hidden">
-                    <div id="btProgressBar" style="background:#10b981;height:100%;width:0;transition:width .3s"></div>
-                </div>
-                <span id="btProgressText" style="font-size:11px;color:var(--text-dim)">0 / ${missingSyms.length}</span>`;
-            const onProg = (done,total,sym) => {
-                const bar=document.getElementById('btProgressBar');
-                const txt=document.getElementById('btProgressText');
-                if(bar)bar.style.width=(done/total*100).toFixed(0)+'%';
-                if(txt)txt.textContent=`${done} / ${total}（${sym}）`;
-            };
-            try {
-                const fetched = await fetchTWSEPrices(priceDateStr, missingSyms, onProg);
-                Object.assign(todayPrices, fetched);
-                console.log(`✅ TWSE 補抓 ${Object.keys(fetched).length} 檔`);
-                msg.textContent = `✅ 資料庫+TWSE 共 ${Object.keys(todayPrices).length} 支收盤價，比對中…`;
-            } catch(e) {
-                console.warn('TWSE 補抓失敗:', e.message);
-            }
-        }
-
-        // 若本地完全沒有，才去 TWSE 全抓
         if (priceSource === 'twse' && Object.keys(todayPrices).length === 0) {
-            const isToday = (() => {
-                const n = new Date();
-                const t = `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`;
-                return !priceDateStr || priceDateStr === t;
-            })();
-
-            if (isToday) {
-                msg.textContent = '從 TWSE 抓取今日收盤價（約 5-10 秒）…';
-            } else {
-                const syms = entryPayload.top50.map(r => r.代號);
-                msg.innerHTML = `逐支查詢歷史收盤（${priceDateStr}）共 ${syms.length} 支，約 ${Math.ceil(syms.length/5)*1.2|0} 秒…<br>
-                    <div id="btProgress" style="background:var(--border);border-radius:4px;height:8px;margin-top:6px;overflow:hidden">
-                        <div id="btProgressBar" style="background:#10b981;height:100%;width:0;transition:width .3s"></div>
-                    </div>
-                    <span id="btProgressText" style="font-size:11px;color:var(--text-dim)">0 / ${syms.length}</span>`;
-
-                const onProgress = (done, total, sym) => {
-                    const pct = (done/total*100).toFixed(0);
-                    const bar = document.getElementById('btProgressBar');
-                    const txt = document.getElementById('btProgressText');
-                    if (bar) bar.style.width = pct + '%';
-                    if (txt) txt.textContent = `${done} / ${total}（${sym}）`;
-                };
-
-                try {
-                    todayPrices = await fetchTWSEPrices(priceDateStr, syms, onProgress);
-                } catch(e) {
-                    msg.textContent = `❌ ${e.message}`;
-                    return;
-                }
-                const loaded = Object.keys(todayPrices).length;
-                msg.textContent = `✅ 已取得 ${loaded}/${syms.length} 支歷史收盤，比對中…`;
-                goto_result = true;
-            }
-
-            if (isToday) {
-                try {
-                    todayPrices = await fetchTWSEPrices(priceDateStr, null, null);
-                } catch(e) {
-                    msg.textContent = `❌ ${e.message}，請改用 CSV 上傳`;
-                    return;
-                }
-            }
-
-            const loaded = Object.keys(todayPrices).length;
-            if (loaded === 0) {
-                msg.textContent = '❌ TWSE 抓取失敗，請改用 CSV 上傳，或確認網路連線';
-                return;
-            }
-            if (isToday) msg.textContent = `✅ 已載入 ${loaded} 檔收盤價，比對中…`;
+            msg.innerHTML = `❌ 資料庫中找不到對應日期的收盤價快照。<br>
+                <span style="color:var(--text-dim);font-size:12px">請先到「📦 批次匯入歷史資料」上傳該日期的 CSV,或改用「上傳 CSV」手動提供收盤價。</span>`;
+            return;
+        }
+        if (priceSource === 'twse' && missingSyms.length > 0) {
+            console.warn(`⚠️ ${missingSyms.length} 檔在資料庫快照中缺收盤價(將顯示為-)：`, missingSyms.slice(0,10));
         } else if (priceSource === 'csv') {
             const fileEl = document.getElementById('backtestPriceFile');
             if (!fileEl?.files.length) { alert('請上傳 CSV 檔案'); return; }
@@ -4608,6 +4598,11 @@
 
 
     // ── 自訂族群對應 ──────────────────────────────────────
+    // ── 內建股票→相關產業對照表(供批次匯入歷史資料補產業用,1180檔) ──
+    const STOCK_DICT = {"1101":{"m":1843.0,"i":"水泥–水泥生產,水泥–水泥製品,水泥–原料開採,水泥–預拌混凝土"},"1102":{"m":1270.0,"i":"水泥–水泥生產,水泥–水泥製品,水泥–原料開採,水泥–高爐水泥,水泥–預拌混凝土"},"1103":{"m":109.0,"i":"水泥–水泥生產"},"1104":{"m":200.0,"i":"水泥–水泥生產,水泥–預拌混凝土"},"1108":{"m":56.3,"i":"水泥–水泥生產,水泥–水泥製品,水泥–預拌混凝土"},"1109":{"m":50.0,"i":"水泥–水泥生產,水泥–水泥製品,水泥–預拌混凝土"},"1110":{"m":88.9,"i":"水泥–水泥生產,水泥–原料開採,水泥–預拌混凝土"},"1201":{"m":63.5,"i":"食品生產–食品加工,食品生產–調味料,飲料類–乳品,飲料類–咖啡,飲料類–飲料生產"},"1210":{"m":489.0,"i":"食品生產–肉品加工,食品原料–小麥、麵粉,食品原料–玉米,食品原料–食用油,食品原料–黃豆,食品原料–飼料"},"1215":{"m":339.0,"i":"食品生產–肉品加工,食品生產–食品加工,食品原料–小麥、麵粉,食品原料–玉米,食品原料–黃豆,食品原料–飼料"},"1216":{"m":4233.0,"i":"食品生產–肉品加工,食品生產–食品加工,食品生產–速食麵,食品生產–調味料,食品生產–麵包、糕餅、零食,食品原料–小麥、麵粉,食品原料–玉米,食品原料–食用油,食品原料–黃豆,航運–倉儲物流,飲料類–乳品,飲料類–咖啡,飲料類–飲料生產"},"1217":{"m":48.9,"i":"食品生產–食品加工,飲料類–乳品,飲料類–飲料生產"},"1218":{"m":89.5,"i":"食品生產–食品加工,食品生產–麵包、糕餅、零食,食品原料–小麥、麵粉,食品原料–玉米,食品原料–食用油,食品原料–黃豆,食品原料–飼料,飲料類–茶葉,飲料類–飲料生產"},"1219":{"m":43.0,"i":"食品生產–食品加工,食品生產–寵物食品,食品原料–小麥、麵粉,食品原料–玉米,食品原料–食用油,食品原料–黃豆,食品原料–飼料"},"1225":{"m":78.1,"i":"食品生產–肉品加工,食品原料–小麥、麵粉,食品原料–玉米,食品原料–食用油,食品原料–黃豆,食品原料–飼料"},"1227":{"m":266.0,"i":"食品生產–食品加工,食品生產–嬰幼兒食品,食品原料–小麥、麵粉,食品原料–食用油,食品原料–黃豆,飲料類–乳品,飲料類–飲料生產"},"1229":{"m":753.0,"i":"食品原料–小麥、麵粉"},"1231":{"m":261.0,"i":"食品生產–食品加工,食品生產–麵包、糕餅、零食"},"1232":{"m":229.0,"i":"食品原料–食用油,食品原料–黃豆,飲料類–飲料生產"},"1234":{"m":140.0,"i":"飲料類–咖啡,飲料類–酒類,飲料類–飲料生產"},"1236":{"m":22.4,"i":"食品生產–食品加工,食品生產–麵包、糕餅、零食"},"1256":{"m":64.9,"i":"飲料類–飲料生產"},"1301":{"m":3291.0,"i":"塑膠"},"1303":{"m":11024.0,"i":"塑膠"},"1304":{"m":161.0,"i":"塑膠"},"1305":{"m":77.0,"i":"塑膠"},"1307":{"m":145.0,"i":"塑膠"},"1308":{"m":82.8,"i":"塑膠"},"1309":{"m":58.6,"i":"塑膠"},"1310":{"m":48.9,"i":"塑膠"},"1312":{"m":149.0,"i":"塑膠"},"1313":{"m":154.0,"i":"塑膠"},"1314":{"m":294.0,"i":"塑膠"},"1315":{"m":61.7,"i":"塑膠"},"1316":{"m":41.2,"i":"建材營造"},"1319":{"m":587.0,"i":"汽車"},"1321":{"m":73.1,"i":"塑膠"},"1323":{"m":18.1,"i":"塑膠"},"1324":{"m":7.81,"i":"塑膠"},"1325":{"m":22.3,"i":"塑膠"},"1326":{"m":3177.0,"i":"塑膠"},"1337":{"m":13.6,"i":"塑膠"},"1339":{"m":32.6,"i":"汽車"},"1342":{"m":90.5,"i":"其他"},"1402":{"m":1544.0,"i":"紡織纖維"},"1409":{"m":414.0,"i":"紡織纖維"},"1416":{"m":20.6,"i":"其他"},"1417":{"m":16.2,"i":"紡織纖維"},"1419":{"m":201.0,"i":"紡織纖維"},"1423":{"m":39.5,"i":"紡織纖維"},"1432":{"m":19.0,"i":"貿易百貨"},"1434":{"m":286.0,"i":"紡織纖維"},"1436":{"m":92.2,"i":"建材營造"},"1437":{"m":59.7,"i":"其他"},"1438":{"m":24.7,"i":"建材營造"},"1440":{"m":220.0,"i":"紡織纖維"},"1442":{"m":103.0,"i":"建材營造"},"1444":{"m":70.1,"i":"紡織纖維"},"1446":{"m":23.0,"i":"紡織纖維"},"1447":{"m":54.9,"i":"紡織纖維"},"1449":{"m":17.9,"i":"紡織纖維"},"1451":{"m":33.2,"i":"紡織纖維"},"1452":{"m":14.8,"i":"紡織纖維"},"1455":{"m":54.2,"i":"紡織纖維"},"1456":{"m":14.5,"i":"紡織纖維"},"1457":{"m":45.3,"i":"紡織纖維"},"1460":{"m":50.0,"i":"紡織纖維"},"1464":{"m":43.8,"i":"紡織纖維"},"1466":{"m":15.9,"i":"紡織纖維"},"1471":{"m":16.5,"i":"電子零組件–電源供應器"},"1472":{"m":47.8,"i":"紡織纖維"},"1473":{"m":29.5,"i":"紡織纖維"},"1476":{"m":897.0,"i":"紡織纖維"},"1477":{"m":546.0,"i":"紡織纖維"},"1503":{"m":1258.0,"i":"電機機械"},"1504":{"m":1664.0,"i":"電機機械"},"1506":{"m":30.9,"i":"電機機械"},"1513":{"m":888.0,"i":"電機機械"},"1514":{"m":332.0,"i":"電機機械"},"1515":{"m":47.0,"i":"電機機械"},"1517":{"m":23.1,"i":"電機機械"},"1519":{"m":2631.0,"i":"電機機械"},"1522":{"m":100.0,"i":"汽車"},"1524":{"m":49.5,"i":"汽車"},"1527":{"m":46.1,"i":"電機機械"},"1528":{"m":48.6,"i":"電機機械"},"1529":{"m":35.5,"i":"電機機械"},"1530":{"m":28.9,"i":"電機機械"},"1532":{"m":101.0,"i":"電機機械"},"1533":{"m":37.6,"i":"航運–巴士製造、維修"},"1535":{"m":62.4,"i":"電機機械"},"1536":{"m":136.0,"i":"汽車"},"1537":{"m":105.0,"i":"電機機械"},"1540":{"m":18.7,"i":"電機機械"},"1558":{"m":59.1,"i":"電機機械"},"1560":{"m":1047.0,"i":"電機機械"},"1563":{"m":156.0,"i":"汽車"},"1568":{"m":47.5,"i":"汽車"},"1582":{"m":135.0,"i":"電子零組件"},"1587":{"m":22.5,"i":"汽車"},"1590":{"m":2760.0,"i":"電機機械"},"1597":{"m":141.0,"i":"電機機械"},"1598":{"m":36.2,"i":"生技醫療"},"1603":{"m":60.8,"i":"電器電纜"},"1604":{"m":88.9,"i":"航運–倉儲物流"},"1605":{"m":1728.0,"i":"電器電纜"},"1608":{"m":219.0,"i":"電器電纜"},"1609":{"m":300.0,"i":"電器電纜"},"1611":{"m":42.0,"i":"電器電纜"},"1612":{"m":121.0,"i":"電器電纜"},"1615":{"m":88.9,"i":"電器電纜"},"1616":{"m":43.0,"i":"電器電纜"},"1617":{"m":27.5,"i":"電器電纜"},"1618":{"m":80.5,"i":"電器電纜"},"1623":{"m":145.0,"i":"興電器電纜"},"1626":{"m":14.9,"i":"電器電纜"},"1702":{"m":93.5,"i":"食品生產–食品加工,食品生產–速食麵,食品原料–小麥、麵粉,食品原料–食用油,食品原料–黃豆"},"1707":{"m":148.0,"i":"生物科技"},"1708":{"m":125.0,"i":"航運–海運,航運–散裝海運"},"1709":{"m":101.0,"i":"化工"},"1710":{"m":121.0,"i":"化工"},"1711":{"m":248.0,"i":"化工"},"1712":{"m":165.0,"i":"化工"},"1713":{"m":75.5,"i":"化工"},"1714":{"m":202.0,"i":"化工"},"1717":{"m":849.0,"i":"化工"},"1718":{"m":166.0,"i":"化工"},"1720":{"m":112.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"1721":{"m":44.0,"i":"化工"},"1722":{"m":472.0,"i":"化工"},"1723":{"m":206.0,"i":"化工"},"1725":{"m":68.1,"i":"化工"},"1726":{"m":127.0,"i":"化工"},"1727":{"m":120.0,"i":"化工"},"1730":{"m":33.5,"i":"化工"},"1731":{"m":29.0,"i":"醫藥產業"},"1733":{"m":29.3,"i":"生物科技,醫療器材–血糖機,醫療器材–醫療耗材"},"1734":{"m":60.7,"i":"生物科技,醫藥產業"},"1735":{"m":23.0,"i":"化工"},"1736":{"m":363.0,"i":"生技醫療"},"1737":{"m":63.6,"i":"生物科技,食品原料–鹽,飲料類–飲料生產"},"1752":{"m":33.1,"i":"醫藥產業"},"1760":{"m":51.4,"i":"生物科技,醫藥產業–新藥研發,醫藥產業"},"1762":{"m":27.3,"i":"醫藥產業"},"1773":{"m":540.0,"i":"化工"},"1776":{"m":11.3,"i":"化工"},"1783":{"m":34.8,"i":"生技醫療"},"1786":{"m":40.0,"i":"生物科技"},"1789":{"m":162.0,"i":"生物科技,醫藥產業"},"1795":{"m":515.0,"i":"生技醫療"},"1802":{"m":2073.0,"i":"玻璃陶瓷"},"1806":{"m":32.1,"i":"玻璃陶瓷"},"1808":{"m":288.0,"i":"建材營造"},"1809":{"m":85.9,"i":"玻璃陶瓷"},"1810":{"m":60.2,"i":"玻璃陶瓷"},"1817":{"m":29.5,"i":"玻璃陶瓷"},"1903":{"m":125.0,"i":"造紙"},"1904":{"m":256.0,"i":"造紙"},"1905":{"m":189.0,"i":"造紙"},"1907":{"m":468.0,"i":"造紙"},"1909":{"m":135.0,"i":"造紙"},"2002":{"m":3005.0,"i":"鋼鐵"},"2006":{"m":507.0,"i":"鋼鐵"},"2007":{"m":39.2,"i":"鋼鐵"},"2009":{"m":142.0,"i":"鋼鐵"},"2010":{"m":161.0,"i":"航運–貨櫃製造、維修"},"2012":{"m":44.1,"i":"鋼鐵"},"2013":{"m":85.8,"i":"鋼鐵"},"2014":{"m":254.0,"i":"鋼鐵"},"2015":{"m":353.0,"i":"鋼鐵"},"2017":{"m":41.7,"i":"鋼鐵"},"2020":{"m":58.1,"i":"鋼鐵"},"2022":{"m":26.0,"i":"鋼鐵"},"2023":{"m":257.0,"i":"鋼鐵"},"2025":{"m":24.3,"i":"鋼鐵"},"2027":{"m":1060.0,"i":"鋼鐵"},"2028":{"m":54.1,"i":"鋼鐵"},"2029":{"m":66.2,"i":"鋼鐵"},"2030":{"m":52.0,"i":"鋼鐵"},"2031":{"m":125.0,"i":"鋼鐵"},"2032":{"m":23.0,"i":"鋼鐵"},"2033":{"m":12.7,"i":"鋼鐵"},"2034":{"m":110.0,"i":"鋼鐵"},"2038":{"m":26.9,"i":"鋼鐵"},"2049":{"m":1185.0,"i":"電機機械"},"2059":{"m":6542.0,"i":"電子零組件"},"2062":{"m":38.0,"i":"其他"},"2069":{"m":31.3,"i":"鋼鐵"},"2072":{"m":334.0,"i":"興鋼鐵"},"2101":{"m":238.0,"i":"橡膠"},"2102":{"m":86.9,"i":"橡膠"},"2103":{"m":177.0,"i":"橡膠"},"2104":{"m":102.0,"i":"橡膠"},"2105":{"m":961.0,"i":"橡膠"},"2106":{"m":170.0,"i":"橡膠"},"2107":{"m":77.1,"i":"橡膠"},"2108":{"m":141.0,"i":"橡膠"},"2114":{"m":69.4,"i":"橡膠"},"2115":{"m":21.5,"i":"汽車"},"2201":{"m":301.0,"i":"汽車"},"2204":{"m":306.0,"i":"汽車"},"2206":{"m":483.0,"i":"汽車"},"2207":{"m":2685.0,"i":"汽車"},"2208":{"m":227.0,"i":"航運–造船"},"2211":{"m":398.0,"i":"航運–貨櫃製造、維修"},"2227":{"m":148.0,"i":"汽車"},"2228":{"m":71.0,"i":"汽車"},"2231":{"m":126.0,"i":"汽車"},"2233":{"m":184.0,"i":"汽車"},"2236":{"m":84.8,"i":"汽車"},"2241":{"m":52.9,"i":"汽車"},"2243":{"m":35.9,"i":"汽車"},"2247":{"m":192.0,"i":"汽車"},"2250":{"m":22.5,"i":"汽車"},"2258":{"m":578.0,"i":"創新板"},"2301":{"m":4875.0,"i":"3C周邊產品–光碟機,通信網路–光通訊,電子零組件–電源供應器"},"2302":{"m":78.2,"i":"半導體–IC製造"},"2303":{"m":18300.0,"i":"半導體–IC製造"},"2305":{"m":69.2,"i":"3C周邊產品,3C周邊產品–掃描器"},"2308":{"m":55847.0,"i":"電子零組件–電源供應器"},"2312":{"m":535.0,"i":"3C周邊產品–印表機,電腦系統–筆記型電腦"},"2313":{"m":3093.0,"i":"印刷電路板 (PCB)"},"2316":{"m":376.0,"i":"印刷電路板 (PCB)"},"2317":{"m":37667.0,"i":"3C周邊產品–印表機,電子零組件–連接器,電腦系統–伺服器,電腦系統–筆記型電腦"},"2323":{"m":128.0,"i":"3C周邊產品–光碟片"},"2324":{"m":1664.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"2327":{"m":22372.0,"i":"被動元件"},"2328":{"m":277.0,"i":"電子零組件–連接器"},"2329":{"m":366.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"2330":{"m":624970.0,"i":"半導體–IC製造"},"2331":{"m":125.0,"i":"電子零組件–主機板,電腦系統–筆記型電腦"},"2332":{"m":121.0,"i":"通信網路–網路設備"},"2337":{"m":3348.0,"i":"半導體–IC設計"},"2338":{"m":196.0,"i":"半導體–IC製造"},"2340":{"m":175.0,"i":"半導體–IC製造,LED"},"2342":{"m":86.9,"i":"半導體–IC製造"},"2344":{"m":9833.0,"i":"半導體–DRAM製造,半導體–IC設計"},"2345":{"m":13663.0,"i":"通信網路–網路設備"},"2347":{"m":1558.0,"i":"資訊通路"},"2348":{"m":117.0,"i":"其他"},"2349":{"m":96.1,"i":"3C周邊產品–光碟片"},"2351":{"m":355.0,"i":"半導體–IC製造,半導體–導線架"},"2352":{"m":488.0,"i":"3C周邊產品–掃描器,醫療器材–醫療耗材"},"2353":{"m":1048.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"2354":{"m":819.0,"i":"電子零組件–機殼"},"2355":{"m":230.0,"i":"印刷電路板 (PCB)"},"2356":{"m":2429.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"2357":{"m":5860.0,"i":"電子零組件–主機板,電腦系統–筆記型電腦,手機相關"},"2359":{"m":230.0,"i":"其他電子"},"2360":{"m":9823.0,"i":"其他電子"},"2362":{"m":296.0,"i":"電腦系統–筆記型電腦"},"2363":{"m":324.0,"i":"半導體–IC設計"},"2364":{"m":35.6,"i":"電腦及週邊設備"},"2365":{"m":75.4,"i":"3C周邊產品"},"2367":{"m":433.0,"i":"印刷電路板 (PCB)"},"2368":{"m":7006.0,"i":"印刷電路板 (PCB)"},"2369":{"m":140.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"2371":{"m":609.0,"i":"電機機械"},"2374":{"m":255.0,"i":"消費性電子產品–數位相機"},"2375":{"m":238.0,"i":"被動元件"},"2376":{"m":2304.0,"i":"電子零組件–主機板,電腦系統–伺服器,電腦系統–筆記型電腦"},"2377":{"m":1170.0,"i":"電子零組件–主機板,電腦系統–伺服器,電腦系統–筆記型電腦"},"2379":{"m":4222.0,"i":"半導體–IC設計"},"2382":{"m":14523.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"2383":{"m":20066.0,"i":"印刷電路板 (PCB)"},"2385":{"m":866.0,"i":"3C周邊產品,電子零組件–電源供應器"},"2387":{"m":77.1,"i":"3C周邊產品"},"2388":{"m":453.0,"i":"半導體–IC設計"},"2390":{"m":23.8,"i":"消費性電子產品–監控系統"},"2392":{"m":204.0,"i":"電子零組件–連接器,電子零組件–電源供應器"},"2393":{"m":313.0,"i":"LED"},"2395":{"m":4289.0,"i":"電腦及週邊設備"},"2397":{"m":69.6,"i":"電腦及週邊設備"},"2399":{"m":85.6,"i":"電子零組件–主機板"},"2401":{"m":191.0,"i":"半導體–IC設計"},"2402":{"m":215.0,"i":"3C周邊產品,印刷電路板 (PCB)"},"2404":{"m":2411.0,"i":"其他電子"},"2405":{"m":64.9,"i":"電腦及週邊設備"},"2406":{"m":122.0,"i":"光電"},"2408":{"m":14238.0,"i":"半導體–DRAM製造,半導體–IC設計"},"2409":{"m":2125.0,"i":"面板業"},"2412":{"m":11171.0,"i":"通信網路–電信/數據服務"},"2413":{"m":72.0,"i":"電子零組件–電源供應器"},"2414":{"m":102.0,"i":"資訊通路"},"2415":{"m":27.3,"i":"電子零組件"},"2417":{"m":72.5,"i":"3C周邊產品"},"2419":{"m":94.6,"i":"通信網路–網路設備"},"2420":{"m":93.4,"i":"電子零組件–電源供應器"},"2421":{"m":416.0,"i":"電子零組件"},"2423":{"m":113.0,"i":"其他電子"},"2425":{"m":38.0,"i":"3C周邊產品,電腦系統–伺服器"},"2426":{"m":246.0,"i":"通信網路–光通訊,LED"},"2427":{"m":44.2,"i":"軟體業–系統整合"},"2428":{"m":405.0,"i":"被動元件"},"2429":{"m":33.0,"i":"印刷電路板 (PCB)"},"2430":{"m":21.5,"i":"資訊通路"},"2431":{"m":12.9,"i":"電子零組件–電源供應器"},"2432":{"m":17.6,"i":"軟體業"},"2434":{"m":14.4,"i":"半導體–IC製造"},"2436":{"m":147.0,"i":"半導體–IC設計"},"2438":{"m":16.0,"i":"LED"},"2439":{"m":234.0,"i":"手機相關"},"2440":{"m":23.6,"i":"電子零組件"},"2441":{"m":768.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"2442":{"m":64.6,"i":"電腦及週邊設備"},"2444":{"m":13.6,"i":"通信網路–網路設備"},"2449":{"m":3772.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"2450":{"m":75.3,"i":"資訊通路"},"2451":{"m":1344.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"2453":{"m":56.6,"i":"軟體業–系統整合"},"2454":{"m":70411.0,"i":"半導體–IC設計"},"2455":{"m":769.0,"i":"通信網路–網路設備,LED"},"2457":{"m":122.0,"i":"電子零組件–電源供應器"},"2458":{"m":523.0,"i":"半導體–IC設計"},"2459":{"m":68.0,"i":"電子通路"},"2460":{"m":58.9,"i":"電子零組件"},"2461":{"m":32.2,"i":"其他電子"},"2462":{"m":38.4,"i":"電子零組件"},"2464":{"m":355.0,"i":"其他電子"},"2465":{"m":76.0,"i":"3C周邊產品"},"2466":{"m":86.9,"i":"通信網路–光通訊"},"2467":{"m":939.0,"i":"電子零組件"},"2468":{"m":26.6,"i":"軟體業–系統整合"},"2471":{"m":25.4,"i":"軟體業–系統整合"},"2472":{"m":662.0,"i":"被動元件"},"2474":{"m":1137.0,"i":"電子零組件–機殼"},"2476":{"m":273.0,"i":"電子零組件"},"2477":{"m":34.7,"i":"消費性電子產品"},"2478":{"m":339.0,"i":"被動元件"},"2480":{"m":163.0,"i":"軟體業–系統整合"},"2481":{"m":611.0,"i":"半導體–IC製造"},"2482":{"m":13.5,"i":"其他電子"},"2483":{"m":42.8,"i":"半導體–導線架,電子零組件–連接器"},"2484":{"m":114.0,"i":"電子零組件"},"2485":{"m":196.0,"i":"通信網路–網路設備"},"2486":{"m":647.0,"i":"半導體–導線架,LED"},"2488":{"m":43.8,"i":"消費性電子產品,航運–倉儲物流"},"2489":{"m":294.0,"i":"光電"},"2491":{"m":33.6,"i":"光電"},"2492":{"m":2722.0,"i":"被動元件"},"2493":{"m":347.0,"i":"電子零組件"},"2495":{"m":143.0,"i":"3C周邊產品"},"2497":{"m":78.8,"i":"汽車"},"2498":{"m":388.0,"i":"手機相關"},"2501":{"m":311.0,"i":"建材營造"},"2504":{"m":396.0,"i":"水泥–預拌混凝土"},"2505":{"m":71.4,"i":"建材營造"},"2509":{"m":32.7,"i":"建材營造"},"2511":{"m":133.0,"i":"建材營造"},"2514":{"m":54.1,"i":"其他"},"2515":{"m":215.0,"i":"建材營造"},"2516":{"m":30.2,"i":"建材營造"},"2520":{"m":222.0,"i":"建材營造"},"2524":{"m":144.0,"i":"建材營造"},"2527":{"m":108.0,"i":"建材營造"},"2528":{"m":97.7,"i":"建材營造"},"2530":{"m":168.0,"i":"建材營造"},"2534":{"m":86.8,"i":"建材營造"},"2535":{"m":254.0,"i":"建材營造"},"2536":{"m":74.4,"i":"建材營造"},"2537":{"m":36.1,"i":"建材營造"},"2538":{"m":44.9,"i":"建材營造"},"2539":{"m":477.0,"i":"建材營造"},"2540":{"m":521.0,"i":"建材營造"},"2542":{"m":972.0,"i":"建材營造"},"2543":{"m":233.0,"i":"建材營造"},"2545":{"m":146.0,"i":"建材營造"},"2546":{"m":126.0,"i":"建材營造"},"2547":{"m":116.0,"i":"建材營造"},"2548":{"m":331.0,"i":"建材營造"},"2597":{"m":553.0,"i":"水泥–水泥生產,水泥–預拌混凝土"},"2601":{"m":47.9,"i":"航運–海運,航運–散裝海運"},"2603":{"m":4179.0,"i":"航運–海運,航運–貨櫃海運,航運–貨櫃場"},"2605":{"m":181.0,"i":"航運–石油海運,航運–海運,航運–散裝海運"},"2606":{"m":520.0,"i":"航運–石油海運,航運–海運,航運–散裝海運"},"2607":{"m":264.0,"i":"航運–巴士客運,航運–倉儲物流,航運–貨櫃場,航運–陸上客運,航運–陸上貨運,航運–陸運"},"2608":{"m":136.0,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"2609":{"m":1791.0,"i":"航運–海運,航運–貨櫃海運,航運–貨櫃場"},"2610":{"m":1346.0,"i":"航運–空運,航運–倉儲物流"},"2611":{"m":26.5,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"2612":{"m":106.0,"i":"航運–倉儲物流,航運–海運,航運–陸上貨運,航運–陸運,航運–散裝海運"},"2613":{"m":32.5,"i":"航運–貨櫃場,航運–貨櫃製造、維修"},"2614":{"m":61.7,"i":"食品生產–寵物食品"},"2615":{"m":2256.0,"i":"航運–海運,航運–貨櫃海運,航運–貨櫃場"},"2616":{"m":19.0,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"2617":{"m":125.0,"i":"航運–石油海運,航運–海運,航運–散裝海運"},"2618":{"m":2298.0,"i":"航運–空運"},"2630":{"m":83.6,"i":"航運–飛機製造、維修"},"2633":{"m":1472.0,"i":"航運–陸上客運,航運–陸運,航運–鐵路運輸"},"2634":{"m":445.0,"i":"航運–飛機製造、維修"},"2636":{"m":99.6,"i":"航運–倉儲物流"},"2637":{"m":578.0,"i":"航運–海運,航運–散裝海運"},"2642":{"m":20.1,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"2645":{"m":637.0,"i":"航運–飛機製造、維修"},"2646":{"m":639.0,"i":"航運業"},"2704":{"m":167.0,"i":"觀光"},"2705":{"m":31.6,"i":"觀光"},"2707":{"m":228.0,"i":"觀光"},"2723":{"m":120.0,"i":"食品生產–麵包、糕餅、零食,飲料類–咖啡,飲料類–飲料生產"},"2727":{"m":204.0,"i":"觀光"},"2731":{"m":142.0,"i":"觀光"},"2739":{"m":32.8,"i":"觀光"},"2753":{"m":125.0,"i":"觀光"},"2762":{"m":96.0,"i":"運動休閒"},"2801":{"m":2689.0,"i":"金融保險"},"2812":{"m":1192.0,"i":"金融保險"},"2816":{"m":74.8,"i":"金融保險"},"2820":{"m":240.0,"i":"金融保險"},"2832":{"m":143.0,"i":"金融保險"},"2834":{"m":1701.0,"i":"金融保險"},"2836":{"m":227.0,"i":"金融保險"},"2838":{"m":987.0,"i":"金融保險"},"2845":{"m":630.0,"i":"金融保險"},"2849":{"m":286.0,"i":"金融保險"},"2850":{"m":449.0,"i":"金融保險"},"2851":{"m":312.0,"i":"金融保險"},"2852":{"m":79.4,"i":"金融保險"},"2855":{"m":836.0,"i":"金融保險"},"2867":{"m":516.0,"i":"金融保險"},"2880":{"m":5337.0,"i":"金融保險"},"2881":{"m":19330.0,"i":"金融保險"},"2881B":{"m":417.0,"i":"金控業"},"2882":{"m":16943.0,"i":"金融保險"},"2882A":{"m":517.0,"i":"金控業"},"2883":{"m":5706.0,"i":"金融保險"},"2883B":{"m":131.0,"i":"金控業"},"2884":{"m":5726.0,"i":"金融保險"},"2885":{"m":9065.0,"i":"金融保險"},"2886":{"m":6749.0,"i":"金融保險"},"2887":{"m":8069.0,"i":"金融保險"},"2887E":{"m":254.0,"i":"金控業"},"2887G":{"m":32.4,"i":"金控業"},"2887H":{"m":90.4,"i":"金控業"},"2887I":{"m":294.0,"i":"金控業"},"2887Z1":{"m":54.2,"i":"金控業"},"2889":{"m":554.0,"i":"金融保險"},"2890":{"m":5772.0,"i":"金融保險"},"2891":{"m":14148.0,"i":"金融保險"},"2892":{"m":4688.0,"i":"金融保險"},"2897":{"m":295.0,"i":"金融保險"},"2897B":{"m":29.5,"i":"銀行業"},"2903":{"m":339.0,"i":"貿易百貨"},"2905":{"m":168.0,"i":"貿易百貨"},"2906":{"m":27.0,"i":"貿易百貨"},"2908":{"m":106.0,"i":"貿易百貨"},"2911":{"m":8.42,"i":"貿易百貨"},"2912":{"m":2324.0,"i":"貿易百貨"},"2913":{"m":88.1,"i":"食品生產–食品加工,飲料類–茶葉"},"2915":{"m":589.0,"i":"貿易百貨"},"2923":{"m":410.0,"i":"建材營造"},"2929":{"m":6.57,"i":"貿易百貨"},"3002":{"m":23.4,"i":"電子零組件–電源供應器"},"3003":{"m":109.0,"i":"電子零組件–連接器"},"3004":{"m":86.6,"i":"鋼鐵"},"3005":{"m":634.0,"i":"電腦及週邊設備"},"3006":{"m":706.0,"i":"半導體–IC設計"},"3008":{"m":6795.0,"i":"光電"},"3010":{"m":340.0,"i":"電子通路"},"3011":{"m":18.9,"i":"電子零組件"},"3013":{"m":232.0,"i":"電子零組件–機殼"},"3014":{"m":261.0,"i":"半導體–IC設計"},"3015":{"m":114.0,"i":"電子零組件–電源供應器"},"3016":{"m":365.0,"i":"半導體–IC製造"},"3017":{"m":9421.0,"i":"3C周邊產品"},"3019":{"m":448.0,"i":"消費性電子產品–數位相機"},"3021":{"m":29.4,"i":"電子零組件"},"3022":{"m":149.0,"i":"電腦及週邊設備"},"3023":{"m":786.0,"i":"電子零組件–連接器"},"3024":{"m":33.8,"i":"消費性電子產品"},"3025":{"m":40.3,"i":"通信網路–光通訊,通信網路–網路設備"},"3026":{"m":1496.0,"i":"被動元件"},"3027":{"m":27.3,"i":"通信網路–網路設備"},"3028":{"m":178.0,"i":"電子通路"},"3029":{"m":170.0,"i":"軟體業–系統整合"},"3030":{"m":804.0,"i":"其他電子"},"3031":{"m":48.5,"i":"LED"},"3032":{"m":97.3,"i":"電子零組件–電源供應器"},"3033":{"m":239.0,"i":"電子通路"},"3034":{"m":3140.0,"i":"半導體–IC設計"},"3035":{"m":545.0,"i":"半導體–IC設計"},"3036":{"m":2824.0,"i":"電子通路"},"3037":{"m":15380.0,"i":"印刷電路板 (PCB)"},"3038":{"m":36.0,"i":"面板業"},"3040":{"m":25.4,"i":"其他"},"3041":{"m":39.5,"i":"半導體–IC設計"},"3042":{"m":741.0,"i":"電子零組件"},"3043":{"m":9.28,"i":"其他電子"},"3044":{"m":3012.0,"i":"印刷電路板 (PCB)"},"3045":{"m":4431.0,"i":"通信網路–電信/數據服務"},"3046":{"m":44.6,"i":"電腦及週邊設備"},"3047":{"m":37.4,"i":"通信網路–網路設備"},"3048":{"m":198.0,"i":"電子通路"},"3049":{"m":116.0,"i":"面板業"},"3050":{"m":20.1,"i":"3C周邊產品–光碟片"},"3051":{"m":46.5,"i":"光電"},"3052":{"m":25.3,"i":"建材營造"},"3054":{"m":54.6,"i":"半導體–DRAM製造,生物科技"},"3055":{"m":105.0,"i":"電子通路"},"3056":{"m":73.3,"i":"建材營造"},"3057":{"m":13.4,"i":"3C周邊產品"},"3058":{"m":19.0,"i":"電子零組件–電源供應器"},"3059":{"m":150.0,"i":"消費性電子產品–數位相機"},"3060":{"m":52.1,"i":"3C周邊產品"},"3062":{"m":85.7,"i":"通信網路–網路設備"},"3090":{"m":956.0,"i":"被動元件"},"3092":{"m":33.4,"i":"電子零組件"},"3094":{"m":31.8,"i":"半導體–IC設計"},"3130":{"m":74.3,"i":"資訊服務"},"3135":{"m":186.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"3138":{"m":77.0,"i":"通信網路–網路設備"},"3149":{"m":215.0,"i":"光電"},"3167":{"m":731.0,"i":"電機機械"},"3168":{"m":36.0,"i":"面板業"},"3189":{"m":3815.0,"i":"半導體–IC製造,印刷電路板 (PCB)"},"3209":{"m":147.0,"i":"通信網路–網路設備"},"3229":{"m":29.4,"i":"印刷電路板 (PCB)"},"3231":{"m":5136.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"3257":{"m":48.8,"i":"半導體–IC設計"},"3296":{"m":28.8,"i":"電子零組件–電源供應器"},"3305":{"m":211.0,"i":"其他電子"},"3308":{"m":12.9,"i":"電子零組件–電源供應器"},"3311":{"m":38.8,"i":"手機相關"},"3312":{"m":115.0,"i":"電子通路"},"3321":{"m":20.9,"i":"印刷電路板 (PCB)"},"3338":{"m":66.1,"i":"電子零組件"},"3346":{"m":28.7,"i":"LED"},"3356":{"m":48.3,"i":"光電"},"3376":{"m":401.0,"i":"電子零組件"},"3380":{"m":189.0,"i":"通信網路–網路設備"},"3406":{"m":849.0,"i":"光電"},"3413":{"m":359.0,"i":"半導體"},"3416":{"m":142.0,"i":"電腦及週邊設備"},"3419":{"m":17.3,"i":"通信網路–光通訊,通信網路–網路設備"},"3437":{"m":31.0,"i":"LED"},"3443":{"m":6513.0,"i":"半導體–IC設計"},"3447":{"m":31.1,"i":"通信網路–網路設備"},"3450":{"m":823.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"3481":{"m":5145.0,"i":"面板業"},"3501":{"m":49.4,"i":"電子零組件"},"3504":{"m":104.0,"i":"光電"},"3515":{"m":305.0,"i":"電子零組件–主機板"},"3518":{"m":29.0,"i":"其他電子"},"3528":{"m":73.6,"i":"電子通路"},"3530":{"m":55.1,"i":"半導體–IC設計"},"3532":{"m":1513.0,"i":"半導體–IC製造"},"3533":{"m":2577.0,"i":"電子零組件"},"3535":{"m":106.0,"i":"光電"},"3543":{"m":34.1,"i":"光電"},"3545":{"m":128.0,"i":"半導體–IC設計"},"3550":{"m":40.1,"i":"電子零組件"},"3557":{"m":22.5,"i":"其他"},"3563":{"m":457.0,"i":"光電"},"3576":{"m":293.0,"i":"光電"},"3583":{"m":714.0,"i":"半導體"},"3588":{"m":37.4,"i":"半導體–IC設計"},"3591":{"m":34.8,"i":"LED"},"3592":{"m":209.0,"i":"半導體–IC設計"},"3596":{"m":422.0,"i":"通信網路–網路設備"},"3605":{"m":141.0,"i":"電子零組件–連接器"},"3607":{"m":20.5,"i":"電子零組件"},"3617":{"m":200.0,"i":"其他電子"},"3622":{"m":84.3,"i":"面板業"},"3645":{"m":129.0,"i":"印刷電路板 (PCB)"},"3652":{"m":30.2,"i":"電腦及週邊設備"},"3653":{"m":5818.0,"i":"半導體–導線架"},"3661":{"m":3596.0,"i":"半導體–IC設計"},"3665":{"m":4097.0,"i":"電子零組件–連接器"},"3669":{"m":32.9,"i":"光電"},"3673":{"m":351.0,"i":"面板業"},"3679":{"m":70.0,"i":"電子零組件"},"3686":{"m":13.2,"i":"半導體–IC製造"},"3694":{"m":94.2,"i":"通信網路–網路設備"},"3701":{"m":115.0,"i":"電腦及週邊設備"},"3702":{"m":1884.0,"i":"電子通路"},"3703":{"m":179.0,"i":"建材營造"},"3704":{"m":200.0,"i":"通信網路–光通訊,通信網路–網路設備"},"3705":{"m":152.0,"i":"醫藥產業–原料藥,醫藥產業"},"3706":{"m":1153.0,"i":"電腦系統–伺服器"},"3708":{"m":107.0,"i":"化工"},"3711":{"m":27405.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"3712":{"m":43.5,"i":"電腦及週邊設備"},"3714":{"m":496.0,"i":"LED"},"3715":{"m":508.0,"i":"印刷電路板 (PCB)"},"3716":{"m":52.0,"i":"生技"},"3717":{"m":46.9,"i":"汽車"},"4104":{"m":131.0,"i":"醫療器材–醫療耗材"},"4106":{"m":23.6,"i":"生技醫療"},"4119":{"m":52.8,"i":"醫藥產業"},"4133":{"m":12.5,"i":"生技醫療"},"4137":{"m":89.9,"i":"食品生產–保健食品,醫藥產業–保健食品"},"4142":{"m":74.7,"i":"醫藥產業"},"4155":{"m":22.1,"i":"醫療器材–血糖機"},"4164":{"m":60.8,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"4169":{"m":112.0,"i":"興生技"},"4178":{"m":38.1,"i":"醫藥產業"},"4195":{"m":12.6,"i":"生物科技"},"4306":{"m":107.0,"i":"塑膠"},"4438":{"m":69.3,"i":"紡織纖維"},"4441":{"m":136.0,"i":"興紡織"},"4526":{"m":99.8,"i":"電機機械"},"4532":{"m":118.0,"i":"電機機械"},"4536":{"m":148.0,"i":"其他"},"4540":{"m":68.6,"i":"電機機械"},"4545":{"m":28.6,"i":"電子零組件"},"4551":{"m":255.0,"i":"汽車"},"4552":{"m":25.0,"i":"電機機械"},"4555":{"m":33.5,"i":"電機機械"},"4557":{"m":23.8,"i":"汽車"},"4560":{"m":22.5,"i":"電機機械"},"4562":{"m":30.9,"i":"電機機械"},"4564":{"m":36.8,"i":"電機機械"},"4566":{"m":71.3,"i":"電機機械"},"4569":{"m":58.3,"i":"汽車"},"4571":{"m":96.2,"i":"電機機械"},"4572":{"m":57.8,"i":"電機機械"},"4576":{"m":265.0,"i":"電機機械"},"4582":{"m":20.0,"i":"興綠能環保"},"4583":{"m":505.0,"i":"電機"},"4585":{"m":328.0,"i":"興其他電子"},"4588":{"m":25.4,"i":"其他電子"},"4590":{"m":42.8,"i":"興電機"},"4720":{"m":27.7,"i":"化工"},"4722":{"m":285.0,"i":"化工"},"4736":{"m":120.0,"i":"醫療器材–血糖機"},"4737":{"m":44.0,"i":"醫療器材–血糖機"},"4739":{"m":154.0,"i":"化工"},"4746":{"m":62.9,"i":"醫藥產業"},"4755":{"m":147.0,"i":"化工"},"4763":{"m":438.0,"i":"化工"},"4764":{"m":290.0,"i":"化工"},"4766":{"m":449.0,"i":"化工"},"4770":{"m":172.0,"i":"化學"},"4771":{"m":112.0,"i":"醫療器材–隱形眼鏡"},"4807":{"m":21.6,"i":"貿易百貨"},"4904":{"m":3914.0,"i":"通信網路–電信/數據服務"},"4906":{"m":190.0,"i":"通信網路–網路設備"},"4912":{"m":59.4,"i":"電子零組件"},"4915":{"m":358.0,"i":"3C周邊產品"},"4916":{"m":114.0,"i":"電腦及週邊設備"},"4919":{"m":825.0,"i":"半導體–IC設計"},"4927":{"m":135.0,"i":"印刷電路板 (PCB)"},"4934":{"m":38.5,"i":"光電"},"4935":{"m":51.6,"i":"光電"},"4938":{"m":2223.0,"i":"電腦系統–伺服器,電腦系統–筆記型電腦"},"4942":{"m":53.8,"i":"光電"},"4949":{"m":59.9,"i":"光電"},"4952":{"m":63.0,"i":"半導體–IC設計"},"4956":{"m":38.7,"i":"LED"},"4958":{"m":6873.0,"i":"印刷電路板 (PCB)"},"4960":{"m":166.0,"i":"光電"},"4961":{"m":211.0,"i":"半導體–IC設計"},"4967":{"m":237.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"4968":{"m":105.0,"i":"半導體–IC設計"},"4976":{"m":62.1,"i":"消費性電子產品–數位相機"},"4977":{"m":148.0,"i":"通信網路–光通訊,通信網路–網路設備"},"4989":{"m":118.0,"i":"印刷電路板 (PCB)"},"5007":{"m":165.0,"i":"鋼鐵"},"5203":{"m":54.7,"i":"軟體業"},"5215":{"m":29.2,"i":"3C周邊產品"},"5222":{"m":104.0,"i":"半導體–IC製造"},"5225":{"m":58.6,"i":"消費性電子產品"},"5234":{"m":407.0,"i":"光電"},"5243":{"m":185.0,"i":"光電"},"5244":{"m":25.8,"i":"LED"},"5258":{"m":55.8,"i":"電腦及週邊設備"},"5269":{"m":1079.0,"i":"半導體–IC設計"},"5283":{"m":47.7,"i":"電器電纜"},"5284":{"m":214.0,"i":"其他"},"5285":{"m":95.6,"i":"半導體–IC製造,半導體–導線架"},"5288":{"m":132.0,"i":"電機機械"},"5292":{"m":96.2,"i":"綠能環保"},"5306":{"m":108.0,"i":"其他"},"5388":{"m":256.0,"i":"通信網路–網路設備"},"5434":{"m":921.0,"i":"電子通路"},"5469":{"m":422.0,"i":"印刷電路板 (PCB)"},"5471":{"m":102.0,"i":"半導體–IC設計"},"5484":{"m":31.4,"i":"光電"},"5515":{"m":84.7,"i":"建材營造"},"5519":{"m":75.5,"i":"建材營造"},"5521":{"m":52.2,"i":"建材營造"},"5522":{"m":582.0,"i":"建材營造"},"5525":{"m":71.7,"i":"建材營造"},"5531":{"m":80.8,"i":"建材營造"},"5533":{"m":39.9,"i":"建材營造"},"5534":{"m":262.0,"i":"建材營造"},"5607":{"m":192.0,"i":"航運–倉儲物流"},"5608":{"m":58.0,"i":"航運–海運,航運–散裝海運"},"5706":{"m":45.9,"i":"觀光"},"5871":{"m":1951.0,"i":"其他"},"5871A":{"m":154.0,"i":"其他業"},"5876":{"m":2066.0,"i":"金融保險"},"5880":{"m":3881.0,"i":"金融保險"},"5906":{"m":14.6,"i":"貿易百貨"},"6005":{"m":861.0,"i":"金融保險"},"6024":{"m":155.0,"i":"金融保險"},"6108":{"m":29.9,"i":"印刷電路板 (PCB)"},"6112":{"m":85.1,"i":"軟體業–系統整合"},"6115":{"m":91.3,"i":"電子零組件"},"6116":{"m":537.0,"i":"面板業"},"6117":{"m":70.4,"i":"電子零組件–機殼,電腦系統–伺服器"},"6120":{"m":90.1,"i":"面板業"},"6128":{"m":26.8,"i":"電腦及週邊設備"},"6133":{"m":27.0,"i":"電子零組件"},"6136":{"m":29.2,"i":"通信網路"},"6139":{"m":1939.0,"i":"其他電子"},"6141":{"m":39.5,"i":"印刷電路板 (PCB)"},"6142":{"m":31.8,"i":"通信網路–網路設備"},"6152":{"m":24.3,"i":"通信網路–網路設備"},"6153":{"m":156.0,"i":"印刷電路板 (PCB)"},"6155":{"m":86.7,"i":"被動元件"},"6164":{"m":10.7,"i":"LED"},"6165":{"m":37.8,"i":"電子零組件"},"6166":{"m":339.0,"i":"電腦及週邊設備"},"6168":{"m":58.2,"i":"LED"},"6176":{"m":409.0,"i":"光電"},"6177":{"m":238.0,"i":"建材營造"},"6183":{"m":136.0,"i":"資訊服務"},"6184":{"m":76.1,"i":"其他"},"6189":{"m":145.0,"i":"電子通路"},"6191":{"m":502.0,"i":"印刷電路板 (PCB)"},"6192":{"m":113.0,"i":"其他電子"},"6196":{"m":1249.0,"i":"其他電子"},"6197":{"m":424.0,"i":"電子零組件–連接器"},"6201":{"m":43.2,"i":"消費性電子產品"},"6202":{"m":154.0,"i":"半導體–IC設計"},"6205":{"m":66.9,"i":"電子零組件–連接器"},"6206":{"m":188.0,"i":"電腦及週邊設備"},"6209":{"m":175.0,"i":"光電"},"6213":{"m":1018.0,"i":"印刷電路板 (PCB)"},"6214":{"m":387.0,"i":"軟體業–系統整合"},"6215":{"m":89.8,"i":"其他電子"},"6216":{"m":22.6,"i":"通信網路–網路設備"},"6224":{"m":72.8,"i":"被動元件"},"6226":{"m":14.3,"i":"LED"},"6230":{"m":114.0,"i":"3C周邊產品"},"6235":{"m":81.1,"i":"電子零組件–機殼"},"6239":{"m":2759.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"6243":{"m":15.8,"i":"半導體–IC設計"},"6257":{"m":1137.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"6269":{"m":258.0,"i":"印刷電路板 (PCB)"},"6271":{"m":507.0,"i":"半導體–IC封裝測試,半導體–IC製造,LED"},"6272":{"m":26.2,"i":"電子零組件–連接器"},"6277":{"m":86.5,"i":"電腦及週邊設備"},"6278":{"m":598.0,"i":"光電"},"6281":{"m":51.1,"i":"資訊通路"},"6282":{"m":497.0,"i":"電子零組件–電源供應器"},"6283":{"m":35.8,"i":"手機相關"},"6285":{"m":1325.0,"i":"通信網路–網路設備"},"6405":{"m":47.0,"i":"光電"},"6409":{"m":817.0,"i":"其他電子"},"6412":{"m":367.0,"i":"電子零組件–電源供應器"},"6414":{"m":559.0,"i":"電腦及週邊設備"},"6415":{"m":2446.0,"i":"半導體–IC設計"},"6416":{"m":61.4,"i":"通信網路"},"6426":{"m":81.1,"i":"通信網路–光通訊,通信網路–網路設備"},"6431":{"m":18.8,"i":"生物科技"},"6438":{"m":131.0,"i":"其他電子"},"6442":{"m":1528.0,"i":"通信網路–光通訊,通信網路–網路設備,電子零組件–連接器"},"6443":{"m":202.0,"i":"光電"},"6446":{"m":4045.0,"i":"生物科技"},"6449":{"m":398.0,"i":"被動元件"},"6451":{"m":629.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"6456":{"m":258.0,"i":"面板業"},"6472":{"m":541.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"6477":{"m":39.7,"i":"光電"},"6491":{"m":255.0,"i":"醫療器材–隱形眼鏡"},"6505":{"m":5096.0,"i":"油電燃氣"},"6515":{"m":3406.0,"i":"半導體"},"6525":{"m":185.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"6526":{"m":1166.0,"i":"半導體–IC設計"},"6531":{"m":1669.0,"i":"半導體–IC設計"},"6533":{"m":102.0,"i":"半導體–IC設計"},"6534":{"m":95.6,"i":"創新板"},"6541":{"m":107.0,"i":"醫藥產業"},"6550":{"m":122.0,"i":"醫藥產業"},"6552":{"m":25.8,"i":"印刷電路板 (PCB)"},"6558":{"m":29.0,"i":"其他電子"},"6573":{"m":13.0,"i":"半導體–IC製造"},"6579":{"m":285.0,"i":"電腦及週邊設備"},"6582":{"m":33.4,"i":"橡膠"},"6585":{"m":99.5,"i":"其他"},"6589":{"m":143.0,"i":"醫藥產業"},"6591":{"m":22.8,"i":"電腦及週邊設備"},"6592":{"m":407.0,"i":"其他"},"6598":{"m":24.8,"i":"生技醫療"},"6605":{"m":235.0,"i":"汽車"},"6606":{"m":27.6,"i":"電機"},"6614":{"m":33.0,"i":"軟體業–系統整合"},"6625":{"m":45.9,"i":"其他"},"6657":{"m":32.5,"i":"醫藥產業"},"6658":{"m":68.7,"i":"其他電子"},"6668":{"m":50.6,"i":"光電"},"6669":{"m":9534.0,"i":"電腦系統–伺服器"},"6670":{"m":401.0,"i":"其他"},"6671":{"m":15.6,"i":"其他"},"6672":{"m":175.0,"i":"印刷電路板 (PCB)"},"6689":{"m":45.6,"i":"軟體業–系統整合"},"6691":{"m":875.0,"i":"其他電子"},"6695":{"m":62.2,"i":"半導體–IC設計"},"6698":{"m":27.9,"i":"其他電子"},"6706":{"m":135.0,"i":"光電"},"6715":{"m":316.0,"i":"電子零組件"},"6719":{"m":275.0,"i":"半導體–IC設計"},"6742":{"m":49.2,"i":"光電"},"6743":{"m":43.5,"i":"消費性電子產品"},"6753":{"m":142.0,"i":"航運–造船"},"6756":{"m":72.4,"i":"半導體–IC設計"},"6757":{"m":267.0,"i":"創新板"},"6768":{"m":171.0,"i":"其他"},"6770":{"m":3495.0,"i":"半導體–IC製造"},"6771":{"m":13.1,"i":"創新板"},"6776":{"m":54.3,"i":"資訊通路"},"6781":{"m":1008.0,"i":"電子零組件"},"6782":{"m":123.0,"i":"醫療器材–隱形眼鏡"},"6789":{"m":1728.0,"i":"半導體–IC封裝測試,半導體–IC製造,消費性電子產品–數位相機"},"6790":{"m":107.0,"i":"造紙"},"6792":{"m":33.5,"i":"通信網路–網路設備"},"6794":{"m":50.5,"i":"醫藥產業"},"6796":{"m":23.9,"i":"生技"},"6799":{"m":43.6,"i":"半導體–IC設計"},"6805":{"m":1203.0,"i":"3C周邊產品"},"6830":{"m":301.0,"i":"半導體–IC製造"},"6831":{"m":522.0,"i":"興電腦週邊"},"6834":{"m":89.8,"i":"被動元件"},"6838":{"m":37.2,"i":"醫藥產業"},"6854":{"m":153.0,"i":"半導體–IC製造"},"6861":{"m":154.0,"i":"生技"},"6862":{"m":114.0,"i":"被動元件"},"6863":{"m":72.4,"i":"通訊網路"},"6869":{"m":107.0,"i":"創新板"},"6873":{"m":112.0,"i":"創新板"},"6885":{"m":29.8,"i":"醫藥產業"},"6890":{"m":594.0,"i":"運動休閒"},"6901":{"m":141.0,"i":"其他"},"6902":{"m":47.3,"i":"創新板"},"6906":{"m":30.9,"i":"數位雲端"},"6909":{"m":34.2,"i":"半導體"},"6914":{"m":94.4,"i":"其他"},"6916":{"m":15.1,"i":"面板業"},"6918":{"m":25.5,"i":"生技"},"6919":{"m":1697.0,"i":"食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"6921":{"m":22.8,"i":"半導體–IC設計"},"6923":{"m":71.1,"i":"綠能環保"},"6924":{"m":25.8,"i":"印刷電路板 (PCB)"},"6928":{"m":41.2,"i":"電腦週邊"},"6931":{"m":27.0,"i":"生技"},"6933":{"m":66.5,"i":"電腦系統–伺服器"},"6934":{"m":25.6,"i":"興生技"},"6937":{"m":189.0,"i":"戰略新板"},"6944":{"m":801.0,"i":"綠能環保"},"6949":{"m":597.0,"i":"創新板"},"6957":{"m":105.0,"i":"其他"},"6962":{"m":192.0,"i":"半導體–IC設計"},"6965":{"m":128.0,"i":"運動休閒"},"6969":{"m":11.6,"i":"創新板"},"6994":{"m":39.5,"i":"綠能環保"},"7610":{"m":1125.0,"i":"戰略新板"},"7631":{"m":26.5,"i":"戰略新板"},"7711":{"m":261.0,"i":"電子零組件–主機板,電腦系統–伺服器"},"7721":{"m":41.6,"i":"數位雲端"},"7722":{"m":223.0,"i":"數位雲端"},"7730":{"m":66.4,"i":"興半導體"},"7740":{"m":83.0,"i":"創新板"},"7749":{"m":225.0,"i":"半導體–IC設計"},"7750":{"m":1703.0,"i":"興電機"},"7760":{"m":22.2,"i":"興觀光餐旅"},"7765":{"m":96.8,"i":"軟體業"},"7768":{"m":261.0,"i":"興半導體"},"7769":{"m":12550.0,"i":"興半導體"},"7780":{"m":156.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"7786":{"m":229.0,"i":"興綠能環保"},"7788":{"m":233.0,"i":"興電子零組件"},"7791":{"m":50.1,"i":"興食品"},"7795":{"m":323.0,"i":"興電子零組件"},"7799":{"m":572.0,"i":"興生技"},"7803":{"m":21.7,"i":"興生技"},"7818":{"m":104.0,"i":"興其他"},"7821":{"m":53.5,"i":"興其他電子"},"7822":{"m":531.0,"i":"興半導體"},"7827":{"m":230.0,"i":"興生技"},"8011":{"m":29.9,"i":"通信網路–光通訊,通信網路–網路設備"},"8016":{"m":361.0,"i":"半導體–IC設計"},"8021":{"m":788.0,"i":"其他電子"},"8028":{"m":559.0,"i":"半導體–IC製造"},"8033":{"m":213.0,"i":"其他"},"8039":{"m":384.0,"i":"印刷電路板 (PCB)"},"8045":{"m":58.1,"i":"通信網路–光通訊,通信網路–網路設備"},"8046":{"m":5647.0,"i":"印刷電路板 (PCB)"},"8070":{"m":399.0,"i":"半導體–導線架"},"8072":{"m":23.5,"i":"電子通路"},"8081":{"m":275.0,"i":"半導體–IC設計"},"8103":{"m":76.2,"i":"電子零組件–連接器"},"8104":{"m":44.1,"i":"面板業"},"8105":{"m":96.7,"i":"面板業"},"8110":{"m":307.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"8112":{"m":516.0,"i":"電子通路"},"8114":{"m":162.0,"i":"電腦及週邊設備"},"8131":{"m":336.0,"i":"半導體–IC封裝測試,半導體–IC製造,電子零組件–DRAM模組"},"8150":{"m":733.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"8162":{"m":53.9,"i":"半導體–IC封裝測試,半導體–IC製造"},"8163":{"m":126.0,"i":"3C周邊產品"},"8210":{"m":1711.0,"i":"電子零組件–機殼"},"8213":{"m":101.0,"i":"印刷電路板 (PCB)"},"8215":{"m":99.9,"i":"醫療器材–醫療耗材"},"8222":{"m":24.2,"i":"航運–飛機製造、維修"},"8249":{"m":71.8,"i":"消費性電子產品–數位相機"},"8261":{"m":256.0,"i":"半導體–IC設計"},"8271":{"m":273.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"8341":{"m":103.0,"i":"其他"},"8374":{"m":102.0,"i":"電機機械"},"8404":{"m":69.9,"i":"其他"},"8411":{"m":26.5,"i":"其他"},"8422":{"m":381.0,"i":"其他"},"8429":{"m":12.1,"i":"貿易百貨"},"8438":{"m":64.7,"i":"印刷電路板 (PCB)"},"8442":{"m":28.3,"i":"其他"},"8454":{"m":904.0,"i":"貿易百貨"},"8462":{"m":112.0,"i":"觀光"},"8463":{"m":32.0,"i":"水泥–水泥生產"},"8464":{"m":1049.0,"i":"其他"},"8473":{"m":90.6,"i":"其他"},"8476":{"m":36.2,"i":"其他"},"8478":{"m":142.0,"i":"航運–造船"},"8487":{"m":20.9,"i":"創新板"},"8499":{"m":125.0,"i":"其他"},"8926":{"m":656.0,"i":"油電燃氣"},"8996":{"m":1485.0,"i":"電機機械"},"9103":{"m":11.0,"i":"醫療器材–醫療耗材"},"9105":{"m":158.0,"i":"3C周邊產品,3C周邊產品–印表機"},"912000":{"m":4.3,"i":"手機相關"},"9136":{"m":23.2,"i":"電子零組件–機殼"},"9802":{"m":155.0,"i":"其他"},"9904":{"m":771.0,"i":"其他"},"9905":{"m":64.2,"i":"其他"},"9906":{"m":42.3,"i":"建材營造"},"9907":{"m":264.0,"i":"其他"},"9908":{"m":153.0,"i":"油電燃氣"},"9910":{"m":717.0,"i":"其他"},"9911":{"m":183.0,"i":"其他"},"9914":{"m":216.0,"i":"其他"},"9917":{"m":528.0,"i":"其他"},"9919":{"m":27.4,"i":"其他"},"9921":{"m":291.0,"i":"其他"},"9924":{"m":61.3,"i":"其他"},"9925":{"m":158.0,"i":"其他"},"9927":{"m":83.3,"i":"其他"},"9928":{"m":13.2,"i":"其他"},"9930":{"m":174.0,"i":"水泥–水泥生產,水泥–高爐水泥"},"9933":{"m":384.0,"i":"其他"},"9934":{"m":41.9,"i":"其他"},"9935":{"m":34.3,"i":"其他"},"9937":{"m":172.0,"i":"油電燃氣"},"9938":{"m":131.0,"i":"其他"},"9939":{"m":396.0,"i":"其他"},"9940":{"m":146.0,"i":"其他"},"9941":{"m":469.0,"i":"其他"},"9942":{"m":98.5,"i":"其他"},"9943":{"m":72.1,"i":"觀光"},"9944":{"m":18.8,"i":"其他"},"9945":{"m":782.0,"i":"水泥–水泥生產,水泥–預拌混凝土"},"9946":{"m":67.3,"i":"建材營造"},"9955":{"m":28.1,"i":"其他"},"9958":{"m":284.0,"i":"鋼鐵"},"1240":{"m":25.8,"i":"食品生產–肉品加工,食品原料–飼料"},"1259":{"m":18.8,"i":"觀光"},"1264":{"m":101.0,"i":"食品生產–食品加工,食品生產–麵包、糕餅、零食"},"1268":{"m":71.6,"i":"觀光"},"1294":{"m":24.2,"i":"櫃食品"},"1295":{"m":17.3,"i":"飲料類–飲料生產"},"1336":{"m":11.6,"i":"電子零組件"},"1565":{"m":47.3,"i":"醫療器材–隱形眼鏡"},"1569":{"m":70.2,"i":"電腦及週邊設備"},"1570":{"m":21.6,"i":"電機機械"},"1580":{"m":61.2,"i":"電機機械"},"1584":{"m":45.7,"i":"其他"},"1586":{"m":28.1,"i":"電機機械"},"1593":{"m":12.1,"i":"生技醫療"},"1595":{"m":41.9,"i":"電子零組件"},"1599":{"m":17.1,"i":"電機機械"},"1742":{"m":14.5,"i":"化工"},"1777":{"m":32.3,"i":"醫藥產業–原料藥"},"1780":{"m":29.4,"i":"興生技"},"1781":{"m":5.69,"i":"醫療器材–血壓計"},"1784":{"m":35.6,"i":"生物科技"},"1785":{"m":888.0,"i":"其他電子"},"1788":{"m":58.3,"i":"生技醫療"},"1796":{"m":14.1,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"1799":{"m":38.3,"i":"醫藥產業"},"1813":{"m":5.53,"i":"醫療器材–隱形眼鏡"},"1815":{"m":574.0,"i":"印刷電路板 (PCB)"},"2035":{"m":98.7,"i":"鋼鐵"},"2061":{"m":30.3,"i":"電器電纜"},"2063":{"m":12.0,"i":"鋼鐵"},"2064":{"m":9.29,"i":"鋼鐵"},"2065":{"m":21.9,"i":"鋼鐵"},"2066":{"m":28.8,"i":"電機機械"},"2067":{"m":2.98,"i":"電機機械"},"2070":{"m":28.5,"i":"電機機械"},"2073":{"m":7.01,"i":"櫃鋼鐵"},"2221":{"m":20.3,"i":"其他"},"2230":{"m":18.4,"i":"電機機械"},"2235":{"m":10.8,"i":"電機機械"},"2596":{"m":30.8,"i":"建材營造"},"2640":{"m":90.4,"i":"其他"},"2641":{"m":62.1,"i":"航運–海運,航運–散裝海運"},"2643":{"m":23.3,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"2718":{"m":44.7,"i":"觀光"},"2719":{"m":17.4,"i":"觀光"},"2724":{"m":7.37,"i":"觀光"},"2726":{"m":3.72,"i":"觀光"},"2729":{"m":70.6,"i":"觀光"},"2732":{"m":29.9,"i":"觀光"},"2734":{"m":8.85,"i":"觀光"},"2736":{"m":9.64,"i":"觀光"},"2740":{"m":4.6,"i":"觀光"},"2743":{"m":32.3,"i":"觀光"},"2745":{"m":36.5,"i":"觀光"},"2751":{"m":10.2,"i":"櫃觀光餐旅"},"2752":{"m":48.0,"i":"觀光"},"2754":{"m":31.9,"i":"櫃觀光"},"2755":{"m":51.8,"i":"櫃觀光"},"2756":{"m":14.7,"i":"櫃觀光"},"2916":{"m":27.0,"i":"貿易百貨"},"2924":{"m":9.03,"i":"貿易百貨"},"2926":{"m":16.7,"i":"文化創意"},"2937":{"m":21.7,"i":"貿易百貨"},"2941":{"m":5.54,"i":"櫃居家生活"},"2947":{"m":17.0,"i":"櫃貿易百貨"},"2948":{"m":11.5,"i":"櫃居家生活"},"2949":{"m":21.0,"i":"櫃電子商務"},"3066":{"m":17.7,"i":"LED"},"3067":{"m":3.9,"i":"消費性電子產品"},"3071":{"m":36.5,"i":"3C周邊產品"},"3073":{"m":8.38,"i":"半導體–IC設計"},"3078":{"m":126.0,"i":"電子零組件–電源供應器"},"3081":{"m":2257.0,"i":"通信網路–網路設備"},"3083":{"m":25.6,"i":"文化創意"},"3085":{"m":8.39,"i":"航運–倉儲物流"},"3086":{"m":98.2,"i":"文化創意"},"3088":{"m":158.0,"i":"電腦及週邊設備"},"3093":{"m":94.4,"i":"其他電子"},"3095":{"m":3.9,"i":"手機相關"},"3105":{"m":2238.0,"i":"半導體–IC製造"},"3114":{"m":31.1,"i":"電子零組件–連接器"},"3115":{"m":6.5,"i":"電子零組件"},"3118":{"m":10.2,"i":"生物科技"},"3122":{"m":12.7,"i":"半導體–IC設計"},"3128":{"m":11.6,"i":"光電"},"3131":{"m":1044.0,"i":"其他電子"},"3141":{"m":55.8,"i":"半導體–IC設計"},"3147":{"m":143.0,"i":"軟體業–系統整合"},"3152":{"m":141.0,"i":"通信網路–網路設備"},"3158":{"m":25.4,"i":"軟體業–系統整合"},"3162":{"m":132.0,"i":"電機機械"},"3163":{"m":719.0,"i":"通信網路–光通訊,通信網路–網路設備"},"3169":{"m":69.1,"i":"半導體–IC設計"},"3171":{"m":23.7,"i":"貿易百貨"},"3176":{"m":46.7,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"3178":{"m":29.6,"i":"半導體–IC製造"},"3188":{"m":47.1,"i":"建材營造"},"3191":{"m":8.44,"i":"被動元件"},"3205":{"m":35.5,"i":"生物科技"},"3206":{"m":22.7,"i":"電子零組件"},"3207":{"m":45.4,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"3211":{"m":673.0,"i":"3C周邊產品"},"3213":{"m":78.6,"i":"電腦系統–筆記型電腦"},"3217":{"m":153.0,"i":"電子零組件–連接器"},"3218":{"m":113.0,"i":"生技醫療"},"3219":{"m":53.5,"i":"半導體"},"3221":{"m":63.6,"i":"通信網路–網路設備"},"3224":{"m":30.0,"i":"生物科技,電子零組件–連接器"},"3226":{"m":31.5,"i":"電機機械"},"3227":{"m":339.0,"i":"半導體–IC設計"},"3228":{"m":131.0,"i":"半導體–IC設計"},"3230":{"m":25.7,"i":"光電"},"3232":{"m":10.6,"i":"電子通路"},"3234":{"m":162.0,"i":"通信網路–光通訊,通信網路–網路設備"},"3236":{"m":74.6,"i":"被動元件"},"3252":{"m":8.88,"i":"觀光"},"3259":{"m":12.1,"i":"半導體–IC設計"},"3260":{"m":1393.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"3264":{"m":1140.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"3265":{"m":258.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"3268":{"m":7.59,"i":"半導體–IC設計"},"3272":{"m":10.2,"i":"3C周邊產品"},"3276":{"m":10.6,"i":"印刷電路板 (PCB)"},"3284":{"m":24.6,"i":"其他"},"3285":{"m":21.9,"i":"消費性電子產品"},"3287":{"m":14.8,"i":"3C周邊產品"},"3288":{"m":3.42,"i":"半導體–IC設計"},"3289":{"m":151.0,"i":"其他電子"},"3290":{"m":63.0,"i":"電子零組件"},"3293":{"m":2235.0,"i":"文化創意"},"3294":{"m":52.4,"i":"電子零組件"},"3297":{"m":11.4,"i":"光電"},"3303":{"m":57.4,"i":"其他電子"},"3306":{"m":24.3,"i":"通信網路–網路設備"},"3310":{"m":49.3,"i":"電子零組件"},"3313":{"m":26.9,"i":"電子零組件"},"3317":{"m":79.5,"i":"半導體–IC設計"},"3322":{"m":20.4,"i":"電子零組件–連接器"},"3323":{"m":35.3,"i":"3C周邊產品"},"3324":{"m":996.0,"i":"其他電子"},"3325":{"m":13.9,"i":"電子零組件–機殼"},"3332":{"m":31.3,"i":"電子零組件–電源供應器"},"3339":{"m":33.1,"i":"LED"},"3349":{"m":8.41,"i":"3C周邊產品"},"3354":{"m":19.6,"i":"印刷電路板 (PCB)"},"3357":{"m":400.0,"i":"被動元件"},"3360":{"m":12.4,"i":"消費性電子產品–數位相機"},"3362":{"m":311.0,"i":"光電"},"3363":{"m":809.0,"i":"通信網路–光通訊,通信網路–網路設備"},"3372":{"m":35.8,"i":"半導體–IC封裝測試,半導體–IC製造"},"3373":{"m":7.98,"i":"醫療器材–體溫計"},"3374":{"m":681.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"3379":{"m":13.5,"i":"電機機械"},"3388":{"m":68.4,"i":"電子零組件"},"3390":{"m":22.6,"i":"印刷電路板 (PCB)"},"3402":{"m":103.0,"i":"其他電子"},"3430":{"m":48.0,"i":"櫃化學"},"3434":{"m":10.7,"i":"光電"},"3438":{"m":34.2,"i":"半導體–IC設計"},"3441":{"m":37.0,"i":"光電"},"3444":{"m":44.1,"i":"電子通路"},"3455":{"m":145.0,"i":"光電"},"3465":{"m":12.8,"i":"電子零組件"},"3466":{"m":25.9,"i":"通信網路–網路設備"},"3467":{"m":20.0,"i":"半導體–IC製造"},"3479":{"m":99.1,"i":"電腦及週邊設備"},"3483":{"m":92.9,"i":"3C周邊產品"},"3484":{"m":43.4,"i":"電子零組件"},"3485":{"m":120.0,"i":"興光電"},"3489":{"m":20.8,"i":"建材營造"},"3490":{"m":17.8,"i":"光電"},"3491":{"m":1073.0,"i":"通信網路–網路設備"},"3492":{"m":8.14,"i":"電子零組件–連接器"},"3498":{"m":75.4,"i":"其他電子"},"3499":{"m":8.0,"i":"通信網路–網路設備"},"3511":{"m":20.0,"i":"電子零組件–連接器"},"3512":{"m":23.5,"i":"電子零組件"},"3516":{"m":16.6,"i":"LED"},"3520":{"m":11.8,"i":"電子零組件"},"3521":{"m":23.3,"i":"電腦及週邊設備"},"3522":{"m":12.3,"i":"觀光"},"3523":{"m":10.6,"i":"光電"},"3526":{"m":215.0,"i":"電子零組件–連接器"},"3527":{"m":31.4,"i":"半導體–IC設計"},"3529":{"m":2442.0,"i":"半導體–IC設計"},"3531":{"m":13.9,"i":"光電"},"3537":{"m":50.4,"i":"電子零組件"},"3540":{"m":21.5,"i":"電子零組件–電源供應器,電子零組件–機殼"},"3541":{"m":12.4,"i":"消費性電子產品"},"3546":{"m":50.2,"i":"文化創意"},"3548":{"m":60.4,"i":"電子零組件"},"3551":{"m":130.0,"i":"其他電子"},"3552":{"m":50.9,"i":"其他電子"},"3555":{"m":79.6,"i":"半導體–IC設計,生物科技,軟體業"},"3556":{"m":47.1,"i":"半導體–IC設計"},"3558":{"m":79.1,"i":"通信網路–網路設備"},"3564":{"m":28.2,"i":"通信網路–網路設備"},"3567":{"m":9.66,"i":"半導體–IC封裝測試,半導體–IC製造"},"3570":{"m":30.6,"i":"軟體業–系統整合"},"3577":{"m":77.7,"i":"電腦及週邊設備"},"3580":{"m":40.1,"i":"其他電子"},"3581":{"m":91.6,"i":"半導體"},"3587":{"m":216.0,"i":"其他電子"},"3594":{"m":46.0,"i":"電腦及週邊設備"},"3597":{"m":10.6,"i":"電子零組件"},"3609":{"m":10.8,"i":"電子零組件"},"3611":{"m":91.8,"i":"3C周邊產品,3C周邊產品–印表機"},"3615":{"m":37.9,"i":"光電"},"3623":{"m":6.8,"i":"面板業"},"3624":{"m":188.0,"i":"被動元件"},"3625":{"m":18.1,"i":"3C周邊產品"},"3628":{"m":32.6,"i":"其他電子"},"3630":{"m":71.1,"i":"光電"},"3631":{"m":27.8,"i":"印刷電路板 (PCB)"},"3646":{"m":9.23,"i":"電子零組件–連接器"},"3663":{"m":93.0,"i":"其他電子"},"3666":{"m":36.0,"i":"光電"},"3672":{"m":4.92,"i":"通信網路–光通訊,通信網路–網路設備"},"3675":{"m":196.0,"i":"半導體–IC製造"},"3680":{"m":521.0,"i":"半導體"},"3684":{"m":17.8,"i":"通信網路–網路設備"},"3685":{"m":24.1,"i":"光電"},"3687":{"m":23.6,"i":"電子商務"},"3689":{"m":108.0,"i":"電子零組件–連接器"},"3691":{"m":142.0,"i":"光電"},"3693":{"m":215.0,"i":"3C周邊產品"},"3707":{"m":330.0,"i":"半導體–IC製造"},"3709":{"m":108.0,"i":"資訊通路"},"3713":{"m":13.8,"i":"光電"},"4102":{"m":8.05,"i":"醫藥產業–原料藥,醫藥產業,醫藥產業–藥品受託研發、代工"},"4105":{"m":183.0,"i":"生物科技"},"4107":{"m":80.0,"i":"醫療器材–醫療耗材"},"4109":{"m":14.4,"i":"生物科技"},"4111":{"m":18.1,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"4113":{"m":40.1,"i":"建材營造"},"4114":{"m":158.0,"i":"生物科技,醫藥產業"},"4116":{"m":16.9,"i":"醫療器材–醫療耗材"},"4120":{"m":39.2,"i":"生物科技"},"4121":{"m":11.3,"i":"醫療器材–血壓計"},"4123":{"m":286.0,"i":"生技醫療"},"4126":{"m":58.5,"i":"醫療器材–醫療耗材"},"4127":{"m":30.7,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"4128":{"m":88.5,"i":"生物科技,醫藥產業–中藥,醫藥產業"},"4129":{"m":87.7,"i":"生技醫療"},"4130":{"m":35.4,"i":"醫藥產業"},"4131":{"m":14.7,"i":"生技醫療"},"4138":{"m":20.5,"i":"醫療器材–醫療耗材"},"4139":{"m":11.1,"i":"醫藥產業"},"4147":{"m":156.0,"i":"醫藥產業"},"4153":{"m":17.6,"i":"生技醫療"},"4154":{"m":4.89,"i":"生技醫療"},"4157":{"m":62.2,"i":"醫藥產業"},"4160":{"m":10.8,"i":"生物科技"},"4161":{"m":13.9,"i":"生物科技,醫療器材–血糖機"},"4162":{"m":83.5,"i":"醫藥產業"},"4163":{"m":58.3,"i":"生技醫療"},"4166":{"m":60.8,"i":"櫃生技"},"4167":{"m":61.9,"i":"醫藥產業"},"4168":{"m":28.5,"i":"生技醫療"},"4171":{"m":10.0,"i":"生物科技"},"4173":{"m":13.5,"i":"醫藥產業"},"4174":{"m":36.7,"i":"生物科技,醫藥產業"},"4175":{"m":22.7,"i":"生技醫療"},"4183":{"m":3.33,"i":"醫療器材–血糖機"},"4188":{"m":6.68,"i":"生技醫療"},"4192":{"m":7.44,"i":"生物科技,醫藥產業–新藥研發"},"4198":{"m":9.28,"i":"生技醫療"},"4205":{"m":71.2,"i":"食品生產–食品加工,食品原料–黃豆"},"4207":{"m":38.8,"i":"食品原料–糖"},"4303":{"m":44.9,"i":"塑膠"},"4304":{"m":14.1,"i":"塑膠"},"4305":{"m":24.2,"i":"塑膠"},"4401":{"m":17.3,"i":"紡織纖維"},"4402":{"m":11.4,"i":"紡織纖維"},"4406":{"m":5.13,"i":"紡織纖維"},"4413":{"m":5.2,"i":"紡織纖維"},"4416":{"m":7.36,"i":"建材營造"},"4417":{"m":39.2,"i":"紡織纖維"},"4419":{"m":78.2,"i":"紡織纖維"},"4420":{"m":15.2,"i":"紡織纖維"},"4430":{"m":9.9,"i":"其他"},"4432":{"m":8.22,"i":"紡織纖維"},"4433":{"m":12.5,"i":"紡織纖維"},"4442":{"m":18.1,"i":"櫃紡織"},"4502":{"m":9.08,"i":"電機機械"},"4503":{"m":30.1,"i":"電機機械"},"4506":{"m":210.0,"i":"電機機械"},"4510":{"m":49.4,"i":"電機機械"},"4513":{"m":23.4,"i":"電機機械"},"4523":{"m":19.8,"i":"電機機械"},"4527":{"m":31.1,"i":"電機機械"},"4528":{"m":13.3,"i":"電機機械"},"4530":{"m":8.77,"i":"電機機械"},"4533":{"m":47.8,"i":"電機機械"},"4534":{"m":29.2,"i":"電機機械"},"4535":{"m":20.8,"i":"電機機械"},"4538":{"m":11.2,"i":"電機機械"},"4541":{"m":34.4,"i":"其他"},"4542":{"m":141.0,"i":"電子零組件"},"4543":{"m":22.7,"i":"電機機械"},"4549":{"m":60.7,"i":"電機機械"},"4550":{"m":9.38,"i":"電機機械"},"4554":{"m":7.94,"i":"其他電子"},"4556":{"m":32.5,"i":"其他"},"4558":{"m":9.32,"i":"櫃電機"},"4561":{"m":24.9,"i":"電機機械"},"4563":{"m":23.5,"i":"電機機械"},"4568":{"m":12.9,"i":"電機機械"},"4577":{"m":42.9,"i":"櫃其他電子"},"4580":{"m":38.6,"i":"電機機械"},"4584":{"m":12.1,"i":"櫃電機"},"4702":{"m":7.34,"i":"化工"},"4706":{"m":25.4,"i":"化工"},"4707":{"m":92.9,"i":"化工"},"4711":{"m":10.3,"i":"化工"},"4714":{"m":28.9,"i":"化工"},"4716":{"m":17.2,"i":"化工"},"4721":{"m":75.4,"i":"化工"},"4726":{"m":52.2,"i":"生技醫療"},"4728":{"m":205.0,"i":"生物科技"},"4729":{"m":17.4,"i":"面板業"},"4735":{"m":12.7,"i":"醫療器材–血壓計,醫療器材–體溫計"},"4741":{"m":22.5,"i":"化工"},"4743":{"m":231.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"4745":{"m":11.3,"i":"生技醫療"},"4747":{"m":24.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"4749":{"m":939.0,"i":"半導體–IC製造"},"4754":{"m":11.3,"i":"化工"},"4760":{"m":121.0,"i":"被動元件"},"4767":{"m":8.47,"i":"化工"},"4768":{"m":181.0,"i":"櫃化學"},"4772":{"m":415.0,"i":"櫃化學"},"4806":{"m":10.2,"i":"文化創意"},"4903":{"m":40.9,"i":"通信網路–光通訊,通信網路–網路設備"},"4905":{"m":21.0,"i":"通信網路–網路設備"},"4907":{"m":50.2,"i":"建材營造"},"4908":{"m":166.0,"i":"通信網路–光通訊,通信網路–網路設備"},"4909":{"m":46.5,"i":"通信網路"},"4911":{"m":19.8,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業"},"4923":{"m":19.6,"i":"半導體–IC設計"},"4924":{"m":4.24,"i":"電腦及週邊設備"},"4931":{"m":171.0,"i":"電腦及週邊設備"},"4933":{"m":55.7,"i":"光電"},"4939":{"m":63.7,"i":"印刷電路板 (PCB)"},"4946":{"m":9.78,"i":"文化創意"},"4950":{"m":9.35,"i":"其他"},"4951":{"m":33.6,"i":"半導體–IC設計"},"4953":{"m":96.9,"i":"軟體業–系統整合"},"4966":{"m":547.0,"i":"半導體–IC設計"},"4971":{"m":231.0,"i":"半導體–IC製造"},"4972":{"m":9.61,"i":"LED"},"4973":{"m":126.0,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"4974":{"m":52.6,"i":"消費性電子產品–數位相機"},"4979":{"m":807.0,"i":"通信網路–光通訊,通信網路–網路設備"},"4991":{"m":685.0,"i":"半導體–IC製造"},"4995":{"m":19.4,"i":"面板業"},"5009":{"m":209.0,"i":"鋼鐵"},"5011":{"m":21.7,"i":"鋼鐵"},"5013":{"m":37.1,"i":"鋼鐵"},"5014":{"m":20.5,"i":"鋼鐵"},"5015":{"m":14.5,"i":"鋼鐵"},"5016":{"m":12.5,"i":"鋼鐵"},"5201":{"m":10.7,"i":"軟體業–系統整合"},"5202":{"m":14.1,"i":"軟體業"},"5205":{"m":3.36,"i":"航運–倉儲物流,航運–陸上貨運,航運–陸運"},"5206":{"m":41.0,"i":"建材營造"},"5209":{"m":49.8,"i":"資訊服務"},"5210":{"m":24.7,"i":"軟體業–系統整合"},"5211":{"m":6.07,"i":"3C周邊產品–掃描器,軟體業"},"5212":{"m":16.4,"i":"軟體業–系統整合"},"5213":{"m":166.0,"i":"建材營造"},"5220":{"m":8.63,"i":"面板業"},"5223":{"m":11.4,"i":"電腦及週邊設備"},"5227":{"m":27.1,"i":"電子零組件"},"5228":{"m":28.7,"i":"被動元件"},"5230":{"m":11.3,"i":"LED"},"5236":{"m":99.6,"i":"半導體–IC設計"},"5245":{"m":11.8,"i":"面板業"},"5251":{"m":10.2,"i":"光電"},"5263":{"m":75.0,"i":"文化創意"},"5272":{"m":12.0,"i":"半導體–IC設計"},"5274":{"m":7167.0,"i":"半導體–IC設計"},"5276":{"m":7.37,"i":"其他"},"5278":{"m":72.4,"i":"電子商務"},"5287":{"m":89.6,"i":"電子商務"},"5289":{"m":1860.0,"i":"3C周邊產品,電子零組件–DRAM模組,電子零組件–Flash模組"},"5291":{"m":26.0,"i":"印刷電路板 (PCB)"},"5299":{"m":59.8,"i":"半導體–IC設計"},"5302":{"m":20.1,"i":"半導體–IC設計"},"5309":{"m":159.0,"i":"電子零組件–電源供應器"},"5310":{"m":7.03,"i":"軟體業–系統整合"},"5312":{"m":58.4,"i":"生技醫療"},"5314":{"m":172.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"5315":{"m":24.5,"i":"面板業"},"5321":{"m":21.4,"i":"電子零組件"},"5324":{"m":27.4,"i":"建材營造"},"5328":{"m":97.6,"i":"被動元件"},"5340":{"m":175.0,"i":"印刷電路板 (PCB)"},"5344":{"m":12.4,"i":"半導體–IC封裝測試,半導體–IC製造"},"5345":{"m":12.2,"i":"電子零組件"},"5347":{"m":3259.0,"i":"半導體–IC製造"},"5348":{"m":2.36,"i":"通信網路–網路設備"},"5351":{"m":309.0,"i":"半導體–IC設計"},"5353":{"m":24.2,"i":"通信網路–網路設備"},"5356":{"m":28.9,"i":"電腦及週邊設備"},"5364":{"m":5.57,"i":"觀光"},"5371":{"m":274.0,"i":"光電"},"5381":{"m":57.8,"i":"印刷電路板 (PCB)"},"5386":{"m":188.0,"i":"電腦及週邊設備"},"5392":{"m":76.5,"i":"光電"},"5398":{"m":8.83,"i":"生物科技,醫療器材–醫療器材批發、銷售,醫藥產業,醫藥產業–藥品批發、銷售"},"5403":{"m":74.3,"i":"軟體業–系統整合"},"5410":{"m":41.3,"i":"軟體業–系統整合"},"5425":{"m":312.0,"i":"3C周邊產品–印表機,半導體–IC製造"},"5426":{"m":54.5,"i":"電子零組件–連接器,電子零組件–機殼"},"5432":{"m":31.9,"i":"面板業"},"5438":{"m":21.6,"i":"3C周邊產品,3C周邊產品–掃描器"},"5439":{"m":309.0,"i":"印刷電路板 (PCB)"},"5443":{"m":176.0,"i":"半導體–IC製造"},"5450":{"m":17.4,"i":"LED"},"5452":{"m":50.4,"i":"其他電子"},"5455":{"m":17.9,"i":"建材營造"},"5457":{"m":72.9,"i":"電子零組件–連接器"},"5460":{"m":9.26,"i":"電子零組件"},"5464":{"m":52.4,"i":"印刷電路板 (PCB)"},"5465":{"m":38.2,"i":"電子零組件–電源供應器,電子零組件–機殼"},"5468":{"m":17.7,"i":"半導體–IC設計"},"5474":{"m":74.7,"i":"3C周邊產品"},"5475":{"m":320.0,"i":"印刷電路板 (PCB)"},"5478":{"m":166.0,"i":"文化創意"},"5481":{"m":16.2,"i":"其他"},"5483":{"m":1161.0,"i":"半導體–IC製造"},"5487":{"m":7.15,"i":"半導體–IC設計"},"5488":{"m":11.4,"i":"電子零組件"},"5489":{"m":47.9,"i":"消費性電子產品–監控系統"},"5490":{"m":28.1,"i":"3C周邊產品"},"5493":{"m":40.3,"i":"消費性電子產品–監控系統"},"5498":{"m":130.0,"i":"電子零組件"},"5508":{"m":134.0,"i":"建材營造"},"5511":{"m":87.1,"i":"建材營造"},"5512":{"m":60.9,"i":"建材營造"},"5514":{"m":33.2,"i":"建材營造"},"5516":{"m":5.75,"i":"建材營造"},"5520":{"m":49.4,"i":"水泥–預拌混凝土"},"5523":{"m":47.2,"i":"建材營造"},"5529":{"m":23.3,"i":"建材營造"},"5530":{"m":208.0,"i":"其他"},"5536":{"m":1570.0,"i":"其他電子"},"5543":{"m":13.8,"i":"建材營造"},"5547":{"m":10.0,"i":"興營建"},"5548":{"m":13.8,"i":"櫃營建"},"5601":{"m":21.2,"i":"航運–貨櫃場"},"5603":{"m":15.8,"i":"航運–陸上貨運,航運–陸運"},"5604":{"m":33.8,"i":"航運業"},"5609":{"m":110.0,"i":"航運–倉儲物流"},"5703":{"m":9.55,"i":"觀光"},"5704":{"m":12.5,"i":"觀光"},"5864":{"m":223.0,"i":"金融"},"5878":{"m":9.78,"i":"金融"},"5902":{"m":33.2,"i":"貿易百貨"},"5903":{"m":420.0,"i":"航運–倉儲物流"},"5904":{"m":665.0,"i":"貿易百貨"},"5905":{"m":24.5,"i":"貿易百貨"},"6015":{"m":72.2,"i":"金融"},"6016":{"m":198.0,"i":"金融"},"6020":{"m":57.5,"i":"金融"},"6021":{"m":129.0,"i":"金融"},"6023":{"m":320.0,"i":"金融"},"6026":{"m":67.5,"i":"金融"},"6028":{"m":20.0,"i":"興金融"},"6101":{"m":47.7,"i":"文化創意"},"6103":{"m":4.63,"i":"半導體–IC設計"},"6104":{"m":94.3,"i":"半導體–IC設計"},"6109":{"m":10.2,"i":"電子零組件–電源供應器,手機相關"},"6111":{"m":48.8,"i":"文化創意"},"6113":{"m":14.9,"i":"電子通路"},"6114":{"m":13.1,"i":"電子零組件"},"6118":{"m":15.6,"i":"資訊通路"},"6121":{"m":772.0,"i":"3C周邊產品"},"6122":{"m":36.6,"i":"電機機械"},"6123":{"m":26.7,"i":"軟體業–系統整合"},"6124":{"m":54.5,"i":"電子零組件"},"6125":{"m":165.0,"i":"光電"},"6126":{"m":52.3,"i":"電子零組件–連接器"},"6127":{"m":91.2,"i":"被動元件"},"6129":{"m":28.8,"i":"半導體–IC設計"},"6130":{"m":11.3,"i":"生技醫療"},"6134":{"m":29.1,"i":"電子零組件"},"6138":{"m":271.0,"i":"半導體–IC設計"},"6140":{"m":11.6,"i":"軟體業–系統整合"},"6143":{"m":76.8,"i":"通信網路"},"6144":{"m":5.55,"i":"文化創意"},"6146":{"m":198.0,"i":"其他電子"},"6147":{"m":1876.0,"i":"半導體–IC封裝測試,半導體–IC製造"},"6148":{"m":15.6,"i":"軟體業–系統整合"},"6150":{"m":31.1,"i":"3C周邊產品"},"6151":{"m":22.1,"i":"消費性電子產品"},"6154":{"m":11.1,"i":"資訊通路"},"6156":{"m":26.3,"i":"印刷電路板 (PCB)"},"6158":{"m":9.83,"i":"電子零組件–連接器"},"6160":{"m":11.5,"i":"電腦及週邊設備"},"6161":{"m":29.7,"i":"3C周邊產品,電子零組件–主機板"},"6163":{"m":74.1,"i":"通信網路"},"6167":{"m":17.7,"i":"面板業"},"6169":{"m":3.56,"i":"文化創意"},"6170":{"m":51.3,"i":"手機相關"},"6171":{"m":24.9,"i":"建材營造"},"6173":{"m":544.0,"i":"被動元件"},"6174":{"m":26.2,"i":"電子零組件"},"6175":{"m":171.0,"i":"被動元件"},"6179":{"m":47.5,"i":"其他"},"6180":{"m":88.3,"i":"文化創意"},"6182":{"m":712.0,"i":"半導體–IC製造"},"6185":{"m":21.4,"i":"電子零組件–連接器"},"6186":{"m":82.5,"i":"建材營造"},"6187":{"m":1213.0,"i":"半導體–IC製造"},"6188":{"m":222.0,"i":"3C周邊產品"},"6190":{"m":156.0,"i":"通信網路"},"6194":{"m":15.6,"i":"印刷電路板 (PCB)"},"6195":{"m":13.8,"i":"貿易百貨"},"6198":{"m":35.9,"i":"半導體"},"6199":{"m":62.4,"i":"其他"},"6203":{"m":55.5,"i":"電子零組件–電源供應器"},"6204":{"m":26.6,"i":"被動元件"},"6207":{"m":132.0,"i":"被動元件"},"6208":{"m":93.5,"i":"半導體–IC製造"},"6210":{"m":7.25,"i":"印刷電路板 (PCB)"},"6212":{"m":29.3,"i":"建材營造"},"6217":{"m":290.0,"i":"電子零組件"},"6218":{"m":22.6,"i":"通信網路"},"6219":{"m":16.1,"i":"建材營造"},"6220":{"m":56.2,"i":"電子零組件"},"6221":{"m":41.1,"i":"軟體業–系統整合"},"6222":{"m":19.7,"i":"光電"},"6223":{"m":6286.0,"i":"半導體"},"6227":{"m":92.9,"i":"電子通路"},"6228":{"m":5.33,"i":"3C周邊產品,3C周邊產品–掃描器,生物科技"},"6229":{"m":11.2,"i":"半導體–IC設計"},"6231":{"m":126.0,"i":"軟體業"},"6233":{"m":20.3,"i":"半導體–IC設計"},"6234":{"m":45.3,"i":"光電"},"6237":{"m":36.6,"i":"半導體–IC設計"},"6240":{"m":4.22,"i":"軟體業–系統整合"},"6241":{"m":6.99,"i":"通信網路–網路設備"},"6242":{"m":11.7,"i":"生物科技,食品生產–保健食品,醫藥產業–中藥,醫藥產業–保健食品"},"6244":{"m":110.0,"i":"光電"},"6245":{"m":119.0,"i":"通信網路"},"6246":{"m":5.85,"i":"光電"},"6248":{"m":18.3,"i":"鋼鐵"},"6259":{"m":10.1,"i":"電子零組件"},"6261":{"m":127.0,"i":"半導體–IC封裝測試"},"6263":{"m":103.0,"i":"通信網路–光通訊,通信網路–網路設備"},"6264":{"m":8.19,"i":"建材營造"},"6265":{"m":68.1,"i":"半導體–DRAM製造"},"6266":{"m":39.9,"i":"電子零組件"},"6270":{"m":25.4,"i":"電子通路"},"6274":{"m":5347.0,"i":"印刷電路板 (PCB)"},"6275":{"m":38.0,"i":"消費性電子產品"},"6276":{"m":5.51,"i":"電子零組件–電源供應器"},"6279":{"m":143.0,"i":"電子零組件–連接器"},"6284":{"m":158.0,"i":"被動元件"},"6290":{"m":542.0,"i":"電子零組件"},"6291":{"m":230.0,"i":"半導體–IC設計"},"6292":{"m":31.6,"i":"電子零組件"},"6294":{"m":7.44,"i":"文化創意"},"6411":{"m":106.0,"i":"半導體–IC設計"},"6417":{"m":55.8,"i":"通信網路"},"6418":{"m":10.9,"i":"電子零組件–連接器"},"6419":{"m":19.7,"i":"光電"},"6423":{"m":25.7,"i":"半導體–IC設計"},"6425":{"m":40.5,"i":"電機機械"},"6432":{"m":29.9,"i":"被動元件"},"6435":{"m":119.0,"i":"半導體–IC設計"},"6441":{"m":12.1,"i":"電腦及週邊設備"},"6461":{"m":27.4,"i":"醫藥產業"},"6462":{"m":104.0,"i":"半導體–IC設計"},"6465":{"m":33.5,"i":"通信網路–網路設備"},"6469":{"m":112.0,"i":"生物科技,食品生產–保健食品,航運–倉儲物流,醫藥產業–保健食品"},"6470":{"m":18.8,"i":"通信網路–網路設備"},"6474":{"m":19.9,"i":"興電子通路"},"6482":{"m":8.49,"i":"文化創意"},"6485":{"m":41.9,"i":"半導體–IC設計"},"6486":{"m":41.6,"i":"軟體業–系統整合"},"6488":{"m":5307.0,"i":"半導體–IC製造"},"6492":{"m":39.6,"i":"醫藥產業"},"6494":{"m":21.8,"i":"半導體–IC設計"},"6496":{"m":11.8,"i":"生物科技,醫藥產業"},"6498":{"m":50.5,"i":"櫃光電"},"6499":{"m":71.4,"i":"生技醫療"},"6506":{"m":15.6,"i":"化工"},"6508":{"m":20.7,"i":"農業科技業"},"6509":{"m":94.2,"i":"化工"},"6510":{"m":1187.0,"i":"半導體–IC製造"},"6512":{"m":4.93,"i":"其他電子"},"6516":{"m":32.0,"i":"軟體業–系統整合,軟體業"},"6517":{"m":23.9,"i":"櫃光電"},"6523":{"m":44.1,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"6527":{"m":18.3,"i":"生技醫療"},"6530":{"m":33.0,"i":"通信網路–光通訊,通信網路–網路設備"},"6532":{"m":34.1,"i":"半導體–IC製造"},"6535":{"m":173.0,"i":"醫藥產業"},"6538":{"m":43.6,"i":"電子零組件"},"6542":{"m":20.2,"i":"文化創意"},"6546":{"m":50.1,"i":"通信網路–網路設備"},"6547":{"m":149.0,"i":"醫藥產業"},"6548":{"m":818.0,"i":"半導體–IC製造,半導體–導線架,LED"},"6556":{"m":21.1,"i":"消費性電子產品–監控系統"},"6560":{"m":12.3,"i":"光電"},"6561":{"m":263.0,"i":"通信網路–電信/數據服務"},"6568":{"m":54.4,"i":"半導體–IC設計"},"6569":{"m":44.9,"i":"生技醫療"},"6570":{"m":20.3,"i":"電腦及週邊設備"},"6574":{"m":24.0,"i":"生技醫療"},"6576":{"m":124.0,"i":"醫藥產業"},"6577":{"m":45.5,"i":"電腦及週邊設備"},"6578":{"m":11.8,"i":"生物科技"},"6584":{"m":443.0,"i":"櫃電子零組件"},"6588":{"m":37.3,"i":"通信網路–光通訊,通信網路–網路設備"},"6590":{"m":17.2,"i":"軟體業–系統整合"},"6593":{"m":11.2,"i":"軟體業"},"6596":{"m":35.7,"i":"文化創意"},"6597":{"m":21.0,"i":"LED,被動元件"},"6603":{"m":40.5,"i":"電機機械"},"6609":{"m":30.0,"i":"電機機械"},"6612":{"m":34.8,"i":"生技醫療"},"6613":{"m":297.0,"i":"其他電子"},"6615":{"m":7.45,"i":"生物科技"},"6616":{"m":3.38,"i":"其他"},"6617":{"m":86.2,"i":"生物科技"},"6620":{"m":139.0,"i":"興生技"},"6624":{"m":9.6,"i":"其他"},"6629":{"m":43.8,"i":"其他"},"6637":{"m":17.0,"i":"櫃生技"},"6640":{"m":324.0,"i":"半導體"},"6642":{"m":33.9,"i":"電子零組件"},"6643":{"m":206.0,"i":"半導體–IC設計"},"6649":{"m":15.8,"i":"生技醫療"},"6651":{"m":53.8,"i":"半導體–IC設計"},"6654":{"m":88.9,"i":"其他電子"},"6661":{"m":3.69,"i":"生物科技"},"6662":{"m":7.63,"i":"生技醫療"},"6664":{"m":234.0,"i":"電子零組件"},"6667":{"m":138.0,"i":"其他電子"},"6679":{"m":157.0,"i":"半導體–IC設計"},"6680":{"m":12.3,"i":"電腦及週邊設備"},"6683":{"m":455.0,"i":"半導體–IC製造"},"6684":{"m":22.5,"i":"半導體–IC設計"},"6690":{"m":53.7,"i":"軟體業–系統整合"},"6692":{"m":15.9,"i":"櫃綠能環保"},"6693":{"m":98.3,"i":"半導體–IC設計"},"6697":{"m":11.4,"i":"軟體業–系統整合"},"6703":{"m":36.1,"i":"櫃生技"},"6708":{"m":11.5,"i":"半導體–IC設計"},"6712":{"m":141.0,"i":"生物科技,醫藥產業–新藥研發,醫藥產業"},"6716":{"m":31.0,"i":"半導體–IC設計"},"6720":{"m":42.9,"i":"半導體–IC設計"},"6721":{"m":13.7,"i":"櫃其他"},"6725":{"m":136.0,"i":"興其他電子"},"6727":{"m":121.0,"i":"櫃電子零組件"},"6728":{"m":33.1,"i":"櫃貿易百貨"},"6730":{"m":13.8,"i":"醫療器材–醫療耗材"},"6732":{"m":81.0,"i":"半導體–IC設計"},"6733":{"m":33.5,"i":"櫃生技"},"6735":{"m":43.6,"i":"櫃其他電子"},"6739":{"m":262.0,"i":"櫃其他電子"},"6741":{"m":74.8,"i":"櫃電子商務"},"6751":{"m":10.8,"i":"軟體業–系統整合"},"6752":{"m":37.9,"i":"軟體業–系統整合"},"6761":{"m":71.3,"i":"櫃電子零組件"},"6762":{"m":59.4,"i":"櫃生技"},"6763":{"m":87.2,"i":"櫃電子商務"},"6767":{"m":9.8,"i":"櫃生技"},"6785":{"m":80.8,"i":"醫藥產業"},"6788":{"m":170.0,"i":"櫃半導體"},"6791":{"m":21.6,"i":"軟體業–系統整合"},"6803":{"m":209.0,"i":"其他"},"6804":{"m":7.7,"i":"櫃其他"},"6811":{"m":95.3,"i":"軟體業–系統整合"},"6821":{"m":22.2,"i":"通信網路–網路設備"},"6823":{"m":22.3,"i":"櫃半導體"},"6829":{"m":120.0,"i":"半導體–IC製造"},"6840":{"m":20.4,"i":"櫃其他電子"},"6841":{"m":57.8,"i":"櫃生技"},"6843":{"m":13.5,"i":"櫃電機"},"6844":{"m":24.6,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"6846":{"m":18.2,"i":"生物科技,食品生產–保健食品,食品生產–食品加工,醫藥產業–保健食品"},"6855":{"m":28.4,"i":"櫃其他電子"},"6856":{"m":13.0,"i":"櫃文化創意"},"6859":{"m":57.8,"i":"櫃光電"},"6865":{"m":4.16,"i":"軟體業"},"6870":{"m":66.7,"i":"櫃電子商務"},"6872":{"m":12.7,"i":"櫃生技"},"6874":{"m":18.7,"i":"軟體業–系統整合"},"6875":{"m":47.2,"i":"醫藥產業"},"6877":{"m":60.8,"i":"櫃其他電子"},"6881":{"m":36.2,"i":"櫃其他"},"6884":{"m":6.14,"i":"軟體業–系統整合"},"6894":{"m":89.1,"i":"櫃綠能環保"},"6895":{"m":55.8,"i":"櫃半導體"},"6899":{"m":25.8,"i":"面板業"},"6903":{"m":262.0,"i":"櫃其他電子"},"6904":{"m":22.8,"i":"櫃其他"},"6907":{"m":84.7,"i":"半導體–IC設計"},"6910":{"m":8.55,"i":"軟體業"},"6913":{"m":55.2,"i":"櫃電子零組件"},"6922":{"m":50.5,"i":"戰略新板"},"6925":{"m":12.7,"i":"軟體業"},"6929":{"m":11.1,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"6945":{"m":95.9,"i":"醫藥產業"},"6953":{"m":70.5,"i":"櫃半導體"},"6961":{"m":15.0,"i":"興觀光餐旅"},"6967":{"m":17.8,"i":"櫃電子零組件"},"6968":{"m":21.5,"i":"食品生產–寵物食品"},"6971":{"m":10.7,"i":"戰略新板"},"6982":{"m":23.8,"i":"櫃電機"},"6983":{"m":66.9,"i":"興其他電子"},"6996":{"m":81.5,"i":"半導體–IC設計"},"6997":{"m":16.6,"i":"櫃電子商務"},"7402":{"m":32.5,"i":"光電"},"7547":{"m":19.9,"i":"軟體業–系統整合"},"7556":{"m":75.9,"i":"櫃半導體"},"7584":{"m":4.61,"i":"軟體業–遊戲軟體"},"7642":{"m":21.6,"i":"櫃電機"},"7703":{"m":71.7,"i":"櫃其他電子"},"7704":{"m":19.7,"i":"櫃半導體"},"7708":{"m":24.0,"i":"櫃觀光餐旅"},"7709":{"m":40.9,"i":"櫃電機"},"7712":{"m":60.1,"i":"半導體–IC設計"},"7713":{"m":32.3,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"7714":{"m":26.6,"i":"軟體業–系統整合"},"7715":{"m":10.6,"i":"櫃綠能環保"},"7716":{"m":5.85,"i":"航運–倉儲物流"},"7717":{"m":135.0,"i":"通信網路–光通訊"},"7718":{"m":22.2,"i":"櫃鋼鐵"},"7723":{"m":11.8,"i":"櫃觀光餐旅"},"7728":{"m":98.6,"i":"櫃其他電子"},"7734":{"m":1012.0,"i":"櫃半導體"},"7738":{"m":47.5,"i":"興數位雲端"},"7743":{"m":7.15,"i":"飲料類–飲料生產"},"7744":{"m":155.0,"i":"興電子零組件"},"7747":{"m":35.0,"i":"櫃電子商務"},"7751":{"m":399.0,"i":"櫃半導體"},"7753":{"m":10.4,"i":"LED"},"7757":{"m":24.1,"i":"興觀光餐旅"},"7767":{"m":12.9,"i":"軟體業–系統整合"},"7770":{"m":12.7,"i":"半導體–IC設計"},"7772":{"m":38.2,"i":"半導體–IC製造,消費性電子產品–數位相機"},"7777":{"m":77.0,"i":"興其他"},"7782":{"m":6.53,"i":"興居家生活"},"7792":{"m":122.0,"i":"興其他電子"},"7794":{"m":8.78,"i":"興居家生活"},"7805":{"m":229.0,"i":"通信網路–網路設備"},"7810":{"m":42.1,"i":"興半導體"},"7811":{"m":26.4,"i":"興運動休閒"},"7819":{"m":10.9,"i":"軟體業–系統整合"},"7820":{"m":44.6,"i":"興綠能環保"},"7828":{"m":810.0,"i":"興半導體"},"7839":{"m":7.13,"i":"興數位雲端"},"7842":{"m":18.4,"i":"興綠能環保"},"8024":{"m":5.53,"i":"半導體–IC設計"},"8027":{"m":265.0,"i":"電機機械"},"8032":{"m":24.7,"i":"電子通路"},"8034":{"m":13.2,"i":"通信網路–網路設備"},"8038":{"m":25.4,"i":"電子零組件"},"8040":{"m":91.4,"i":"半導體–IC設計"},"8042":{"m":253.0,"i":"被動元件"},"8043":{"m":181.0,"i":"被動元件"},"8044":{"m":64.1,"i":"航運–倉儲物流"},"8047":{"m":20.6,"i":"其他電子"},"8048":{"m":38.3,"i":"通信網路–光通訊,通信網路–網路設備"},"8049":{"m":32.8,"i":"面板業"},"8050":{"m":114.0,"i":"電腦及週邊設備"},"8054":{"m":110.0,"i":"半導體–IC設計"},"8059":{"m":33.2,"i":"通信網路–網路設備"},"8064":{"m":288.0,"i":"光電"},"8066":{"m":5.7,"i":"貿易百貨"},"8067":{"m":2.65,"i":"資訊通路"},"8068":{"m":15.5,"i":"電子通路"},"8069":{"m":2355.0,"i":"面板業"},"8071":{"m":17.7,"i":"醫療器材–隱形眼鏡"},"8074":{"m":64.3,"i":"印刷電路板 (PCB)"},"8076":{"m":75.2,"i":"電腦及週邊設備"},"8077":{"m":11.0,"i":"觀光"},"8080":{"m":19.3,"i":"電子零組件"},"8083":{"m":60.4,"i":"電機機械"},"8084":{"m":32.8,"i":"電子通路"},"8085":{"m":18.1,"i":"其他電子"},"8086":{"m":326.0,"i":"半導體–IC製造"},"8087":{"m":12.8,"i":"光電"},"8088":{"m":42.2,"i":"半導體–IC製造,電子零組件–DRAM模組,電子零組件–Flash模組"},"8089":{"m":14.0,"i":"通信網路–光通訊,通信網路–網路設備"},"8091":{"m":156.0,"i":"半導體–IC製造"},"8092":{"m":8.4,"i":"其他電子"},"8096":{"m":232.0,"i":"電子通路"},"8097":{"m":38.5,"i":"通信網路"},"8099":{"m":60.2,"i":"軟體業–系統整合"},"8102":{"m":16.8,"i":"半導體–IC設計"},"8107":{"m":9.07,"i":"電機機械"},"8109":{"m":101.0,"i":"電子零組件–電源供應器"},"8111":{"m":61.3,"i":"LED"},"8121":{"m":114.0,"i":"被動元件"},"8147":{"m":61.1,"i":"電子零組件–連接器"},"8155":{"m":249.0,"i":"印刷電路板 (PCB)"},"8171":{"m":24.3,"i":"手機相關"},"8176":{"m":7.28,"i":"通信網路–網路設備"},"8182":{"m":54.6,"i":"電子零組件"},"8183":{"m":39.5,"i":"其他電子"},"8227":{"m":73.0,"i":"半導體–IC設計"},"8234":{"m":89.8,"i":"電腦及週邊設備"},"8240":{"m":56.9,"i":"光電"},"8255":{"m":199.0,"i":"電機機械"},"8272":{"m":13.6,"i":"軟體業"},"8279":{"m":26.3,"i":"生物科技,醫藥產業"},"8284":{"m":30.7,"i":"軟體業–系統整合"},"8289":{"m":45.9,"i":"電子零組件"},"8299":{"m":5593.0,"i":"半導體–IC設計,電子零組件–Flash模組"},"8342":{"m":30.5,"i":"其他"},"8349":{"m":85.5,"i":"鋼鐵"},"8349A":{"m":4.73,"i":"鋼鐵工業"},"8354":{"m":12.9,"i":"塑膠"},"8358":{"m":1768.0,"i":"印刷電路板 (PCB)"},"8383":{"m":68.7,"i":"半導體–IC製造"},"8390":{"m":110.0,"i":"其他"},"8401":{"m":16.3,"i":"其他"},"8403":{"m":26.6,"i":"生技醫療"},"8409":{"m":6.11,"i":"生技醫療"},"8410":{"m":12.0,"i":"3C周邊產品"},"8415":{"m":355.0,"i":"鋼鐵"},"8416":{"m":48.5,"i":"軟體業–系統整合,軟體業"},"8421":{"m":7.24,"i":"其他"},"8423":{"m":7.4,"i":"其他"},"8424":{"m":24.9,"i":"建材營造"},"8426":{"m":10.2,"i":"其他"},"8431":{"m":28.1,"i":"其他電子"},"8432":{"m":19.7,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品,醫藥產業–新藥研發,醫藥產業"},"8433":{"m":29.4,"i":"貿易百貨"},"8435":{"m":19.0,"i":"其他"},"8436":{"m":139.0,"i":"生物科技,食品生產–保健食品,醫藥產業–保健食品"},"8437":{"m":4.98,"i":"其他"},"8440":{"m":11.2,"i":"其他"},"8446":{"m":46.5,"i":"文化創意"},"8450":{"m":8.16,"i":"文化創意"},"8455":{"m":7.84,"i":"其他電子"},"8472":{"m":15.2,"i":"電子商務"},"8477":{"m":11.0,"i":"電子商務"},"8489":{"m":13.3,"i":"文化創意"},"8905":{"m":36.1,"i":"食品生產–肉品加工"},"8906":{"m":14.0,"i":"其他"},"8908":{"m":133.0,"i":"油電燃氣"},"8916":{"m":66.6,"i":"其他"},"8917":{"m":85.1,"i":"油電燃氣"},"8921":{"m":8.48,"i":"其他"},"8923":{"m":6.01,"i":"文化創意"},"8924":{"m":47.1,"i":"其他"},"8927":{"m":86.8,"i":"油電燃氣"},"8928":{"m":10.7,"i":"其他"},"8929":{"m":7.08,"i":"其他"},"8930":{"m":22.6,"i":"鋼鐵"},"8931":{"m":51.6,"i":"油電燃氣"},"8932":{"m":358.0,"i":"其他"},"8935":{"m":25.8,"i":"其他"},"8936":{"m":144.0,"i":"水泥–水泥生產,水泥–水泥製品,水泥–預拌混凝土"},"8937":{"m":126.0,"i":"其他"},"8938":{"m":83.5,"i":"其他"},"8941":{"m":15.2,"i":"貿易百貨"},"8942":{"m":84.1,"i":"其他"},"9949":{"m":11.0,"i":"文化創意"},"9950":{"m":17.7,"i":"塑膠"},"9951":{"m":39.1,"i":"電機機械"},"9960":{"m":10.7,"i":"貿易百貨"},"9962":{"m":8.84,"i":"鋼鐵"}};
+    // 相容舊呼叫:只取產業
+    const STOCK_INFO_INDUSTRY = new Proxy(STOCK_DICT, { get:(t,k)=> (t[k]?t[k].i:undefined) });
+
     const CUSTOM_IND_KEY = 'customIndustryMap_v1';
 
     // ── 族群 TAG 欄即時編輯(從 TOP50 狀態標註直接操作) ──
