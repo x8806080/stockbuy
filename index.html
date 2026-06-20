@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bn</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bo</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4025,12 +4025,9 @@
                 if (csvRow) csvRow.style.display = r.value==='csv'?'':'none';
             });
         });
-        // 設定現價日期預設為今天
+        // 現價日期預設留空 → 自動用資料庫中比入場日新的最新一天
         const el = document.getElementById('btPriceDate');
-        if (el) {
-            const d=new Date();
-            el.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        }
+        if (el) { el.value = ''; }
     });
 
     // 從 TWSE 抓取當日全市場收盤價
@@ -4411,18 +4408,29 @@
         const priceSource = document.querySelector('input[name="priceSource"]:checked')?.value || 'twse';
         let todayPrices = {};
 
-        // ── 優先從 repo 資料庫讀收盤價（免打 TWSE）──
+        // ── 優先從 repo 資料庫讀收盤價 ──
         let usedRepoDate = '';
         if (priceSource === 'twse' && hasRepo()) {
             const allDates = await loadDailyIndex(); // 已排序（新到舊）
-            // 決定要讀哪一天：有指定就用指定，沒指定用 repo 最新一筆（排除入場日當天）
+            // 決定要讀哪一天的收盤價
             let targetDate = null;
             if (priceDateStr && allDates.includes(priceDateStr)) {
+                // 指定日期且 repo 有 → 直接用
                 targetDate = priceDateStr;
-            } else if (!priceDateStr) {
-                // 未指定 → 用 repo 最新一筆（且要比入場日新）
-                targetDate = allDates.filter(d => d > dateKey).sort().reverse()[0]
-                          || allDates.sort().reverse()[0] || null;
+            } else {
+                // 指定日期不在 repo(如預設今天還沒分析) 或 未指定
+                // → 自動找「比入場日新、且 repo 有」的最近一天當出場價
+                const newerDates = allDates.filter(d => d > dateKey).sort();  // 升冪
+                if (priceDateStr) {
+                    // 有指定但 repo 沒有:找 ≤ 指定日 且 > 入場日 的最接近一天
+                    targetDate = newerDates.filter(d => d <= priceDateStr).pop()
+                              || newerDates[0] || null;
+                } else {
+                    // 未指定:用比入場日新的最新一天
+                    targetDate = newerDates.length ? newerDates[newerDates.length-1] : null;
+                }
+                // 都找不到比入場日新的 → 退而用 repo 最新一筆(即使不比入場日新,至少有價)
+                if (!targetDate) targetDate = allDates.slice().sort().reverse()[0] || null;
             }
             if (targetDate) {
                 const tLabel = targetDate.slice(0,4)+'/'+targetDate.slice(4,6)+'/'+targetDate.slice(6,8);
@@ -4457,8 +4465,13 @@
         const missingSyms = neededSyms.filter(s => !todayPrices[s]);
 
         if (priceSource === 'twse' && Object.keys(todayPrices).length === 0) {
-            msg.innerHTML = `❌ 資料庫中找不到對應日期的收盤價快照。<br>
-                <span style="color:var(--text-dim);font-size:12px">請先到「📦 批次匯入歷史資料」上傳該日期的 CSV,或改用「上傳 CSV」手動提供收盤價。</span>`;
+            const allD = await loadDailyIndex().catch(()=>[]);
+            const newer = allD.filter(d => d > dateKey).sort();
+            const hint = newer.length
+                ? `資料庫有這些比入場日新的日期可當出場價:${newer.slice(0,8).map(d=>d.slice(4,6)+'/'+d.slice(6,8)).join('、')}${newer.length>8?'…':''}。請在「現價日期」欄選其中一天。`
+                : `資料庫中沒有比入場日(${label})更新的日期,無法計算報酬。請先批次匯入較新日期的資料。`;
+            msg.innerHTML = `❌ 找不到出場日的收盤價快照。<br>
+                <span style="color:var(--text-dim);font-size:12px">${hint}</span>`;
             return;
         }
         if (priceSource === 'twse' && missingSyms.length > 0) {
