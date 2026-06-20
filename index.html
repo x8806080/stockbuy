@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bs</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04bt</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -735,13 +735,14 @@
                             📊 執行回測
                         </button>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label>持有天數篩選：</label>
+                            <label>持有交易日：</label>
                             <select id="btHoldDays" style="padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                                <option value="0">全部</option>
-                                <option value="5">≥ 5 日</option>
-                                <option value="10">≥ 10 日</option>
-                                <option value="20" selected>≥ 20 日</option>
-                                <option value="60">≥ 60 日</option>
+                                <option value="1">1 日後出場</option>
+                                <option value="3">3 日後出場</option>
+                                <option value="5" selected>5 日後出場</option>
+                                <option value="10">10 日後出場</option>
+                                <option value="20">20 日後出場</option>
+                                <option value="0">用最新價</option>
                             </select>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
@@ -1025,7 +1026,15 @@
     //  讀取當前評分參數
     // ══════════════════════════════════════════════
     function getScoreConfig() {
-        const v = id => { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : 0; };
+        // 元素不存在或值無效時,回退到 DEFAULTS(避免批次匯入在「評分設定」分頁未渲染時讀到0)
+        const v = id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const parsed = parseFloat(el.value);
+                if (!isNaN(parsed)) return parsed;
+            }
+            return (typeof DEFAULTS !== 'undefined' && DEFAULTS[id] !== undefined) ? DEFAULTS[id] : 0;
+        };
         return {
             corp: {
                 // 比值制：門檻為 買超/市值 比值（小數，如 0.02 = 2%）
@@ -4425,9 +4434,22 @@
             return;
         }
 
-        // 計算持有天數
+        // 持有交易日 → 決定出場日(入場日往後第 N 個有資料的交易日)
+        const holdN = parseInt(document.getElementById('btHoldDays').value) || 0;
         const priceDateEl = document.getElementById('btPriceDate');
-        const priceDateStr = priceDateEl?.value ? priceDateEl.value.replace(/-/g,'') : null;
+        let priceDateStr = priceDateEl?.value ? priceDateEl.value.replace(/-/g,'') : null;
+
+        // 若選了持有交易日(非0且非手動指定),自動算出場日
+        if (holdN > 0 && !priceDateStr) {
+            const allD = await loadDailyIndex().catch(()=>[]);
+            const newerSorted = allD.filter(d => d > dateKey).sort();  // 比入場日新,升冪
+            if (newerSorted.length >= holdN) {
+                priceDateStr = newerSorted[holdN - 1];   // 第 N 個交易日
+            } else if (newerSorted.length > 0) {
+                priceDateStr = newerSorted[newerSorted.length - 1];  // 不足N天,用最後一天
+            }
+        }
+
         const priceDate = priceDateStr ? new Date(
             parseInt(priceDateStr.slice(0,4)),
             parseInt(priceDateStr.slice(4,6))-1,
@@ -4439,7 +4461,7 @@
             parseInt(dateKey.slice(6,8))
         );
         const holdDays = Math.round((priceDate - entryDate) / (1000*60*60*24));
-        const minHold = parseInt(document.getElementById('btHoldDays').value) || 0;
+        const minHold = 0;   // 持有天數已改為決定出場日,不再做篩選
         const topN = parseInt(document.getElementById('btTopN').value) || 50;
         // 取評分前 N 名(不看絕對分數):依綜合評分排序後取前 topN 名的代號集合
         const rankedTop = entryPayload.top50.slice()
