@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cm</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cn</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4824,18 +4824,15 @@
     // 個股相關產業優先序:payload 既有 > 自訂族群 > STOCK_DICT。前5大族群從 top50 即時統計。
     function recomputeHotIndustryTag(payload) {
         if (!payload?.top50?.length) return;
+        let cust = {};
+        try { if (typeof getCustomIndustry === 'function') cust = getCustomIndustry() || {}; } catch(e) {}
         const indOf = sym => {
-            // 自訂族群優先
-            try {
-                const cust = (typeof getCustomIndustry === 'function') ? getCustomIndustry() : {};
-                if (cust[sym]) return cust[sym];
-            } catch(e) {}
-            const d = (typeof STOCK_DICT !== 'undefined') ? STOCK_DICT[sym] : null;
-            return d?.i || '';
+            if (cust[sym]) return cust[sym];
+            try { const d = (typeof STOCK_DICT !== 'undefined') ? STOCK_DICT[sym] : null; return d?.i || ''; } catch(e) { return ''; }
         };
         const splitI = s => (s||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
         // 補每檔相關產業(若 payload 沒存就用代號對照)
-        payload.top50.forEach(r => { if (!r.相關產業) r.相關產業 = indOf(r.代號); });
+        payload.top50.forEach(r => { if (!r.相關產業 || r.相關產業 === '-') r.相關產業 = indOf(r.代號); });
         // 統計前5大族群(用 top50 出現次數)
         const cnt = {};
         payload.top50.forEach(r => splitI(r.相關產業).forEach(i => { cnt[i] = (cnt[i]||0)+1; }));
@@ -4860,6 +4857,14 @@
 
         // 即時補「🔥熱門族群」標籤(用代號→族群對照);包 try-catch 確保絕不影響主回測流程
         try { recomputeHotIndustryTag(entryPayload); } catch(e) { console.warn('[熱門族群補標籤] 跳過:', e.message); }
+        // 診斷:補標籤後有幾檔熱門族群
+        if (selectedTags.includes('🔥熱門族群')) {
+            const hotN = entryPayload.top50.filter(r => (r.狀態標註||'').includes('🔥熱門族群')).length;
+            if (hotN === 0) {
+                const s0 = entryPayload.top50[0];
+                console.warn(`[熱門族群=0] ${dateKey}: 補標籤後0檔熱門族群。首檔 ${s0?.代號} 相關產業="${s0?.相關產業}" 狀態="${s0?.狀態標註}"`);
+            }
+        }
 
         // 決定出場日(入場日往後第 holdN 個有資料的交易日)
         const allD = await loadDailyIndex().catch(()=>[]);
@@ -4993,7 +4998,11 @@
             if (cache[cacheKey]) {
                 const c = cache[cacheKey];
                 const savedDate = new Date(c.savedAt).toLocaleString('zh-TW');
-                renderRangeResult(c.dayResults, c.allRecords, c.allFullRecords, c.meta);
+                if (c.html != null) {
+                    document.getElementById('backtestResult').innerHTML = c.html;
+                } else if (c.dayResults) {
+                    renderRangeResult(c.dayResults, c.allRecords, c.allFullRecords, c.meta);  // 相容舊快取
+                }
                 msg.innerHTML = `⚡ 已從快取載入(${savedDate}運算)　<a href="#" onclick="runRangeBacktest(true);return false" style="color:#a78bfa">🔄 重新計算</a>`;
                 return;
             }
@@ -5018,8 +5027,9 @@
 
         const meta = { start, end, ...opts, totalDays: entryDates.length };
         renderRangeResult(dayResults, allRecords, allFullRecords, meta);
-        // 存快取
-        setBtCache(cacheKey, { dayResults, allRecords, allFullRecords, meta });
+        // 存快取:只存渲染後的 HTML(比原始資料小很多,避免 localStorage 爆容量)
+        const resultHTML = document.getElementById('backtestResult').innerHTML;
+        setBtCache(cacheKey, { html: resultHTML });
         msg.innerHTML = `批次回測完成（${entryDates.length} 個入場日）　<span style="color:#64748b;font-size:11px">已存快取,下次同條件免重算</span>`;
     }
     window.runRangeBacktest = runRangeBacktest;
