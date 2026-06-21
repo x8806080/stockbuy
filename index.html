@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cn</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04co</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4918,6 +4918,11 @@
             const eh = ss.map(s => exitPrices[s]!=null ? s+'✓' : s+'✗出場價缺').join(' ');
             const en = ss.map(s => { const r=entryPayload.top50.find(x=>x.代號===s); return (r?.收盤價||entryPriceMap[s])!=null?s+'✓':s+'✗入場價缺';}).join(' ');
             console.warn(`[無樣本] ${dateKey}→${exitDateKey}: top50=${entryPayload.top50.length} 前N=${topNSyms.size} 過篩=${records.length} | 入場價:${en} | 出場價:${eh}`);
+            // 若是標籤篩光(過篩=0但前N有股票),印出勾選的標籤 vs 資料實際的標籤
+            if (records.length === 0 && topNSyms.size > 0 && selectedTags.length) {
+                const sampleTags = entryPayload.top50.slice(0,5).map(r => `${r.代號}[${r.狀態標註||'無標註'}]`).join(' ');
+                console.warn(`  ↳ 勾選標籤=[${selectedTags.join(', ')}] 但資料標籤範例: ${sampleTags}`);
+            }
         }
         const wins = withPrice.filter(r=>r.報酬率>0);
         const stats = {
