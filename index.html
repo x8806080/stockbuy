@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04co</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cq</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -804,8 +804,16 @@
                     </div>
                     <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">
                         <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                            <label style="font-weight:600">標籤篩選（可複選，AND）：</label>
-                            <span style="font-size:11px;color:#64748b">勾選的標籤全部符合才納入回測</span>
+                            <label style="font-weight:600">標籤篩選（可複選）：</label>
+                            <span style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg)">
+                                    <input type="radio" name="btTagMode" value="and" checked style="accent-color:#f97316;margin:0">AND(全符合)
+                                </label>
+                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg);border-left:1px solid var(--border)">
+                                    <input type="radio" name="btTagMode" value="or" style="accent-color:#f97316;margin:0">OR(符合任一)
+                                </label>
+                            </span>
+                            <span style="font-size:11px;color:#64748b">AND=同時符合所有勾選;OR=符合其中一個即可</span>
                             <button type="button" onclick="clearBtTags()" style="background:#334155;color:#cbd5e1;border:none;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">清除</button>
                         </div>
                         <div id="btTagFilterBox" style="display:flex;flex-wrap:wrap;gap:6px">
@@ -4271,9 +4279,21 @@
     }
 
     // 計算單一日期的完整分析 payload(動能 + 法人市值比P90 + 族群統計)
-    function computeHistDayPayload(rows, dateKey) {
+    function computeHistDayPayload(rows, dateKey, prevPriceMap) {
         const SC = getScoreConfig();
         const m = SC.momentum, c = SC.corp, c1 = SC.corp1m, tt = SC.trust;
+
+        // 若 CSV 沒有「當日漲幅」,用前一交易日收盤價推算:(今收-昨收)/昨收×100
+        if (prevPriceMap && Object.keys(prevPriceMap).length) {
+            rows.forEach(r => {
+                if (r.當日漲幅 == null || isNaN(r.當日漲幅)) {
+                    const prev = prevPriceMap[r.代號];
+                    if (prev && prev > 0 && r.收盤價 > 0) {
+                        r.當日漲幅 = (r.收盤價 - prev) / prev * 100;
+                    }
+                }
+            });
+        }
 
         const rise5dTop  = topByPctValue(rows, '漲幅5日', m.topPct);
         const rise1mTop  = topByPctValue(rows, '漲幅1月', m.topPct);
@@ -4435,6 +4455,8 @@
         const existingIdx = await loadDailyIndex().catch(()=>[]);
         let okCount = 0, skipCount = 0, failCount = 0;
         const savedDates = [];   // 成功存入的日期,最後統一更新索引
+        let prevPriceMapCache = {};  // 本次批次中,前一日的收盤價 map(用於推算當日漲幅)
+        let prevDateKeyCache = null;
 
         for (const t of tasks) {
             if (!overwrite && existingIdx.includes(t.dateKey)) {
@@ -4446,12 +4468,31 @@
                 const text = await t.file.text();
                 const rows = parseFinalOutputCSV(text);
                 if (!rows.length) { throw new Error('解析後無有效資料列'); }
-                const payload = computeHistDayPayload(rows, t.dateKey);
+
+                // 取得前一交易日收盤價(推算當日漲幅用)
+                // 優先用本次批次剛處理完的前一日;否則從 repo 載入前一交易日
+                let prevPriceMap = prevPriceMapCache;
+                if (!Object.keys(prevPriceMap).length) {
+                    try {
+                        const allIdx = (await loadDailyIndex().catch(()=>[])).slice().sort();
+                        const prevDk = allIdx.filter(d => d < t.dateKey).pop();
+                        if (prevDk) {
+                            const prevP = await loadDailyResult(prevDk);
+                            prevPriceMap = prevP?.priceMap || {};
+                        }
+                    } catch(e) { prevPriceMap = {}; }
+                }
+
+                const payload = computeHistDayPayload(rows, t.dateKey, prevPriceMap);
                 await saveDailyResult(payload, t.dateKey, true);   // skipIndex=true,索引最後統一更新
                 savedDates.push(t.dateKey);
+                // 更新前一日快取(供下一個日期推算當日漲幅)
+                prevPriceMapCache = payload.priceMap || {};
+                prevDateKeyCache = t.dateKey;
                 const p90n = payload.top50.filter(r=>r.狀態標註.includes('P90')).length;
                 const dualn = payload.top50.filter(r=>r.狀態標註.includes('雙動能共振')).length;
-                log.innerHTML += `<div style="color:#4ade80">✅ ${t.dateKey}：${rows.length}檔解析,TOP50中 P90系${p90n}檔/雙動能${dualn}檔</div>`;
+                const dayn = payload.top50.filter(r=>r.狀態標註.includes('當日強勢')).length;
+                log.innerHTML += `<div style="color:#4ade80">✅ ${t.dateKey}：${rows.length}檔解析,TOP50中 P90系${p90n}檔/雙動能${dualn}檔/當日強勢${dayn}檔</div>`;
                 okCount++;
             } catch(e) {
                 log.innerHTML += `<div style="color:#f87171">❌ ${t.dateKey}：${e.message}</div>`;
@@ -4595,7 +4636,7 @@
 
         // 快取指紋
         const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
-        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, tagMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
         if (!forceRecalc) {
             const cache = getBtCache();
             if (cache[cacheKey]) {
@@ -4633,7 +4674,12 @@
 
         // 對每個入場日,取當天 TOP-N 符合標籤的標的,逐檔追蹤出場
         const trades = [];
-        const passTag = r => !selectedTags.length || selectedTags.every(t => (r.狀態標註||'').includes(t));
+        const tagMode = document.querySelector('input[name="btTagMode"]:checked')?.value || 'and';
+        const passTag = r => {
+            if (!selectedTags.length) return true;
+            const st = r.狀態標註 || '';
+            return tagMode === 'or' ? selectedTags.some(t => st.includes(t)) : selectedTags.every(t => st.includes(t));
+        };
         for (const entryDk of entryDates) {
             const ed = dayData[entryDk];
             if (!ed) continue;
@@ -4895,7 +4941,12 @@
         // 取評分前 N 名
         const rankedTop = entryPayload.top50.slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN);
         const topNSyms = new Set(rankedTop.map(r=>r.代號));
-        const passTag = r => !selectedTags.length || selectedTags.every(t => (r.狀態標註||'').includes(t));
+        const tagMode = document.querySelector('input[name="btTagMode"]:checked')?.value || 'and';
+        const passTag = r => {
+            if (!selectedTags.length) return true;
+            const st = r.狀態標註 || '';
+            return tagMode === 'or' ? selectedTags.some(t => st.includes(t)) : selectedTags.every(t => st.includes(t));
+        };
 
         const entryPriceMap = entryPayload.priceMap || {};
         // 先算「前N名」的全量 records(不套標籤篩選),供標籤拆解表用
@@ -4913,15 +4964,19 @@
         // 篩選後的 records(套標籤交集篩選)供主統計
         const records = entryPayload.top50.filter(r => topNSyms.has(r.代號) && passTag(r)).map(buildRec);
         const withPrice = records.filter(r => r.報酬率 !== null);
+        // 分析:每個勾選標籤在當天前N名中有幾檔(找出「完全沒有」的標籤=交集斷點)
+        let missingTags = [];
+        if (selectedTags.length) {
+            const topNRows = entryPayload.top50.filter(r => topNSyms.has(r.代號));
+            missingTags = selectedTags.filter(t => !topNRows.some(r => (r.狀態標註||'').includes(t)));
+        }
         if (!withPrice.length) {
             const ss = entryPayload.top50.slice(0,3).map(r=>r.代號);
             const eh = ss.map(s => exitPrices[s]!=null ? s+'✓' : s+'✗出場價缺').join(' ');
             const en = ss.map(s => { const r=entryPayload.top50.find(x=>x.代號===s); return (r?.收盤價||entryPriceMap[s])!=null?s+'✓':s+'✗入場價缺';}).join(' ');
             console.warn(`[無樣本] ${dateKey}→${exitDateKey}: top50=${entryPayload.top50.length} 前N=${topNSyms.size} 過篩=${records.length} | 入場價:${en} | 出場價:${eh}`);
-            // 若是標籤篩光(過篩=0但前N有股票),印出勾選的標籤 vs 資料實際的標籤
             if (records.length === 0 && topNSyms.size > 0 && selectedTags.length) {
-                const sampleTags = entryPayload.top50.slice(0,5).map(r => `${r.代號}[${r.狀態標註||'無標註'}]`).join(' ');
-                console.warn(`  ↳ 勾選標籤=[${selectedTags.join(', ')}] 但資料標籤範例: ${sampleTags}`);
+                console.warn(`  ↳ 勾選標籤=[${selectedTags.join(', ')}] 完全缺少的標籤=[${missingTags.join(', ')||'無'}]`);
             }
         }
         const wins = withPrice.filter(r=>r.報酬率>0);
@@ -4934,7 +4989,7 @@
             wins: wins.length, loses: withPrice.length - wins.length,
         };
         return {
-            records, withPrice, fullWithPrice, stats,
+            records, withPrice, fullWithPrice, stats, missingTags,
             label: dateKey.slice(0,4)+'/'+dateKey.slice(4,6)+'/'+dateKey.slice(6,8),
             exitLabel: exitDateKey.slice(0,4)+'/'+exitDateKey.slice(4,6)+'/'+exitDateKey.slice(6,8),
             exitDateKey,
@@ -4990,6 +5045,7 @@
             holdN: parseInt(document.getElementById('btHoldDays').value) || 0,
             topN: parseInt(document.getElementById('btTopN').value) || 50,
             selectedTags: [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value),
+            tagMode: document.querySelector('input[name="btTagMode"]:checked')?.value || 'and',
             stopLoss: parseFloat(document.getElementById('btStopLoss')?.value) || 0,
         };
 
@@ -5023,7 +5079,8 @@
             const r = await computeDayBacktest(dk, opts);
             if (r.fullWithPrice?.length) r.fullWithPrice.forEach(rec => allFullRecords.push({ ...rec, 入場日:dk }));
             if (r.error || !r.withPrice?.length) {
-                dayResults.push({ dateKey:dk, label:dk.slice(0,4)+'/'+dk.slice(4,6)+'/'+dk.slice(6,8), error:r.error||'無樣本', stats:null });
+                const missMsg = (r.missingTags && r.missingTags.length) ? `無樣本（缺少標籤:${r.missingTags.join('、')}）` : (r.error||'無樣本');
+                dayResults.push({ dateKey:dk, label:dk.slice(0,4)+'/'+dk.slice(4,6)+'/'+dk.slice(6,8), error:missMsg, stats:null });
                 continue;
             }
             dayResults.push({ dateKey:dk, label:dk.slice(0,4)+'/'+dk.slice(4,6)+'/'+dk.slice(6,8), exitLabel:r.exitLabel, stats:r.stats });
