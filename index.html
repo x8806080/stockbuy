@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ck</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cl</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3118,10 +3118,25 @@
         const startDow = first.getDay();
         const daysInMonth = new Date(y, m+1, 0).getDate();
         const dows = ['日','一','二','三','四','五','六'];
+        // 年份範圍:從有資料的最早~最晚年(若無資料用當前年±2)
+        const allKeys = [...dataSet];
+        let minY = y, maxY = y;
+        if (allKeys.length) {
+            const yrs = allKeys.map(k => +k.slice(0,4));
+            minY = Math.min(...yrs); maxY = Math.max(...yrs);
+        }
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        let yearOpts = '';
+        for (let yy = minY; yy <= maxY; yy++) yearOpts += `<option value="${yy}" ${yy===y?'selected':''}>${yy}年</option>`;
+        let monthOpts = '';
+        for (let mm = 0; mm < 12; mm++) monthOpts += `<option value="${mm}" ${mm===m?'selected':''}>${mm+1}月</option>`;
         let html = `<div class="cal-wrap">
             <div class="cal-head">
                 <button onclick="calNav('${containerId}',-1)">‹</button>
-                <span class="cal-title">${y} 年 ${m+1} 月</span>
+                <span style="display:flex;gap:4px;align-items:center">
+                    <select onchange="calSetYM('${containerId}',+this.value,null)" style="padding:3px 5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px;font-weight:600">${yearOpts}</select>
+                    <select onchange="calSetYM('${containerId}',null,+this.value)" style="padding:3px 5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px;font-weight:600">${monthOpts}</select>
+                </span>
                 <button onclick="calNav('${containerId}',1)">›</button>
             </div>
             <div class="cal-grid">`;
@@ -3148,6 +3163,14 @@
         if (st.m > 11) { st.m = 0; st.y++; }
         renderCalendar(containerId);
     }
+    function calSetYM(containerId, year, month) {
+        const st = _calState[containerId];
+        if (!st) return;
+        if (year !== null) st.y = year;
+        if (month !== null) st.m = month;
+        renderCalendar(containerId);
+    }
+    window.calSetYM = calSetYM;
     function calPick(containerId, key) {
         const st = _calState[containerId];
         if (!st) return;
@@ -4906,7 +4929,7 @@
     // 批次區間回測:區間內每天當入場日,彙總統計
     // ════════════════════════════════════════════════
     // ── 回測結果快取(localStorage,同條件免重算) ──
-    const BT_CACHE_KEY = 'btRangeCache_v2';  // v2:加入熱門族群即時補標籤,舊快取失效
+    const BT_CACHE_KEY = 'btRangeCache_v3';  // v2:加入熱門族群即時補標籤,舊快取失效
     function getBtCache() {
         try { return JSON.parse(localStorage.getItem(BT_CACHE_KEY) || '{}'); }
         catch(e) { return {}; }
@@ -4980,10 +5003,10 @@
             const r = await computeDayBacktest(dk, opts);
             if (r.fullWithPrice?.length) r.fullWithPrice.forEach(rec => allFullRecords.push({ ...rec, 入場日:dk }));
             if (r.error || !r.withPrice?.length) {
-                dayResults.push({ dateKey:dk, label:dk.slice(4,6)+'/'+dk.slice(6,8), error:r.error||'無樣本', stats:null });
+                dayResults.push({ dateKey:dk, label:dk.slice(0,4)+'/'+dk.slice(4,6)+'/'+dk.slice(6,8), error:r.error||'無樣本', stats:null });
                 continue;
             }
-            dayResults.push({ dateKey:dk, label:dk.slice(4,6)+'/'+dk.slice(6,8), exitLabel:r.exitLabel, stats:r.stats });
+            dayResults.push({ dateKey:dk, label:dk.slice(0,4)+'/'+dk.slice(4,6)+'/'+dk.slice(6,8), exitLabel:r.exitLabel, stats:r.stats });
             r.withPrice.forEach(rec => allRecords.push({ ...rec, 入場日:dk }));
         }
 
