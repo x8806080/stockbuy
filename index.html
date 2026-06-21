@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cj</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ck</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -742,6 +742,10 @@
                             title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
                             🗑️ 清快取
                         </button>
+                        <button onclick="if(confirm('掃描repo重建日期索引?用於修復「資料有匯入但日曆選不到」的問題')){rebuildDailyIndex();}"
+                            title="掃描repo所有每日資料,重建索引(修復索引遺漏)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
+                            🔧 重建索引
+                        </button>
                         <button onclick="runStrategyBacktest()"
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             🎯 策略停利回測
@@ -754,7 +758,10 @@
                             </label>
                             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
                                 <input type="radio" name="exitMode" value="breakout" style="accent-color:#f97316">
-                                時間停損(獲利&lt;10%,N日內沒突破10%就賣)
+                                時間停損(獲利&lt;10%,
+                                <input type="number" id="stratBreakoutN" value="5" min="1" max="60"
+                                    style="width:48px;padding:3px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                                日內沒突破10%就賣)
                             </label>
                         </div>
                         <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px">
@@ -783,9 +790,10 @@
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>停損(%)：</label>
+                            <span style="font-size:16px;color:#f87171;font-weight:700;margin-right:-2px">−</span>
                             <input type="number" id="btStopLoss" value="0" min="0" max="50" step="0.5"
                                 style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                            <span style="font-size:11px;color:var(--text-dim)">虧損達此%視為-此%(0=不停損)</span>
+                            <span style="font-size:11px;color:var(--text-dim)">%(0=不停損)</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
                             <label>取評分前幾名：</label>
@@ -2661,6 +2669,35 @@
     function dailyFileURL(dateKey) {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/data/daily/${dateKey}.json`;
     }
+
+    // 重建索引:掃描 repo data/daily/ 所有 .json,重建 index.json(修復索引遺漏)
+    async function rebuildDailyIndex() {
+        if (!hasRepo()) { alert('未設定 GitHub repo'); return; }
+        const msg = document.getElementById('backtestMsg') || document.getElementById('syncStatus');
+        if (msg) msg.textContent = '掃描 repo 資料夾中…';
+        try {
+            const dirURL = `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/data/daily?ref=${REPO_CONFIG.BRANCH}`;
+            const r = await fetch(dirURL, { headers: repoHeaders() });
+            if (!r.ok) throw new Error(`讀取資料夾失敗 HTTP ${r.status}`);
+            const files = await r.json();
+            // 取所有 YYYYMMDD.json(排除 index.json)
+            const dates = files
+                .filter(f => f.type === 'file' && /^\d{8}\.json$/.test(f.name))
+                .map(f => f.name.replace('.json',''))
+                .sort().reverse();
+            if (!dates.length) { if (msg) msg.textContent = '資料夾中無每日資料檔'; return; }
+            // 寫回 index.json
+            const idxData = await repoGet(dailyIndexURL());
+            await repoPut(dailyIndexURL(), dates, idxData?.sha, `rebuild index (${dates.length} dates)`);
+            if (msg) msg.textContent = `✓ 索引已重建:共 ${dates.length} 天(${dates[dates.length-1].slice(0,6)}~${dates[0].slice(0,6)})。請重新整理頁面或重新同步。`;
+            // 重建回測日曆
+            if (typeof initBacktestDateList === 'function') await initBacktestDateList();
+        } catch(e) {
+            if (msg) msg.textContent = `❌ 重建索引失敗:${e.message}`;
+            console.error('[rebuildDailyIndex]', e);
+        }
+    }
+    window.rebuildDailyIndex = rebuildDailyIndex;
     function dailyIndexURL() {
         return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/${DAILY_INDEX_FILE}`;
     }
@@ -4530,11 +4567,12 @@
         const exitN2 = parseInt(document.getElementById('stratExitN2')?.value) || 10;  // 10-100%
         const exitN3 = parseInt(document.getElementById('stratExitN3')?.value) || 20;  // ≥100%
         const exitMode = document.querySelector('input[name="exitMode"]:checked')?.value || 'leave';  // leave=離榜 / breakout=時間停損
+        const breakoutN = parseInt(document.getElementById('stratBreakoutN')?.value) || 5;  // 時間停損:獲利<10%幾日內沒突破10%就賣
         const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value);
 
         // 快取指紋
         const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
-        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
         if (!forceRecalc) {
             const cache = getBtCache();
             if (cache[cacheKey]) {
@@ -4558,17 +4596,8 @@
             try {
                 const p = await loadDailyResult(dk);
                 if (!p) continue;
-                // 即時補「🔥熱門族群」標籤(相容舊資料:用 payload 存的前5大族群+個股相關產業重算)
-                const top5IndSet = new Set((p.inds||[]).slice(0,5).map(x => x.ind));
-                if (top5IndSet.size) {
-                    (p.top50||[]).forEach(r => {
-                        const myInds = (r.相關產業||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
-                        const isHot = myInds.some(i => top5IndSet.has(i));
-                        let st = (r.狀態標註||'').split(' / ').filter(t => t && t !== '🔥熱門族群');
-                        if (isHot) st.unshift('🔥熱門族群');
-                        r.狀態標註 = st.join(' / ');
-                    });
-                }
+                // 即時補「🔥熱門族群」標籤(用代號對照,相容所有舊資料)
+                recomputeHotIndustryTag(p);
                 // 取該日評分前 topN 名的代號集合
                 const ranked = (p.top50||[]).slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN);
                 dayData[dk] = {
@@ -4592,12 +4621,12 @@
                 const entryPrice = stock.收盤價 || ed.priceMap[sym];
                 if (!entryPrice || entryPrice <= 0) continue;
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
-                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode });
+                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN });
                 trades.push(t);
             }
         }
 
-        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, selectedTags, totalEntries: trades.length };
+        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, selectedTags, totalEntries: trades.length };
         renderStrategyResult(trades, meta);
         setBtCache(cacheKey, { trades, meta });
         msg.innerHTML = `策略回測完成（${trades.length} 筆交易）　<span style="color:#64748b;font-size:11px">已存快取</span>`;
@@ -4628,12 +4657,13 @@
             }
 
             if (cfg.exitMode === 'breakout') {
-                // ── 模式B:時間停損(獲利<10% 連續 N 日沒突破10% 就賣) ──
-                // 獲利≥10% 後改用離榜邏輯(避免賺了還被時間停損掃出)
+                // ── 模式B:時間停損 ──
+                // 獲利<10%:N日(breakoutN)內沒突破10%就賣
+                // 獲利≥10%:用離開TOP50天數(10-100%→exitN2, >100%→exitN3)
                 if (ret < 10) {
                     belowDays++;
-                    if (belowDays >= cfg.exitN1) {
-                        return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, `${cfg.exitN1}日未突破10%`, peakRet);
+                    if (belowDays >= cfg.breakoutN) {
+                        return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, `${cfg.breakoutN}日未突破10%`, peakRet);
                     }
                 } else {
                     belowDays = 0;  // 突破10%,歸零
@@ -4711,7 +4741,7 @@
             <b style="color:#fbbf24">停利規則(收盤近似版):</b><br>
             • 獲利≤-10% → 停損出場<br>
             ${meta.exitMode === 'breakout'
-              ? `• 獲利&lt;10% → <b>${meta.exitN1}日內沒突破10%</b>就賣(時間停損)<br>
+              ? `• 獲利&lt;10% → <b>${meta.breakoutN}日</b>內沒突破10%就賣(時間停損)<br>
                  • 突破10%後 → 獲利10-100%離榜<b>${meta.exitN2}日</b>、&gt;100%離榜<b>${meta.exitN3}日</b>出場`
               : `• 獲利&lt;10% → 連續離開TOP${meta.topN} <b>${meta.exitN1}日</b>出場<br>
                  • 獲利10-100% → 連續離開TOP${meta.topN} <b>${meta.exitN2}日</b>出場<br>
@@ -4767,6 +4797,37 @@
         result.innerHTML = html;
     }
 
+    // 用「代號→族群」對照即時重算熱門族群標籤(不依賴 payload 是否存 inds/標籤)
+    // 個股相關產業優先序:payload 既有 > 自訂族群 > STOCK_DICT。前5大族群從 top50 即時統計。
+    function recomputeHotIndustryTag(payload) {
+        if (!payload?.top50?.length) return;
+        const indOf = sym => {
+            // 自訂族群優先
+            try {
+                const cust = (typeof getCustomIndustry === 'function') ? getCustomIndustry() : {};
+                if (cust[sym]) return cust[sym];
+            } catch(e) {}
+            const d = (typeof STOCK_DICT !== 'undefined') ? STOCK_DICT[sym] : null;
+            return d?.i || '';
+        };
+        const splitI = s => (s||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
+        // 補每檔相關產業(若 payload 沒存就用代號對照)
+        payload.top50.forEach(r => { if (!r.相關產業) r.相關產業 = indOf(r.代號); });
+        // 統計前5大族群(用 top50 出現次數)
+        const cnt = {};
+        payload.top50.forEach(r => splitI(r.相關產業).forEach(i => { cnt[i] = (cnt[i]||0)+1; }));
+        const top5 = new Set(Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([i])=>i));
+        if (!top5.size) return;
+        // 補標籤
+        payload.top50.forEach(r => {
+            const isHot = splitI(r.相關產業).some(i => top5.has(i));
+            let st = (r.狀態標註||'').split(' / ').filter(t => t && t !== '🔥熱門族群');
+            if (isHot) st.unshift('🔥熱門族群');
+            r.狀態標註 = st.join(' / ');
+        });
+    }
+    window.recomputeHotIndustryTag = recomputeHotIndustryTag;
+
     async function computeDayBacktest(dateKey, opts) {
         const { holdN, topN, selectedTags, stopLoss } = opts;
         let entryPayload;
@@ -4774,17 +4835,8 @@
         catch(e) { return { error: `載入失敗:${e.message}` }; }
         if (!entryPayload?.top50?.length) return { error: '無此日期資料' };
 
-        // 即時補「🔥熱門族群」標籤(相容舊資料,讓矩陣/拆解能算熱門族群)
-        const _top5 = new Set((entryPayload.inds||[]).slice(0,5).map(x => x.ind));
-        if (_top5.size) {
-            entryPayload.top50.forEach(r => {
-                const myInds = (r.相關產業||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
-                const isHot = myInds.some(i => _top5.has(i));
-                let st = (r.狀態標註||'').split(' / ').filter(t => t && t !== '🔥熱門族群');
-                if (isHot) st.unshift('🔥熱門族群');
-                r.狀態標註 = st.join(' / ');
-            });
-        }
+        // 即時補「🔥熱門族群」標籤(用代號→族群對照,完全不依賴舊 payload 是否存標籤)
+        recomputeHotIndustryTag(entryPayload);
 
         // 決定出場日(入場日往後第 holdN 個有資料的交易日)
         const allD = await loadDailyIndex().catch(()=>[]);
