@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cq</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ct</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2845,7 +2845,7 @@
             }
         }
         if (!idx.includes(dateKey)) { idx.unshift(dateKey); idx.sort().reverse(); }
-        if (idx.length > 365) idx = idx.slice(0, 365);
+        // 不截斷索引:保留所有歷史日期(之前 slice(0,365) 會讓超過一年的舊資料從索引消失)
         await repoPut(dailyIndexURL(), idx, idxData?.sha, `update index ${dateKey}`);
         console.log(`✅ data/daily/index.json 已更新（${idx.length} 筆）`);
     }
@@ -2853,30 +2853,35 @@
     // 批次結束後統一更新索引(把多個 dateKey 一次加入)
     async function updateDailyIndexBatch(dateKeys) {
         if (!hasRepo() || !dateKeys.length) return;
-        const idxData = await repoGet(dailyIndexURL());
-        let idx = [];
-        if (idxData) {
-            try { idx = decodeGitHubContent(idxData.content); } catch(e) {}
+        try {
+            const idxData = await repoGet(dailyIndexURL());
+            let idx = [];
+            if (idxData) {
+                try { idx = decodeGitHubContent(idxData.content); } catch(e) {}
+            }
+            dateKeys.forEach(dk => { if (!idx.includes(dk)) idx.push(dk); });
+            idx = [...new Set(idx)].sort().reverse();
+            // 不截斷索引:保留所有歷史日期
+            await repoPut(dailyIndexURL(), idx, idxData?.sha, `batch update index (${dateKeys.length} dates)`);
+            console.log(`✅ index.json 批次更新（共 ${idx.length} 筆）`);
+        } catch(e) {
+            // 索引更新失敗 → 自動掃描 repo 重建,確保資料不會「看不到」
+            console.warn('[索引批次更新失敗,改用掃描重建]', e.message);
+            await rebuildDailyIndex();
         }
-        dateKeys.forEach(dk => { if (!idx.includes(dk)) idx.push(dk); });
-        idx = [...new Set(idx)].sort().reverse();
-        if (idx.length > 365) idx = idx.slice(0, 365);
-        await repoPut(dailyIndexURL(), idx, idxData?.sha, `batch update index (${dateKeys.length} dates)`);
-        console.log(`✅ index.json 批次更新（共 ${idx.length} 筆）`);
     }
 
     async function loadDailyIndex() {
         if (!hasRepo()) return [];
+        // index.json 需要即時(剛匯入的新日期要馬上看到),直接走 Contents API + 防快取
+        // 之前用 rawFetch 會吃到 GitHub CDN / 瀏覽器快取的舊 index,導致「資料還在但看不到,要重建才出現」
         try {
-            // 優先用 raw URL（不需 Base64 解碼，更可靠）
-            const data = await rawFetch(REPO_CONFIG.HIST_DIR + '/index.json');
-            if (data) return data;
-        } catch(e) {
-            console.warn('[loadDailyIndex] rawFetch 失敗，改用 Contents API:', e.message);
-        }
-        try {
-            const data = await repoGet(dailyIndexURL());
-            if (!data) return [];
+            const cfg = getRepoConfig();
+            const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DAILY_INDEX_FILE}?ref=${cfg.branch || 'main'}&_t=${Date.now()}`;
+            const r = await fetch(url, { headers: repoHeaders(), cache: 'no-store' });
+            if (r.status === 404) return [];
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const data = await r.json();
             return decodeGitHubContent(data.content);
         } catch(e) {
             console.warn('[loadDailyIndex] 失敗:', e.message);
@@ -4976,7 +4981,19 @@
             const en = ss.map(s => { const r=entryPayload.top50.find(x=>x.代號===s); return (r?.收盤價||entryPriceMap[s])!=null?s+'✓':s+'✗入場價缺';}).join(' ');
             console.warn(`[無樣本] ${dateKey}→${exitDateKey}: top50=${entryPayload.top50.length} 前N=${topNSyms.size} 過篩=${records.length} | 入場價:${en} | 出場價:${eh}`);
             if (records.length === 0 && topNSyms.size > 0 && selectedTags.length) {
-                console.warn(`  ↳ 勾選標籤=[${selectedTags.join(', ')}] 完全缺少的標籤=[${missingTags.join(', ')||'無'}]`);
+                const topNRows2 = entryPayload.top50.filter(r => topNSyms.has(r.代號));
+                // 逐標籤命中數
+                const perTag = selectedTags.map(t => `${t}:${topNRows2.filter(r=>(r.狀態標註||'').includes(t)).length}檔`).join(', ');
+                // 累進交集(A, A∩B, A∩B∩C…)看在哪一步歸零
+                let cumLabel = [], cumCount = [];
+                for (let i = 0; i < selectedTags.length; i++) {
+                    const sub = selectedTags.slice(0, i+1);
+                    const n = topNRows2.filter(r => sub.every(t => (r.狀態標註||'').includes(t))).length;
+                    cumLabel.push(sub.join('∩')); cumCount.push(n);
+                }
+                const cumStr = cumLabel.map((l,i)=>`${l}=${cumCount[i]}`).join(' → ');
+                console.warn(`  ↳ 各標籤命中: ${perTag}`);
+                console.warn(`  ↳ 累進交集: ${cumStr}（${missingTags.length?'完全缺少:'+missingTags.join(','):'各標籤都有,但無交集'}）`);
             }
         }
         const wins = withPrice.filter(r=>r.報酬率>0);
@@ -5011,17 +5028,29 @@
                 (meta.selectedTags||[]).slice().sort().join('+'), dataFingerprint].join('|');
     }
     function setBtCache(key, payload) {
-        try {
-            const cache = getBtCache();
-            cache[key] = { ...payload, savedAt: Date.now() };
-            // 最多保留 20 筆快取(避免 localStorage 爆),刪最舊的
-            const keys = Object.keys(cache);
-            if (keys.length > 20) {
-                keys.sort((a,b)=>(cache[a].savedAt||0)-(cache[b].savedAt||0));
-                delete cache[keys[0]];
+        const cache = getBtCache();
+        cache[key] = { ...payload, savedAt: Date.now() };
+        // 最多保留 3 筆(渲染後 HTML 較大,避免 localStorage 爆容量)
+        let keys = Object.keys(cache);
+        keys.sort((a,b)=>(cache[b].savedAt||0)-(cache[a].savedAt||0));  // 新→舊
+        keys.slice(3).forEach(k => delete cache[k]);  // 只留最新3筆
+        // 嘗試寫入;若超容量,逐筆刪最舊的重試
+        let toStore = { ...cache };
+        for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+                localStorage.setItem(BT_CACHE_KEY, JSON.stringify(toStore));
+                return;
+            } catch(e) {
+                const ks = Object.keys(toStore).sort((a,b)=>(toStore[a].savedAt||0)-(toStore[b].savedAt||0));
+                if (ks.length <= 1) {
+                    // 只剩1筆還是爆 → 放棄快取(不影響功能,只是下次要重算)
+                    console.warn('快取單筆超容量,略過快取(功能正常,僅下次需重算)');
+                    try { localStorage.removeItem(BT_CACHE_KEY); } catch(_){}
+                    return;
+                }
+                delete toStore[ks[0]];  // 刪最舊的再試
             }
-            localStorage.setItem(BT_CACHE_KEY, JSON.stringify(cache));
-        } catch(e) { console.warn('快取儲存失敗(可能超出localStorage容量):', e.message); }
+        }
     }
     function clearBtCache() {
         try { localStorage.removeItem(BT_CACHE_KEY); } catch(e) {}
@@ -5272,6 +5301,80 @@
                         <span><b style="color:#4ade80">${c.winRate.toFixed(0)}%</b> <span style="color:#64748b">n=${c.n}</span></span></div>`;
                 });
                 html += `</div>`;
+            }
+
+            // ── 多標籤組合排行(2標籤 + 3標籤交集) ──
+            // 計算任意標籤組合的勝率/平均/樣本(AND 交集)
+            const comboStat = (tags) => {
+                const keys = tags.map(keyOf);
+                const recs = allFullRecords.filter(r => {
+                    const st = r.狀態標註 || '';
+                    return keys.every(k => st.includes(k));
+                });
+                if (!recs.length) return null;
+                const w = recs.filter(r=>r.報酬率>0).length;
+                return { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
+            };
+            // 產生所有 2 標籤、3 標籤組合
+            const buildCombos = (size) => {
+                const out = [];
+                const rec = (start, picked) => {
+                    if (picked.length === size) {
+                        const s = comboStat(picked);
+                        if (s) out.push({ tags:[...picked], name:picked.join(' ∩ '), ...s });
+                        return;
+                    }
+                    for (let i = start; i < matrixTags.length; i++) rec(i+1, [...picked, matrixTags[i]]);
+                };
+                rec(0, []);
+                return out;
+            };
+            const renderComboRank = (combos, title, subtitle) => {
+                if (!combos.length) return '';
+                // 樣本足夠(n≥20)依勝率排序;不足的列入潛力
+                const reliable = combos.filter(c => c.n >= 20).sort((a,b) => b.winRate - a.winRate || b.avg - a.avg);
+                const potential = combos.filter(c => c.n < 20 && c.n >= 5 && c.winRate >= 80).sort((a,b) => b.winRate - a.winRate);
+                let h = `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">${title}</div>`;
+                h += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">${subtitle}</div>`;
+                if (reliable.length) {
+                    h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+                        <thead><tr style="background:var(--bg2)">
+                        <th style="padding:6px 8px;text-align:left">排名</th>
+                        <th style="padding:6px 8px;text-align:left">標籤組合</th>
+                        <th style="padding:6px 8px;text-align:right">勝率</th>
+                        <th style="padding:6px 8px;text-align:right">平均報酬</th>
+                        <th style="padding:6px 8px;text-align:right">樣本數</th></tr></thead><tbody>`;
+                    reliable.slice(0, 10).forEach((c, i) => {
+                        const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
+                        h += `<tr style="border-bottom:1px solid var(--border)">
+                            <td style="padding:6px 8px">${medal}</td>
+                            <td style="padding:6px 8px;color:#e2e8f0">${c.tags.map(shortName).join(' ∩ ')}</td>
+                            <td style="padding:6px 8px;text-align:right;font-weight:700;color:${c.winRate>=50?'#4ade80':'#f87171'}">${c.winRate.toFixed(1)}%</td>
+                            <td style="padding:6px 8px;text-align:right;color:${c.avg>=0?'#4ade80':'#f87171'}">${c.avg>=0?'+':''}${c.avg.toFixed(1)}%</td>
+                            <td style="padding:6px 8px;text-align:right;color:#64748b">${c.n}</td></tr>`;
+                    });
+                    h += `</tbody></table></div>`;
+                } else {
+                    h += `<div style="font-size:12px;color:#64748b;padding:6px 0">無樣本足夠(n≥20)的組合</div>`;
+                }
+                if (potential.length) {
+                    h += `<div style="margin:8px 0 4px;font-size:11px;color:#a78bfa">💡 潛力組合(n&lt;20 但勝率≥80%,需更多資料):</div>`;
+                    h += `<div style="font-size:11px;color:#94a3b8;display:flex;flex-direction:column;gap:3px">`;
+                    potential.slice(0,5).forEach(c => {
+                        h += `<div style="display:flex;justify-content:space-between;padding:3px 10px;background:var(--bg2);border-radius:5px">
+                            <span>${c.tags.map(shortName).join(' ∩ ')}</span>
+                            <span><b style="color:#4ade80">${c.winRate.toFixed(0)}%</b> <span style="color:#64748b">n=${c.n}</span></span></div>`;
+                    });
+                    h += `</div>`;
+                }
+                return h;
+            };
+
+            if (matrixTags.length >= 2) {
+                html += renderComboRank(buildCombos(2), '🔗 兩標籤組合排行', '所有「兩標籤同時符合」的組合,依勝率排序(n≥20 才上榜)。幫你找出最強的雙標籤搭配。');
+            }
+            if (matrixTags.length >= 3) {
+                html += renderComboRank(buildCombos(3), '🎯 三標籤組合排行', '所有「三標籤同時符合」的組合,依勝率排序(n≥20 才上榜)。三標籤交集樣本通常較少,留意樣本數。');
             }
         }
 
