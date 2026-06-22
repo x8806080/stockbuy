@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04db</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dc</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4723,9 +4723,10 @@
         result.innerHTML = '';
         msg.textContent = '載入區間資料中…';
 
-        // 一次載入所有交易日的 payload(priceMap + top50名單),建快取
-        // 用「所有有資料日期」而非只區間內,因為出場可能在區間結束後
-        const allDatesSorted = allD.slice().sort();
+        // 載入資料範圍:從「最早入場日」到「最新資料日」
+        // 入場日之前的資料用不到(出場只會在入場日之後);但入場日之後的要全留,因為出場可能抱到最新
+        const earliestEntry = entryDates.slice().sort()[0];
+        const allDatesSorted = allD.slice().sort().filter(d => d >= earliestEntry);
         const dayData = {};  // dateKey → { priceMap, topNSet }
         for (let i = 0; i < allDatesSorted.length; i++) {
             const dk = allDatesSorted[i];
