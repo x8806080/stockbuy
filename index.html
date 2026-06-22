@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ct</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cu</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1506,6 +1506,9 @@
             const isRiseStart  = fileName.includes('起漲');  // 起漲標的檔
             const isMorgan5d   = fileName.includes('大摩') && (fileName.includes('5日') || fileName.includes('買超'));  // 大摩5日買超
             const isTrustRank  = fileName.includes('投信') && (fileName.includes('當週') || fileName.includes('買超排行'));  // 投信當週買超排行
+            // final_output 綜合檔:同時含 5日漲幅+1月漲幅+法人買賣超(可單獨一份做完整當日分析)
+            const isFinalOutput = /final_output/i.test(fileName)
+                || (headers.some(k=>k.includes('5日漲幅')) && headers.some(k=>k.includes('1個月漲幅')) && headers.some(k=>k.includes('買賣超金額')));
             // 當日漲幅排行檔(優先判斷;用精確關鍵字避免誤抓「5日漲幅排行」)
             const isDayRankFile = !isInventory && !isRiseStart &&
                 (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('當沖')) &&
@@ -1566,6 +1569,8 @@
                 !k.includes('投信') &&
                 (k.includes('法人') || k.includes('外資')) &&
                 (k.includes('一月') || k.includes('1個月') || k.includes('月累') || k.includes('30日'))
+            ) || headers.find(k =>  // final_output:「1個月買賣超金額(萬元)」(無法人字樣)
+                !k.includes('投信') && k.includes('買賣超') && (k.includes('1個月') || k.includes('一月') || k.includes('1月'))
             );
             // 投信欄：必須含「投信」+ 買賣超（投信5日累積買賣超）
             const trustKey = headers.find(k => k.includes('投信') && (k.includes('5日') || k.includes('五日') || k.includes('累計') || k.includes('累積')) && (k.includes('買') || k.includes('超')))
@@ -1587,7 +1592,7 @@
                 isEtfOrMorgan ? 'ETF/大摩' : '',
                 isInventory   ? '庫存'     : '',
             ].filter(Boolean).join('+');
-            const rankType = isRiseStart ? '起漲' : isMorgan5d ? '大摩5日買超' : isTrustRank ? '投信當週買超排行' : is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
+            const rankType = isFinalOutput ? 'final_output綜合檔(5日+1月+法人)' : isRiseStart ? '起漲' : isMorgan5d ? '大摩5日買超' : isTrustRank ? '投信當週買超排行' : is5dRankFile ? '5日排行' : is1mRankFile ? '1月排行' : isInventory ? '庫存' : isEtfOrMorgan ? 'ETF/大摩' : '其他';
             fileTypeLog.push(`${fileName} → 判定:【${rankType}】 漲幅類型:【${detectedRiseType||'無'}】 其他欄位:【${detectedOther||'無'}】`);
             fileTypeLog.push(`　　漲幅欄：${riseKey||'無'} | 法人5日欄：${corp5dKey||'無'} | 法人一月欄：${corp1mKey||'無'} | 投信欄：${trustKey||'無'} | 營收年增欄：${revKey||'無'} | 市值欄：${mktCapKey||'無'}`);
 
@@ -1619,6 +1624,16 @@
                 if (!entry.名稱 && stockName) entry.名稱 = stockName;
                 if (!entry.相關產業 && industry) entry.相關產業 = industry;
 
+                if (isFinalOutput) {
+                    // final_output 綜合檔:同時填 5日、1月漲幅(各自獨立欄)
+                    const k5 = headers.find(k => k.includes('5日漲幅'));
+                    const k1m = headers.find(k => k.includes('1個月漲幅') || k.includes('1月漲幅'));
+                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: rowIdx }); } }
+                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: rowIdx }); } }
+                    // 收盤價(供當日漲幅用前日推算 + 評分)
+                    const kClose = headers.find(k => k.includes('收盤'));
+                    if (kClose) { const v = parseNum(row[kClose]); if (v !== null && v > 0) entry.收盤價 = v; }
+                }
                 if (is5dRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
                     if (v !== null) rise5dMap[symbol] = v;
