@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cw</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cx</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1630,8 +1630,12 @@
                     if (!finalOutputCloseMap) finalOutputCloseMap = {};
                     const k5 = headers.find(k => k.includes('5日漲幅'));
                     const k1m = headers.find(k => k.includes('1個月漲幅') || k.includes('1月漲幅'));
-                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: rowIdx }); } }
-                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: rowIdx }); } }
+                    const kDay = headers.find(k => k.includes('當日漲幅'));
+                    // idx 用「-漲幅」→ 漲幅大的排前面(final_output 按代號排序,不能用列順序當排名)
+                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: -v }); } }
+                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: -v }); } }
+                    // 當日漲幅:final_output 若有此欄就直接用(不必等前一日推算)
+                    if (kDay) { const v = parseNum(row[kDay]); if (v !== null) { riseDayMap[symbol] = v; riseDayRankList.push({ sym: symbol, idx: -v }); } }
                     // 收盤價(供當日漲幅用前日推算 + 評分)
                     const kClose = headers.find(k => k.includes('收盤'));
                     if (kClose) { const v = parseNum(row[kClose]); if (v !== null && v > 0) { entry.收盤價 = v; finalOutputCloseMap[symbol] = v; } }
