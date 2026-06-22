@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04da</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04db</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -762,6 +762,13 @@
                                 <input type="number" id="stratBreakoutN" value="5" min="1" max="60"
                                     style="width:48px;padding:3px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
                                 日內沒突破10%就賣)
+                            </label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                                <input type="radio" name="exitMode" value="losehot" style="accent-color:#f97316">
+                                失去熱門族群(獲利&lt;10%,連續
+                                <input type="number" id="stratLoseHotN" value="3" min="1" max="60"
+                                    style="width:48px;padding:3px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                                日失去🔥熱門族群就賣)
                             </label>
                         </div>
                         <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px">
@@ -4696,11 +4703,13 @@
         const exitN3 = parseInt(document.getElementById('stratExitN3')?.value) || 20;  // ≥100%
         const exitMode = document.querySelector('input[name="exitMode"]:checked')?.value || 'leave';  // leave=離榜 / breakout=時間停損
         const breakoutN = parseInt(document.getElementById('stratBreakoutN')?.value) || 5;  // 時間停損:獲利<10%幾日內沒突破10%就賣
+        const loseHotN = parseInt(document.getElementById('stratLoseHotN')?.value) || 3;  // 失去熱門族群:獲利<10%連續幾日失去熱門族群就賣
         const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value);
+        const tagMode = document.querySelector('input[name="btTagMode"]:checked')?.value || 'and';
 
         // 快取指紋
         const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
-        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, tagMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, tagMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
         if (!forceRecalc) {
             const cache = getBtCache();
             if (cache[cacheKey]) {
@@ -4732,13 +4741,13 @@
                     priceMap: p.priceMap || {},
                     topNSet: new Set(ranked.map(r=>r.代號)),
                     top50: p.top50 || [],
+                    hotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🔥熱門族群')).map(r=>r.代號)),
                 };
             } catch(e) { /* 跳過 */ }
         }
 
         // 對每個入場日,取當天 TOP-N 符合標籤的標的,逐檔追蹤出場
         const trades = [];
-        const tagMode = document.querySelector('input[name="btTagMode"]:checked')?.value || 'and';
         const passTag = r => {
             if (!selectedTags.length) return true;
             const st = r.狀態標註 || '';
@@ -4754,12 +4763,12 @@
                 const entryPrice = stock.收盤價 || ed.priceMap[sym];
                 if (!entryPrice || entryPrice <= 0) continue;
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
-                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN });
+                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN });
                 trades.push(t);
             }
         }
 
-        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, selectedTags, totalEntries: trades.length };
+        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, selectedTags, totalEntries: trades.length };
         renderStrategyResult(trades, meta);
         setBtCache(cacheKey, { trades, meta });
         msg.innerHTML = `策略回測完成（${trades.length} 筆交易）　<span style="color:#64748b;font-size:11px">已存快取</span>`;
@@ -4812,9 +4821,33 @@
                         }
                     }
                 }
+            } else if (cfg.exitMode === 'losehot') {
+                // ── 模式C:失去熱門族群出場 ──
+                // 獲利<10%:連續 N 日(loseHotN)失去熱門族群標籤就賣
+                // 獲利≥10%:用離開TOP50天數(10-100%→exitN2, >100%→exitN3)
+                if (ret < 10) {
+                    const isHot = dd.hotSet && dd.hotSet.has(sym);
+                    if (isHot) { leftDays = 0; }   // 仍是熱門族群,歸零
+                    else {
+                        leftDays++;
+                        if (leftDays >= cfg.loseHotN) {
+                            return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, `失去熱門族群${cfg.loseHotN}日(獲利<10%)`, peakRet);
+                        }
+                    }
+                } else {
+                    leftDays = 0;  // 突破10%,歸零(改用離榜邏輯)
+                    const inTop = dd.topNSet.has(sym);
+                    if (inTop) { leftDays = 0; }
+                    else {
+                        leftDays++;
+                        const tol = ret < 100 ? cfg.exitN2 : cfg.exitN3;
+                        if (leftDays >= tol) {
+                            const reason = ret < 100 ? `離榜${cfg.exitN2}日(獲利10-100%)` : `離榜${cfg.exitN3}日(獲利>100%)`;
+                            return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, reason, peakRet);
+                        }
+                    }
+                }
             } else {
-                // ── 模式A:離榜出場(連續離開TOP50,依當下獲利分層) ──
-                const inTop = dd.topNSet.has(sym);
                 if (inTop) {
                     leftDays = 0;   // 回到榜上,歸零
                 } else {
@@ -4876,6 +4909,9 @@
             ${meta.exitMode === 'breakout'
               ? `• 獲利&lt;10% → <b>${meta.breakoutN}日</b>內沒突破10%就賣(時間停損)<br>
                  • 突破10%後 → 獲利10-100%離榜<b>${meta.exitN2}日</b>、&gt;100%離榜<b>${meta.exitN3}日</b>出場`
+              : meta.exitMode === 'losehot'
+              ? `• 獲利&lt;10% → 連續<b>${meta.loseHotN}日</b>失去🔥熱門族群就賣<br>
+                 • 獲利≥10% → 獲利10-100%離榜<b>${meta.exitN2}日</b>、&gt;100%離榜<b>${meta.exitN3}日</b>出場`
               : `• 獲利&lt;10% → 連續離開TOP${meta.topN} <b>${meta.exitN1}日</b>出場<br>
                  • 獲利10-100% → 連續離開TOP${meta.topN} <b>${meta.exitN2}日</b>出場<br>
                  • 獲利≥100% → 連續離開TOP${meta.topN} <b>${meta.exitN3}日</b>出場`}
