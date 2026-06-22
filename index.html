@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cv</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cw</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1441,6 +1441,7 @@
         let fileTagMap   = {};   // 標籤名 → Set(代號)
         let fileTagOrder = [];   // 保留檔案上傳順序(輸出/標籤排序用)
         let isInventoryUploaded = false;
+        let finalOutputCloseMap = null;   // final_output 的「代號→當日收盤」(供推算當日漲幅);null=未上傳 final_output
         let rise5dTop40      = new Set();
         let rise1mTop40      = new Set();
         let riseDayTop       = new Set();   // 當日漲幅前N%
@@ -1626,13 +1627,14 @@
 
                 if (isFinalOutput) {
                     // final_output 綜合檔:同時填 5日、1月漲幅(各自獨立欄)
+                    if (!finalOutputCloseMap) finalOutputCloseMap = {};
                     const k5 = headers.find(k => k.includes('5日漲幅'));
                     const k1m = headers.find(k => k.includes('1個月漲幅') || k.includes('1月漲幅'));
                     if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: rowIdx }); } }
                     if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: rowIdx }); } }
                     // 收盤價(供當日漲幅用前日推算 + 評分)
                     const kClose = headers.find(k => k.includes('收盤'));
-                    if (kClose) { const v = parseNum(row[kClose]); if (v !== null && v > 0) entry.收盤價 = v; }
+                    if (kClose) { const v = parseNum(row[kClose]); if (v !== null && v > 0) { entry.收盤價 = v; finalOutputCloseMap[symbol] = v; } }
                 }
                 if (is5dRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
@@ -1756,6 +1758,37 @@
         }
         rise5dTop40 = topByPct(rise5dRankList, SC.momentum.topPct);
         rise1mTop40 = topByPct(rise1mRankList, SC.momentum.topPct);
+
+        // 當日漲幅:有上傳當日漲幅排行檔 → 直接用;沒有但有 final_output → 用前一交易日收盤推算
+        if (!riseDayRankList.length && finalOutputCloseMap && Object.keys(finalOutputCloseMap).length) {
+            try {
+                const analysisKey = getAnalysisDateKey() || todayKey();
+                const allIdx = (await loadDailyIndex().catch(()=>[])).slice().sort();
+                // 找比分析日早的最近一個交易日
+                const prevDk = allIdx.filter(d => d < analysisKey).pop();
+                if (prevDk) {
+                    const prevP = await loadDailyResult(prevDk).catch(()=>null);
+                    const prevPrice = prevP?.priceMap || {};
+                    let filled = 0;
+                    Object.keys(finalOutputCloseMap).forEach(sym => {
+                        const today = finalOutputCloseMap[sym];
+                        const prev = prevPrice[sym];
+                        if (prev && prev > 0 && today > 0) {
+                            const chg = (today - prev) / prev * 100;
+                            riseDayMap[sym] = chg;
+                            riseDayRankList.push({ sym, idx: -chg });  // idx 用 -漲幅,排序時漲幅大的在前
+                            filled++;
+                        }
+                    });
+                    // 依漲幅大→小排序(idx 越小=漲幅越大),讓 topByPct 取到漲幅最高的前N%
+                    riseDayRankList.sort((a,b) => a.idx - b.idx).forEach((r,i)=>{ r.idx = i; });
+                    console.log(`[分析] 當日漲幅用前一交易日(${prevDk})收盤推算,共 ${filled} 檔`);
+                } else {
+                    console.log('[分析] 無前一交易日資料,當日強勢略過');
+                }
+            } catch(e) { console.warn('[分析] 推算當日漲幅失敗:', e.message); }
+        }
+
         riseDayTop  = topByPct(riseDayRankList, SC.momentum.dayPct);
         console.log('[分析] 前N%進榜: 5日', rise5dTop40.size, '| 1月', rise1mTop40.size, '| 當日', riseDayTop.size,
                     `(5日/1月前${SC.momentum.topPct}%, 當日前${SC.momentum.dayPct}%)`);
@@ -1940,15 +1973,8 @@
             }
 
             row.綜合評分 = score;
-            // 掛上「檔名標籤」：該股出現在哪些上傳的CSV(除庫存)就掛哪些標籤
-            const fileTags = [];
-            fileTagOrder.forEach(tagName => {
-                if (fileTagMap[tagName] && fileTagMap[tagName].has(row.代號)) {
-                    fileTags.push('📁' + tagName);
-                }
-            });
-            const allTags = tags.concat(fileTags);
-            row.狀態標註 = allTags.join(' / ');
+            // 檔名標籤(📁)已移除,狀態標註只保留評分標籤
+            row.狀態標註 = tags.join(' / ');
             row.防禦指令 = '獲利<10%守60分K20T；>10%守雙週K低點；>100%守雙月K低點';
             return row;
         });
@@ -4608,12 +4634,8 @@
     function renderBtTagFilter() {
         const box = document.getElementById('btTagFilterBox');
         if (!box) return;
-        // 組合:固定標籤群組 + 動態檔名標籤群組(以最終版標籤為主)
+        // 只用固定標籤群組(📁檔名標籤已移除)
         const groups = BT_TAG_GROUPS.slice();
-        const fileTags = getBtFileTags();
-        if (fileTags.length) {
-            groups.push({ group: '檔名標籤', tags: fileTags.map(t => '📁' + t) });
-        }
         box.innerHTML = groups.map(g => `
             <div style="display:flex;flex-direction:column;gap:4px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--input-bg)">
                 <div style="font-size:10px;color:#64748b;font-weight:600">${g.group}</div>
