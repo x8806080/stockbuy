@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cz</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04da</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1797,10 +1797,16 @@
         console.log('[分析] 前N%進榜: 5日', rise5dTop40.size, '| 1月', rise1mTop40.size, '| 當日', riseDayTop.size,
                     `(5日/1月前${SC.momentum.topPct}%, 當日前${SC.momentum.dayPct}%)`);
 
-        // ── 套用自訂族群（覆蓋 CSV 相關產業）── 移到最前,讓族群共振/熱門族群/TAG 全連動
+        // ── 套用族群:自訂族群 > STOCK_DICT(代號對照) > CSV既有 ──
+        // (final_output 沒有相關產業欄,需用代號從 STOCK_DICT 補,與批次匯入一致)
         const customInd = getCustomIndustry();
         Object.values(masterDict).forEach(r => {
-            if (customInd[r.代號]) r.相關產業 = customInd[r.代號];
+            if (customInd[r.代號]) {
+                r.相關產業 = customInd[r.代號];
+            } else if (!r.相關產業 || r.相關產業 === '-') {
+                const d = (typeof STOCK_DICT !== 'undefined') ? STOCK_DICT[r.代號] : null;
+                if (d && d.i) r.相關產業 = d.i;
+            }
         });
 
         // ── 依漲幅排行標的，自動推算「買超/市值比值」分位數門檻 ──
