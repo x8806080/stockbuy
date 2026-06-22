@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cu</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cv</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1678,6 +1678,11 @@
                         if (entry.市值 === null || vM > entry.市值) entry.市值 = vM;
                     }
                 }
+                // CSV 沒有市值欄(如 final_output)→ 用代號從 STOCK_DICT 補(單位億→百萬)
+                if (!entry.市值 || entry.市值 <= 0) {
+                    const dictM = (STOCK_DICT[symbol] && STOCK_DICT[symbol].m) || 0;
+                    if (dictM > 0) entry.市值 = dictM * 100;
+                }
 
                 // 布林三軌寫入（取最後讀到的值，不取 max）
                 if (bollUpKey)  { const v = parseNum(row[bollUpKey]);  if (v !== null) entry.布林上軌 = v; }
@@ -1712,7 +1717,11 @@
             if (e.三大法人5日買超 === null || e.三大法人5日買超 === -Infinity) e.三大法人5日買超 = 0;
             if (e.法人一月買超    === null || e.法人一月買超    === -Infinity) e.法人一月買超    = 0;
             if (e.投信週買超      === null || e.投信週買超      === -Infinity) e.投信週買超      = 0;
-            if (e.市值            === null) e.市值 = 0;
+            // 市值缺漏 → 先用代號從 STOCK_DICT 補(單位億→百萬),仍無才設 0
+            if (!e.市值 || e.市值 <= 0) {
+                const dictM = (STOCK_DICT[e.代號] && STOCK_DICT[e.代號].m) || 0;
+                e.市值 = dictM > 0 ? dictM * 100 : 0;
+            }
             // 買超/市值比值
             e.法人市值比 = e.市值 > 0 ? e.三大法人5日買超 / e.市值 : 0;
             e.投信市值比 = e.市值 > 0 ? e.投信週買超 / e.市值 : 0;
