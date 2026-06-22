@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cx</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04cz</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2085,7 +2085,8 @@
                 indMap[ind].corpSum += (r.三大法人5日買超 || 0);
             });
         });
-        // 熱門族群排序：依5日漲幅TOP40進榜檔數(count)排序，同檔數再比資金
+        // 熱門族群排序：依進榜檔數(count)排序,同檔數再比買超總額
+        // (用檔數而非買超總額,避免單一權值股一檔就把族群拱上前5大,失真)
         const sortedInds = Object.entries(indMap)
             .sort((a,b) => (b[1].count - a[1].count) || (b[1].corpSum - a[1].corpSum))
             .slice(0, 8);
@@ -4387,7 +4388,9 @@
                 indMap[ind].corpSum += r._corp5;
             });
         });
-        const sortedInds = Object.entries(indMap).sort((a,b)=>b[1].corpSum-a[1].corpSum);
+        // 前5大熱門族群:依進榜檔數(count)排序,同檔數再比買超總額
+        // (用檔數而非買超總額,避免單一權值股一檔就把族群拱上前5大,與當日分析一致)
+        const sortedInds = Object.entries(indMap).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum));
         const top5Inds = new Set(sortedInds.slice(0,5).map(([k])=>k));
 
         const f5A=c.fallbackA||6000, f5B=c.fallbackB||1000, f5C=c.fallbackC||500;
@@ -4934,10 +4937,17 @@
         const splitI = s => (s||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
         // 補每檔相關產業(若 payload 沒存就用代號對照)
         payload.top50.forEach(r => { if (!r.相關產業 || r.相關產業 === '-') r.相關產業 = indOf(r.代號); });
-        // 統計前5大族群(用 top50 出現次數)
-        const cnt = {};
-        payload.top50.forEach(r => splitI(r.相關產業).forEach(i => { cnt[i] = (cnt[i]||0)+1; }));
-        const top5 = new Set(Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([i])=>i));
+        // 前5大族群:優先用 payload.inds(匯入時用「5日漲幅前N% + 檔數排序」算好的,最準)
+        // 沒有 inds 才退回用 top50 出現次數統計
+        let top5;
+        if (Array.isArray(payload.inds) && payload.inds.length) {
+            // 用 inds 裡存的 count 重新依檔數排序(不信任既有順序,因舊資料可能用 corpSum 排序)
+            top5 = new Set(payload.inds.slice().sort((a,b)=>(b.count||0)-(a.count||0)).slice(0,5).map(x => x.ind));
+        } else {
+            const cnt = {};
+            payload.top50.forEach(r => splitI(r.相關產業).forEach(i => { cnt[i] = (cnt[i]||0)+1; }));
+            top5 = new Set(Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([i])=>i));
+        }
         if (!top5.size) return;
         // 補標籤
         payload.top50.forEach(r => {
