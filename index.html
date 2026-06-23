@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dg</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dh</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2193,6 +2193,30 @@
             if (myInds.some(i => top5Inds.has(i))) {
                 if (!r.狀態標註) r.狀態標註 = '🔥熱門族群';
                 else if (!r.狀態標註.includes('🔥熱門族群')) r.狀態標註 = '🔥熱門族群 / ' + r.狀態標註;
+            }
+        });
+
+        // 波段熱門族群:5日漲幅前N% 中「站上週布林上軌」的標的,統計族群檔數取前5大(與批次匯入一致)
+        const waveIndMap = {};
+        rise5dTop40.forEach(sym => {
+            const r = masterDict[sym];
+            if (!r || !r.週布林站上上軌) return;   // 只算站上週布林上軌的
+            splitInds(r.相關產業).forEach(ind => {
+                if (!waveIndMap[ind]) waveIndMap[ind] = { count:0, corpSum:0 };
+                waveIndMap[ind].count++;
+                waveIndMap[ind].corpSum += (r.三大法人5日買超 || 0);
+            });
+        });
+        const top5WaveInds = new Set(
+            Object.entries(waveIndMap).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum))
+                .slice(0,5).map(([ind])=>ind)
+        );
+        console.log('[前5大波段熱門族群]', [...top5WaveInds]);
+        // 為屬於波段熱門族群的個股加「🌊波段熱門族群」標籤
+        finalData.forEach(r => {
+            const myInds = splitInds(r.相關產業);
+            if (myInds.some(i => top5WaveInds.has(i)) && !(r.狀態標註||'').includes('🌊波段熱門族群')) {
+                r.狀態標註 = r.狀態標註 ? r.狀態標註 + ' / 🌊波段熱門族群' : '🌊波段熱門族群';
             }
         });
 
