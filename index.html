@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dc</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04de</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -770,7 +770,59 @@
                                     style="width:48px;padding:3px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
                                 日失去🔥熱門族群就賣)
                             </label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                                <input type="radio" name="exitMode" value="custom4" style="accent-color:#f97316">
+                                🎚️ 自訂4層停利(下方設定)
+                            </label>
                         </div>
+                        <details id="custom4Panel" style="background:var(--bg2);padding:8px 12px;border-radius:6px;font-size:12px;color:var(--text-dim);width:100%">
+                            <summary style="cursor:pointer;font-weight:600;color:#f97316">🎚️ 自訂4層停利設定(選「自訂4層」時生效)</summary>
+                            <div style="margin-top:8px;line-height:2.2">
+                                <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">每層:獲利達到區間時,符合「觸發條件」連續N日就出場。門檻空白=用預設。</div>
+                                <!-- 第1層:停損 -->
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                    <span style="color:#f87171;font-weight:600;width:60px">①停損</span>
+                                    獲利≤ <span style="color:#f87171">−</span><input type="number" id="c4_stopLoss" placeholder="10" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% → 直接出場
+                                </div>
+                                <!-- 第2層:獲利<N% -->
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                    <span style="color:#fbbf24;font-weight:600;width:60px">②低獲利</span>
+                                    獲利&lt; <input type="number" id="c4_t2" placeholder="10" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% 時,
+                                    <select id="c4_cond2" style="padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">
+                                        <option value="leave">離開TOP50</option>
+                                        <option value="losehot">失去🔥熱門族群</option>
+                                        <option value="losewave">失去🌊波段熱門族群</option>
+                                        <option value="loseboll">跌破週布林上軌</option>
+                                        <option value="time">純時間(每日計)</option>
+                                    </select> 連續 <input type="number" id="c4_n2" placeholder="3" style="width:42px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">日
+                                </div>
+                                <!-- 第3層:N%<獲利<N% -->
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                    <span style="color:#4ade80;font-weight:600;width:60px">③中獲利</span>
+                                    <input type="number" id="c4_t3lo" placeholder="10" style="width:46px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">%≤獲利&lt;
+                                    <input type="number" id="c4_t3hi" placeholder="100" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% 時,
+                                    <select id="c4_cond3" style="padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">
+                                        <option value="leave">離開TOP50</option>
+                                        <option value="losehot">失去🔥熱門族群</option>
+                                        <option value="losewave">失去🌊波段熱門族群</option>
+                                        <option value="loseboll">跌破週布林上軌</option>
+                                        <option value="time">純時間(每日計)</option>
+                                    </select> 連續 <input type="number" id="c4_n3" placeholder="10" style="width:42px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">日
+                                </div>
+                                <!-- 第4層:獲利>N% -->
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                    <span style="color:#22d3ee;font-weight:600;width:60px">④高獲利</span>
+                                    獲利≥ <input type="number" id="c4_t4" placeholder="100" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% 時,
+                                    <select id="c4_cond4" style="padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">
+                                        <option value="leave">離開TOP50</option>
+                                        <option value="losehot">失去🔥熱門族群</option>
+                                        <option value="losewave">失去🌊波段熱門族群</option>
+                                        <option value="loseboll">跌破週布林上軌</option>
+                                        <option value="time">純時間(每日計)</option>
+                                    </select> 連續 <input type="number" id="c4_n4" placeholder="20" style="width:42px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">日
+                                </div>
+                            </div>
+                        </details>
                         <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px">
                             <span style="font-weight:600;color:#f97316">離榜出場日設定:</span>
                             <span style="display:flex;align-items:center;gap:4px">
@@ -1157,6 +1209,9 @@
                 minCount: v('sector_minCount'),
                 score:    v('sector_score'),
             },
+            waveSector: {
+                score:    v('waveSector_score'),
+            },
             etf: {
                 minCount: v('etf_minCount'),
                 score:    v('etf_score'),
@@ -1178,7 +1233,7 @@
         dragon_rankThr:10, dragon_score:25,
         superfund_revThr:80, superfund_corpThr:5000, superfund_score:15,
         morganTrust_rankThr:20, morganTrust_score:10,
-        sector_minCount:5, sector_score:10,
+        sector_minCount:5, sector_score:10, waveSector_score:15,
         etf_minCount:2, etf_score:15,
     };
 
@@ -4352,7 +4407,39 @@
     }
 
     // 計算單一日期的完整分析 payload(動能 + 法人市值比P90 + 族群統計)
-    function computeHistDayPayload(rows, dateKey, prevPriceMap) {
+    // ── 週布林通道計算 ──
+    // 把多天的「日收盤序列」轉週收盤(每週最後交易日),算 20週均線±2σ 上軌
+    function _weekKeyOf(dateKey) {
+        const y=+dateKey.slice(0,4), m=+dateKey.slice(4,6), d=+dateKey.slice(6,8);
+        const date=new Date(y, m-1, d);
+        const day=date.getDay()||7;          // 週日=7
+        date.setDate(date.getDate()-day+1);  // 回到該週週一當週鍵
+        return date.getFullYear()+String(date.getMonth()+1).padStart(2,'0')+String(date.getDate()).padStart(2,'0');
+    }
+    // histClosesBySym: { sym: [{dk, close}, ...] (按日期升序) }
+    // 回傳 { sym: {upper, sma, std, weekClose, aboveUpper} }
+    function computeWeeklyBollinger(histClosesBySym, period=20, k=2) {
+        const out = {};
+        for (const sym in histClosesBySym) {
+            const arr = histClosesBySym[sym];
+            if (!arr || arr.length < period*3) continue;  // 資料太少跳過(20週約需100+交易日)
+            // 按週取最後收盤
+            const weekMap = {};
+            arr.forEach(({dk, close}) => { if (close>0) weekMap[_weekKeyOf(dk)] = close; });
+            const weekCloses = Object.keys(weekMap).sort().map(wk => weekMap[wk]);
+            if (weekCloses.length < period) continue;
+            const recent = weekCloses.slice(-period);
+            const sma = recent.reduce((a,b)=>a+b,0)/period;
+            const variance = recent.reduce((a,b)=>a+(b-sma)**2,0)/period;
+            const std = Math.sqrt(variance);
+            const upper = sma + k*std;
+            const weekClose = weekCloses[weekCloses.length-1];
+            out[sym] = { upper, sma, std, weekClose, aboveUpper: weekClose > upper };
+        }
+        return out;
+    }
+
+    function computeHistDayPayload(rows, dateKey, prevPriceMap, bollMap) {
         const SC = getScoreConfig();
         const m = SC.momentum, c = SC.corp, c1 = SC.corp1m, tt = SC.trust;
 
@@ -4406,6 +4493,21 @@
         const sortedInds = Object.entries(indMap).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum));
         const top5Inds = new Set(sortedInds.slice(0,5).map(([k])=>k));
 
+        // 波段熱門族群:5日漲幅前N% 中「站上週布林上軌」的標的,統計族群檔數取前5大
+        const waveIndMap = {};
+        rows.forEach(r => {
+            if (!rise5dTop.has(r.代號) || !r.相關產業) return;
+            const b = bollMap && bollMap[r.代號];
+            if (!b || !b.aboveUpper) return;  // 只算站上週布林上軌的
+            splitIndsStandalone(r.相關產業).forEach(ind => {
+                if (!waveIndMap[ind]) waveIndMap[ind] = { count:0, corpSum:0 };
+                waveIndMap[ind].count++;
+                waveIndMap[ind].corpSum += r._corp5;
+            });
+        });
+        const sortedWaveInds = Object.entries(waveIndMap).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum));
+        const top5WaveInds = new Set(sortedWaveInds.slice(0,5).map(([k])=>k));
+
         const f5A=c.fallbackA||6000, f5B=c.fallbackB||1000, f5C=c.fallbackC||500;
         const f1A=c1.fallbackA||20000, f1B=c1.fallbackB||5000, f1C=c1.fallbackC||2000;
 
@@ -4458,6 +4560,17 @@
                 tags.push('🔥熱門族群');
             }
 
+            // 波段熱門族群:屬於「站上週布林的5日強勢族群」前5大 → 加分 + 標籤
+            if (myInds.some(i => top5WaveInds.has(i))) {
+                score += SC.waveSector?.score || SC.sector?.score || 0;
+                tags.push('🌊波段熱門族群');
+            }
+
+            // 站上週布林上軌標籤(用前面算好的 bollMap)
+            if (bollMap && bollMap[r.代號] && bollMap[r.代號].aboveUpper) {
+                tags.push('📈站上週布林');
+            }
+
             r.綜合評分 = score;
             r.狀態標註 = tags.join(' / ');
         });
@@ -4465,13 +4578,19 @@
         rows.sort((a,b) => b.綜合評分 - a.綜合評分);
         const top50 = rows.slice(0, 50);
 
-        const slim = r => ({
+        const slim = r => {
+            const b = bollMap && bollMap[r.代號];
+            return {
             代號:r.代號, 名稱:r.名稱, 相關產業:r.相關產業, 綜合評分:r.綜合評分, 狀態標註:r.狀態標註,
             收盤價:r.收盤價, 法人市值比pct:r.法人市值比pct||'-', 法人月市值比pct:r.法人月市值比pct||'-', 投信市值比pct:'-',
             三大法人5日買超: r._corp5, 法人一月買超: r._corp1m, 投信週買超: 0,
             市值億: r.市值億||0, 營收年增: 0,
-            布林σ位置:null, 布林上軌:null, 布林中軌:null, 布林下軌:null,
-        });
+            布林σ位置: b ? (b.std>0 ? (b.weekClose-b.sma)/b.std : null) : null,
+            布林上軌: b ? b.upper : null, 布林中軌: b ? b.sma : null,
+            布林下軌: b ? (b.sma - 2*b.std) : null,
+            週布林站上上軌: b ? b.aboveUpper : null,
+            };
+        };
 
         return {
             date: `批次匯入 ${dateKey}`,
@@ -4480,6 +4599,7 @@
             top50: top50.map(slim),
             inv: [], top20: top50.slice(0,20).map(slim),
             inds: sortedInds.slice(0,8).map(([k,v])=>({ind:k,count:v.count,corp:v.corpSum})),
+            waveInds: sortedWaveInds.slice(0,8).map(([k,v])=>({ind:k,count:v.count,corp:v.corpSum})),
             resonance: [],
             etfRes: [],
             rise5d: [...rise5dTop],
@@ -4558,7 +4678,34 @@
                     } catch(e) { prevPriceMap = {}; }
                 }
 
-                const payload = computeHistDayPayload(rows, t.dateKey, prevPriceMap);
+                // 載入前 120 個交易日的歷史收盤(算 20週布林上軌用),串成每檔的收盤序列
+                let bollMap = {};
+                try {
+                    const allIdx = (await loadDailyIndex().catch(()=>[])).slice().sort();
+                    const histDates = allIdx.filter(d => d < t.dateKey).slice(-120);
+                    if (histDates.length >= 60) {  // 至少60交易日才算(約12週)
+                        const histClosesBySym = {};
+                        for (const hd of histDates) {
+                            const hp = await loadDailyResult(hd).catch(()=>null);
+                            const pm = hp?.priceMap || {};
+                            for (const sym in pm) {
+                                if (!histClosesBySym[sym]) histClosesBySym[sym] = [];
+                                histClosesBySym[sym].push({ dk: hd, close: pm[sym] });
+                            }
+                        }
+                        // 把當天收盤也加入(當週收盤)
+                        rows.forEach(r => {
+                            if (r.收盤價 > 0) {
+                                if (!histClosesBySym[r.代號]) histClosesBySym[r.代號] = [];
+                                histClosesBySym[r.代號].push({ dk: t.dateKey, close: r.收盤價 });
+                            }
+                        });
+                        bollMap = computeWeeklyBollinger(histClosesBySym, 20, 2);
+                        log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:載入${histDates.length}日歷史,算出${Object.keys(bollMap).length}檔週布林</div>`;
+                    }
+                } catch(e) { console.warn('[布林] 計算跳過:', e.message); }
+
+                const payload = computeHistDayPayload(rows, t.dateKey, prevPriceMap, bollMap);
                 await saveDailyResult(payload, t.dateKey, true);   // skipIndex=true,索引最後統一更新
                 savedDates.push(t.dateKey);
                 // 更新前一日快取(供下一個日期推算當日漲幅)
@@ -4704,12 +4851,20 @@
         const exitMode = document.querySelector('input[name="exitMode"]:checked')?.value || 'leave';  // leave=離榜 / breakout=時間停損
         const breakoutN = parseInt(document.getElementById('stratBreakoutN')?.value) || 5;  // 時間停損:獲利<10%幾日內沒突破10%就賣
         const loseHotN = parseInt(document.getElementById('stratLoseHotN')?.value) || 3;  // 失去熱門族群:獲利<10%連續幾日失去熱門族群就賣
+        // 自訂4層停利設定(空白用預設)
+        const pv = (id, def) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+        const custom4 = {
+            stopLoss: pv('c4_stopLoss', 10),
+            t2: pv('c4_t2', 10), cond2: document.getElementById('c4_cond2')?.value || 'leave', n2: pv('c4_n2', 3),
+            t3lo: pv('c4_t3lo', 10), t3hi: pv('c4_t3hi', 100), cond3: document.getElementById('c4_cond3')?.value || 'leave', n3: pv('c4_n3', 10),
+            t4: pv('c4_t4', 100), cond4: document.getElementById('c4_cond4')?.value || 'leave', n4: pv('c4_n4', 20),
+        };
         const selectedTags = [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value);
         const tagMode = document.querySelector('input[name="btTagMode"]:checked')?.value || 'and';
 
         // 快取指紋
         const dataFingerprint = allD.length ? allD[allD.length-1]+'_'+allD.length : 'none';
-        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, tagMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
+        const cacheKey = ['STRAT', start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, JSON.stringify(custom4), tagMode, selectedTags.slice().sort().join('+'), dataFingerprint].join('|');
         if (!forceRecalc) {
             const cache = getBtCache();
             if (cache[cacheKey]) {
@@ -4743,6 +4898,8 @@
                     topNSet: new Set(ranked.map(r=>r.代號)),
                     top50: p.top50 || [],
                     hotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🔥熱門族群')).map(r=>r.代號)),
+                    bollSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('📈站上週布林') || r.週布林站上上軌===true).map(r=>r.代號)),
+                    waveHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌊波段熱門族群')).map(r=>r.代號)),
                 };
             } catch(e) { /* 跳過 */ }
         }
@@ -4764,12 +4921,12 @@
                 const entryPrice = stock.收盤價 || ed.priceMap[sym];
                 if (!entryPrice || entryPrice <= 0) continue;
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
-                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN });
+                                     futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, custom4 });
                 trades.push(t);
             }
         }
 
-        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, selectedTags, totalEntries: trades.length };
+        const meta = { start, end, topN, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, custom4, selectedTags, totalEntries: trades.length };
         renderStrategyResult(trades, meta);
         setBtCache(cacheKey, { trades, meta });
         msg.innerHTML = `策略回測完成（${trades.length} 筆交易）　<span style="color:#64748b;font-size:11px">已存快取</span>`;
@@ -4794,12 +4951,39 @@
             const ret = (close - entryPrice) / entryPrice * 100;
             peakRet = Math.max(peakRet, ret);
 
-            // 規則1:停損 -10%(優先,兩種模式都適用)
-            if (ret <= -cfg.stopLossPct) {
-                return mkTrade(sym, name, entryPrice, -cfg.stopLossPct, entryDk, dk, entryTags, '停損-10%', peakRet);
+            // 規則1:停損(優先)。custom4 用自己的停損值
+            const slPct = (cfg.exitMode === 'custom4' && cfg.custom4) ? cfg.custom4.stopLoss : cfg.stopLossPct;
+            if (ret <= -slPct) {
+                return mkTrade(sym, name, entryPrice, -slPct, entryDk, dk, entryTags, `停損-${slPct}%`, peakRet);
             }
 
-            if (cfg.exitMode === 'breakout') {
+            if (cfg.exitMode === 'custom4' && cfg.custom4) {
+                // ── 模式D:自訂4層停利 ──
+                const c4 = cfg.custom4;
+                // 決定當下落在哪一層 + 該層條件/天數
+                let cond, needN, tierName;
+                if (ret < c4.t2) { cond = c4.cond2; needN = c4.n2; tierName = `低獲利(<${c4.t2}%)`; }
+                else if (ret < c4.t3hi) { cond = c4.cond3; needN = c4.n3; tierName = `中獲利(${c4.t3lo}-${c4.t3hi}%)`; }
+                else { cond = c4.cond4; needN = c4.n4; tierName = `高獲利(≥${c4.t4}%)`; }
+                // 判斷該股當天是否「觸發出場條件」(condMet=true 代表往出場方向累計)
+                let condMet;
+                switch (cond) {
+                    case 'losehot':  condMet = !(dd.hotSet && dd.hotSet.has(sym)); break;       // 失去熱門族群
+                    case 'losewave': condMet = !(dd.waveHotSet && dd.waveHotSet.has(sym)); break; // 失去波段熱門
+                    case 'loseboll': condMet = !(dd.bollSet && dd.bollSet.has(sym)); break;      // 跌破週布林
+                    case 'time':     condMet = true; break;                                       // 純時間,每天都計
+                    case 'leave':
+                    default:         condMet = !dd.topNSet.has(sym); break;                        // 離開TOP50
+                }
+                if (condMet) {
+                    leftDays++;
+                    if (leftDays >= needN) {
+                        return mkTrade(sym, name, entryPrice, ret, entryDk, dk, entryTags, `${tierName}${cond}${needN}日`, peakRet);
+                    }
+                } else {
+                    leftDays = 0;  // 條件不成立,歸零(連續才算)
+                }
+            } else if (cfg.exitMode === 'breakout') {
                 // ── 模式B:時間停損 ──
                 // 獲利<10%:N日(breakoutN)內沒突破10%就賣
                 // 獲利≥10%:用離開TOP50天數(10-100%→exitN2, >100%→exitN3)
@@ -4882,6 +5066,9 @@
         };
     }
 
+    function condLabel(cond) {
+        return { leave:'離開TOP50', losehot:'失去🔥熱門族群', losewave:'失去🌊波段熱門族群', loseboll:'跌破週布林', time:'時間' }[cond] || cond;
+    }
     function renderStrategyResult(trades, meta) {
         const result = document.getElementById('backtestResult');
         if (!trades.length) { result.innerHTML = '<div style="padding:20px;color:var(--text-dim)">無交易資料</div>'; return; }
@@ -4906,8 +5093,12 @@
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">🎯 策略停利回測:${startL} ~ ${endL}</div>`;
         html += `<div style="margin-bottom:12px;font-size:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;line-height:1.7">
             <b style="color:#fbbf24">停利規則(收盤近似版):</b><br>
-            • 獲利≤-10% → 停損出場<br>
-            ${meta.exitMode === 'breakout'
+            ${meta.exitMode === 'custom4' && meta.custom4
+              ? `• 獲利≤-<b>${meta.custom4.stopLoss}%</b> → 停損出場<br>
+                 • 獲利&lt;${meta.custom4.t2}% → ${condLabel(meta.custom4.cond2)}連續<b>${meta.custom4.n2}日</b>出場<br>
+                 • ${meta.custom4.t3lo}-${meta.custom4.t3hi}% → ${condLabel(meta.custom4.cond3)}連續<b>${meta.custom4.n3}日</b>出場<br>
+                 • 獲利≥${meta.custom4.t4}% → ${condLabel(meta.custom4.cond4)}連續<b>${meta.custom4.n4}日</b>出場`
+              : `• 獲利≤-10% → 停損出場<br>` + (meta.exitMode === 'breakout'
               ? `• 獲利&lt;10% → <b>${meta.breakoutN}日</b>內沒突破10%就賣(時間停損)<br>
                  • 突破10%後 → 獲利10-100%離榜<b>${meta.exitN2}日</b>、&gt;100%離榜<b>${meta.exitN3}日</b>出場`
               : meta.exitMode === 'losehot'
@@ -4915,7 +5106,7 @@
                  • 獲利≥10% → 獲利10-100%離榜<b>${meta.exitN2}日</b>、&gt;100%離榜<b>${meta.exitN3}日</b>出場`
               : `• 獲利&lt;10% → 連續離開TOP${meta.topN} <b>${meta.exitN1}日</b>出場<br>
                  • 獲利10-100% → 連續離開TOP${meta.topN} <b>${meta.exitN2}日</b>出場<br>
-                 • 獲利≥100% → 連續離開TOP${meta.topN} <b>${meta.exitN3}日</b>出場`}
+                 • 獲利≥100% → 連續離開TOP${meta.topN} <b>${meta.exitN3}日</b>出場`)}
             ${meta.selectedTags.length?`<br>• 篩選:${meta.selectedTags.join(' ∩ ')}`:''}</div>`;
 
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">` +
