@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dh</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04di</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1794,6 +1794,8 @@
                 } else {
                     e.布林σ位置 = null;
                 }
+                // 站上布林上軌:收盤價 > 布林上軌(CSV 已附布林欄時直接判定,不必載入歷史算週布林)
+                if (e.收盤價 && e.收盤價 > e.布林上軌) e.週布林站上上軌 = true;
             } else {
                 e.布林3倍上軌 = null;
                 e.布林3倍下軌 = null;
@@ -2211,6 +2213,10 @@
             Object.entries(waveIndMap).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum))
                 .slice(0,5).map(([ind])=>ind)
         );
+        // 排序後的波段族群(供圓餅圖+表格,取前8大)
+        const sortedWaveInds = Object.entries(waveIndMap)
+            .sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum))
+            .slice(0, 8);
         console.log('[前5大波段熱門族群]', [...top5WaveInds]);
         // 為屬於波段熱門族群的個股加「🌊波段熱門族群」標籤
         finalData.forEach(r => {
@@ -2290,6 +2296,27 @@
         out4HTML += `<table><tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
         out4Rows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
         out4HTML += `</table>`;
+
+        // ── 波段熱門族群圓餅圖(站上週布林的5日強勢族群)──
+        out4HTML += `<div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--border)">
+            <div style="font-size:15px;font-weight:700;color:#5eead4;margin-bottom:6px">🌊 波段熱門族群解析（站上週布林上軌）</div>`;
+        if (sortedWaveInds.length > 0) {
+            const waveRows = sortedWaveInds.map(([ind, {count, corpSum}], i) => {
+                const 億 = (corpSum / 100).toFixed(2);
+                const cls = i < 5 ? 'teal' : 'blue';
+                return [i+1, `<span class="s-tag ${cls}">${ind}</span>`, `${count} 檔`, `${億} 億元`];
+            });
+            const wavePieData = sortedWaveInds.map(([ind, {count}]) => ({ label: ind, value: count })).filter(d => d.value > 0);
+            out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大波段熱門族群（🌊個股TAG依此標記）：${[...top5WaveInds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ') || '（無）'}</div>`;
+            if (wavePieData.length > 0) out4HTML += buildPieChart(wavePieData, 260);
+            out4HTML += `<table style="margin-top:6px"><tr><th>排行</th><th>產業名稱</th><th>站上布林檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
+            waveRows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
+            out4HTML += `</table>`;
+        } else {
+            out4HTML += `<p style="font-size:13px;color:#fbbf24;padding:8px 0">⚠️ 本次無波段熱門族群。原因:5日漲幅前${SC.momentum.topPct}%的標的中,沒有任何一檔「站上週布林上軌」。<br>
+            <span style="font-size:11px;color:#94a3b8">站上週布林需先算出週布林上軌(需 repo 有≥約120天歷史)。若在 Claude 預覽環境執行,外部連線被擋,布林無法計算,屬正常;請在 GitHub Pages 部署環境執行。</span></p>`;
+        }
+        out4HTML += `</div>`;
 
         // 存每檔當前族群(供 TOP50 狀態標註欄的族群編輯用)
         window._stockIndMap = {};
