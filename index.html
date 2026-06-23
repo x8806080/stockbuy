@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04de</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04df</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1871,6 +1871,38 @@
             }
         });
 
+        // ── 週布林通道:若個股缺布林上軌(如 final_output 沒布林欄),載入repo歷史收盤計算 ──
+        try {
+            const needBoll = Object.values(masterDict).some(e => !e.布林上軌);
+            if (needBoll && hasRepo()) {
+                const analysisKey0 = getAnalysisDateKey() || todayKey();
+                const allIdxB = (await loadDailyIndex().catch(()=>[])).slice().sort();
+                const histDatesB = allIdxB.filter(d => d < analysisKey0).slice(-120);
+                if (histDatesB.length >= 60) {
+                    const histB = {};
+                    for (const hd of histDatesB) {
+                        const hp = await loadDailyResult(hd).catch(()=>null);
+                        const pm = hp?.priceMap || {};
+                        for (const sym in pm) { (histB[sym] = histB[sym] || []).push({ dk: hd, close: pm[sym] }); }
+                    }
+                    // 併入今天收盤
+                    Object.values(masterDict).forEach(e => {
+                        if (e.收盤價 > 0) (histB[e.代號] = histB[e.代號] || []).push({ dk: analysisKey0, close: e.收盤價 });
+                    });
+                    const bollMapA = computeWeeklyBollinger(histB, 20, 2);
+                    Object.values(masterDict).forEach(e => {
+                        const b = bollMapA[e.代號];
+                        if (b && !e.布林上軌) {
+                            e.布林上軌 = b.upper; e.布林中軌 = b.sma;
+                            e.布林下軌 = b.sma - 2*b.std;
+                            e.週布林站上上軌 = b.aboveUpper;
+                        }
+                    });
+                    console.log(`[分析] 週布林:載入${histDatesB.length}日歷史,算出${Object.keys(bollMapA).length}檔`);
+                }
+            }
+        } catch(e) { console.warn('[分析] 週布林計算跳過:', e.message); }
+
         // ── 依漲幅排行標的，自動推算「買超/市值比值」分位數門檻 ──
         const benchmarkSymbols = new Set([...rise5dTop40, ...rise1mTop40]);
         const benchmarkRatios = [...benchmarkSymbols]
@@ -2042,6 +2074,11 @@
 
             if (row.etfCount >= SC.etf.minCount) {
                 score += SC.etf.score; tags.push(`🎯ETF共振x${row.etfCount}`);
+            }
+
+            // 站上週布林上軌標籤
+            if (row.週布林站上上軌 === true) {
+                tags.push('📈站上週布林');
             }
 
             row.綜合評分 = score;
@@ -4653,6 +4690,32 @@
         let prevPriceMapCache = {};  // 本次批次中,前一日的收盤價 map(用於推算當日漲幅)
         let prevDateKeyCache = null;
 
+        // 布林歷史快取:整批只載入一次「最早匯入日前120交易日」的歷史收盤,之後逐日累加
+        // (避免每天都重載120天 → GitHub API 爆量導致匯入失敗)
+        let bollHist = null;  // { sym: [{dk, close}] }  累積的歷史收盤序列
+        try {
+            const sortedTasks = tasks.slice().sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
+            const earliestImport = sortedTasks[0]?.dateKey;
+            if (earliestImport) {
+                const allIdx0 = (await loadDailyIndex().catch(()=>[])).slice().sort();
+                const preDates = allIdx0.filter(d => d < earliestImport).slice(-120);
+                if (preDates.length >= 60) {
+                    bollHist = {};
+                    for (const hd of preDates) {
+                        const hp = await loadDailyResult(hd).catch(()=>null);
+                        const pm = hp?.priceMap || {};
+                        for (const sym in pm) {
+                            if (!bollHist[sym]) bollHist[sym] = [];
+                            bollHist[sym].push({ dk: hd, close: pm[sym] });
+                        }
+                    }
+                    log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:預載 ${preDates.length} 日歷史(整批共用,不重複載入)</div>`;
+                } else {
+                    log.innerHTML += `<div style="color:#94a3b8;font-size:11px">　布林:前置歷史不足60日,本批暫不算週布林(資料夠後重匯即可)</div>`;
+                }
+            }
+        } catch(e) { console.warn('[布林] 預載歷史失敗:', e.message); bollHist = null; }
+
         for (const t of tasks) {
             if (!overwrite && existingIdx.includes(t.dateKey)) {
                 log.innerHTML += `<div style="color:#64748b">⏭️ ${t.dateKey}：已存在,略過(未勾選覆蓋)</div>`;
@@ -4678,30 +4741,26 @@
                     } catch(e) { prevPriceMap = {}; }
                 }
 
-                // 載入前 120 個交易日的歷史收盤(算 20週布林上軌用),串成每檔的收盤序列
+                // 布林:用整批共用的歷史(bollHist)+ 當天收盤,不重複載入120天
                 let bollMap = {};
                 try {
-                    const allIdx = (await loadDailyIndex().catch(()=>[])).slice().sort();
-                    const histDates = allIdx.filter(d => d < t.dateKey).slice(-120);
-                    if (histDates.length >= 60) {  // 至少60交易日才算(約12週)
-                        const histClosesBySym = {};
-                        for (const hd of histDates) {
-                            const hp = await loadDailyResult(hd).catch(()=>null);
-                            const pm = hp?.priceMap || {};
-                            for (const sym in pm) {
-                                if (!histClosesBySym[sym]) histClosesBySym[sym] = [];
-                                histClosesBySym[sym].push({ dk: hd, close: pm[sym] });
-                            }
+                    if (bollHist) {
+                        // 把當天收盤併入歷史(供當週收盤)
+                        const todayClose = {};
+                        rows.forEach(r => { if (r.收盤價 > 0) todayClose[r.代號] = r.收盤價; });
+                        // 組合:歷史 + 今天(不永久污染 bollHist 的當天,用淺層複製串接)
+                        const merged = {};
+                        for (const sym in bollHist) merged[sym] = bollHist[sym];
+                        for (const sym in todayClose) {
+                            merged[sym] = (merged[sym] || []).concat([{ dk: t.dateKey, close: todayClose[sym] }]);
                         }
-                        // 把當天收盤也加入(當週收盤)
-                        rows.forEach(r => {
-                            if (r.收盤價 > 0) {
-                                if (!histClosesBySym[r.代號]) histClosesBySym[r.代號] = [];
-                                histClosesBySym[r.代號].push({ dk: t.dateKey, close: r.收盤價 });
-                            }
-                        });
-                        bollMap = computeWeeklyBollinger(histClosesBySym, 20, 2);
-                        log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:載入${histDates.length}日歷史,算出${Object.keys(bollMap).length}檔週布林</div>`;
+                        bollMap = computeWeeklyBollinger(merged, 20, 2);
+                        // 把今天收盤永久加進 bollHist(供下一個匯入日當歷史)
+                        for (const sym in todayClose) {
+                            if (!bollHist[sym]) bollHist[sym] = [];
+                            bollHist[sym].push({ dk: t.dateKey, close: todayClose[sym] });
+                            if (bollHist[sym].length > 150) bollHist[sym] = bollHist[sym].slice(-150);  // 限制長度
+                        }
                     }
                 } catch(e) { console.warn('[布林] 計算跳過:', e.message); }
 
