@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dm</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dn</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4939,18 +4939,33 @@
         let prevPriceMapCache = {};  // 本次批次中,前一日的收盤價 map(用於推算當日漲幅)
         let prevDateKeyCache = null;
 
-        // 布林歷史快取:整批只載入一次「最早匯入日前120交易日」的歷史收盤,之後逐日累加
-        // (避免每天都重載120天 → GitHub API 爆量導致匯入失敗)
+        // 布林歷史快取:整批只載入一次「最早匯入日前歷史」的收盤,之後逐日累加
+        // (避免每天都重載 → GitHub API 爆量導致匯入失敗)
         let bollHist = null;  // { sym: [{dk, close}] }  累積的歷史收盤序列
         try {
+            log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:檢查前置歷史…</div>`;
             const sortedTasks = tasks.slice().sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
             const earliestImport = sortedTasks[0]?.dateKey;
-            if (earliestImport) {
+            // 若本批匯入天數本身就多(≥150),不必預載大量歷史:匯入過程 bollHist 會自然累積。
+            // 避免一次序列載入數百個 repo 檔案而卡死。
+            if (tasks.length >= 150) {
+                bollHist = {};  // 空起步,匯入過程逐日累積
+                log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:本批 ${tasks.length} 天資料量足夠,不預載歷史(過程中累積,週布林約120天後生效、月布林約420天後生效)</div>`;
+                log.scrollTop = log.scrollHeight;
+            } else if (earliestImport) {
                 const allIdx0 = (await loadDailyIndex().catch(()=>[])).slice().sort();
                 const preDates = allIdx0.filter(d => d < earliestImport).slice(-460);  // 460天:夠月布林(20個月≈420交易日)+週布林
+                log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:前置歷史 ${preDates.length} 天${preDates.length<60?'(不足60,本批不算布林)':''}</div>`;
+                log.scrollTop = log.scrollHeight;
                 if (preDates.length >= 60) {
                     bollHist = {};
-                    for (const hd of preDates) {
+                    for (let pi = 0; pi < preDates.length; pi++) {
+                        const hd = preDates[pi];
+                        if (pi % 20 === 0) {
+                            log.innerHTML += `<div style="color:#475569;font-size:11px">　　預載歷史 ${pi+1}/${preDates.length}…</div>`;
+                            log.scrollTop = log.scrollHeight;
+                            await new Promise(r=>setTimeout(r,0));  // 讓畫面更新
+                        }
                         const hp = await loadDailyResult(hd).catch(()=>null);
                         const pm = hp?.priceMap || {};
                         for (const sym in pm) {
@@ -4959,12 +4974,13 @@
                         }
                     }
                     const monthReady = preDates.length >= 420 ? '(週+月布林)' : '(僅週布林,月布林需≥420天)';
-                    log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:預載 ${preDates.length} 日歷史${monthReady}</div>`;
-                } else {
-                    log.innerHTML += `<div style="color:#94a3b8;font-size:11px">　布林:前置歷史不足60日,本批暫不算布林(資料夠後重匯即可)</div>`;
+                    log.innerHTML += `<div style="color:#64748b;font-size:11px">　布林:預載完成 ${preDates.length} 日${monthReady}</div>`;
+                    log.scrollTop = log.scrollHeight;
                 }
             }
-        } catch(e) { console.warn('[布林] 預載歷史失敗:', e.message); bollHist = null; }
+        } catch(e) { console.warn('[布林] 預載歷史失敗:', e.message); bollHist = null;
+            log.innerHTML += `<div style="color:#fbbf24;font-size:11px">　布林:預載失敗(${e.message}),本批不算布林,匯入繼續</div>`;
+        }
 
         for (const t of tasks) {
             if (!overwrite && existingIdx.includes(t.dateKey)) {
