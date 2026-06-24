@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ds</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dt</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -750,6 +750,19 @@
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             🎯 策略停利回測
                         </button>
+                        <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1a2e;border:1px solid #1e3a5f;padding:8px 12px;border-radius:6px;width:100%">
+                            <span style="font-weight:700;color:#4ade80">🔧 回測條件開關（兩種回測共用）:</span>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                                <input type="checkbox" id="btUseEntry" style="width:14px;height:14px;accent-color:#4ade80">
+                                <span>啟用進場條件</span>
+                                <span style="color:#64748b;font-size:11px">(站上週布林上軌且超出≤<input type="number" id="btEntryMaxPct" value="10" min="1" max="100" style="width:42px;padding:1px 3px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">%；已持有不重複買進)</span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                                <input type="checkbox" id="btUseExit" style="width:14px;height:14px;accent-color:#f97316">
+                                <span>啟用停利條件</span>
+                                <span style="color:#64748b;font-size:11px">(用下方離場策略；不勾則固定持有N天)</span>
+                            </label>
+                        </div>
                         <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px;width:100%">
                             <span style="font-weight:600;color:#f97316">離場策略:</span>
                             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
@@ -5249,6 +5262,10 @@
         if (!entryDates.length) { alert('區間內無資料'); return; }
 
         const topN = parseInt(document.getElementById('btTopN').value) || 50;
+        // 回測條件開關(兩種回測共用)
+        const useEntry = document.getElementById('btUseEntry')?.checked || false;
+        const entryMaxPct = parseFloat(document.getElementById('btEntryMaxPct')?.value) || 10;
+        const useExit = document.getElementById('btUseExit')?.checked || false;
         const stopLossPct = 10;  // 固定 -10% 停損
         const exitN1 = parseInt(document.getElementById('stratExitN1')?.value) || 3;   // 獲利<10%
         const exitN2 = parseInt(document.getElementById('stratExitN2')?.value) || 10;  // 10-100%
@@ -5327,8 +5344,8 @@
             const st = r.狀態標註 || '';
             return tagMode === 'or' ? selectedTags.some(t => st.includes(t)) : selectedTags.every(t => st.includes(t));
         };
-        // 買進規則:① 收盤須站上週布林上軌且超出不到10%(剛突破才追) ② 已持有未出場不重複買進
-        const buyMaxAbovePct = 10;          // 收盤超出週布林上軌的上限%
+        // 買進規則(可開關):① 收盤須站上週布林上軌且超出不到 entryMaxPct% ② 已持有未出場不重複買進
+        const buyMaxAbovePct = entryMaxPct;
         const heldUntil = {};                // { sym: 出場日dk } 該股持有到此日(含),之前不重複買進
         const entryDatesSorted = entryDates.slice().sort((a,b)=>a.localeCompare(b));
         for (const entryDk of entryDatesSorted) {
@@ -5340,17 +5357,19 @@
                 const sym = stock.代號;
                 const entryPrice = stock.收盤價 || ed.priceMap[sym];
                 if (!entryPrice || entryPrice <= 0) continue;
-                // 規則②:已買進未賣出 → 跳過(出場日 >= 本入場日表示仍持有)
-                if (heldUntil[sym] && heldUntil[sym] >= entryDk) continue;
-                // 規則①:買進價須在週布林上軌之上、但超出不到10%
-                const up = stock.布林上軌;
-                if (!up || up <= 0) continue;                       // 沒有布林上軌資料 → 不買(無法判斷站上)
-                if (entryPrice < up) continue;                      // 沒站上上軌 → 不買
-                if ((entryPrice - up) / up * 100 > buyMaxAbovePct) continue;  // 超出上軌>10% → 追太高,不買
+                if (useEntry) {
+                    // 規則②:已買進未賣出 → 跳過(出場日 >= 本入場日表示仍持有)
+                    if (heldUntil[sym] && heldUntil[sym] >= entryDk) continue;
+                    // 規則①:買進價須在週布林上軌之上、但超出不到 entryMaxPct%
+                    const up = stock.布林上軌;
+                    if (!up || up <= 0) continue;                       // 沒有布林上軌資料 → 不買
+                    if (entryPrice < up) continue;                      // 沒站上上軌 → 不買
+                    if ((entryPrice - up) / up * 100 > buyMaxAbovePct) continue;  // 超出上軌>門檻 → 追太高,不買
+                }
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
                                      futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, custom4 });
                 trades.push(t);
-                if (t && t.出場日) heldUntil[sym] = t.出場日;        // 記錄持有到出場日
+                if (useEntry && t && t.出場日) heldUntil[sym] = t.出場日;        // 記錄持有到出場日
             }
         }
 
@@ -5583,7 +5602,7 @@
     window.recomputeHotIndustryTag = recomputeHotIndustryTag;
 
     async function computeDayBacktest(dateKey, opts) {
-        const { holdN, topN, selectedTags, stopLoss } = opts;
+        const { holdN, topN, selectedTags, stopLoss, useEntry, entryMaxPct } = opts;
         let entryPayload;
         try { entryPayload = await loadDailyResult(dateKey); }
         catch(e) { return { error: `載入失敗:${e.message}` }; }
@@ -5637,6 +5656,20 @@
         };
 
         const entryPriceMap = entryPayload.priceMap || {};
+        // 進場條件(可開關):站上週布林上軌且超出 ≤ entryMaxPct%
+        const bollUpSet = new Set(Array.isArray(entryPayload.bollUp) ? entryPayload.bollUp : []);
+        const passEntry = r => {
+            if (!useEntry) return true;
+            const ep = r.收盤價 || entryPriceMap[r.代號] || null;
+            const up = r.布林上軌;
+            if (ep == null) return false;
+            if (up && up > 0) {
+                if (ep < up) return false;
+                if ((ep - up) / up * 100 > (entryMaxPct||10)) return false;
+                return true;
+            }
+            return bollUpSet.has(r.代號);
+        };
         // 先算「前N名」的全量 records(不套標籤篩選),供標籤拆解表用
         const buildRec = r => {
             const ep = r.收盤價 || entryPriceMap[r.代號] || null;
@@ -5647,10 +5680,10 @@
             return { 代號:r.代號, 名稱:r.名稱, 入場評分:r.綜合評分, 入場收盤:ep,
                      現在收盤:cp, 報酬率:ret, 停損:stopped, 狀態標註:r.狀態標註 };
         };
-        const fullRecords = entryPayload.top50.filter(r => topNSyms.has(r.代號)).map(buildRec);
+        const fullRecords = entryPayload.top50.filter(r => topNSyms.has(r.代號) && passEntry(r)).map(buildRec);
         const fullWithPrice = fullRecords.filter(r => r.報酬率 !== null);
-        // 篩選後的 records(套標籤交集篩選)供主統計
-        const records = entryPayload.top50.filter(r => topNSyms.has(r.代號) && passTag(r)).map(buildRec);
+        // 篩選後的 records(套標籤交集篩選 + 進場條件)供主統計
+        const records = entryPayload.top50.filter(r => topNSyms.has(r.代號) && passTag(r) && passEntry(r)).map(buildRec);
         const withPrice = records.filter(r => r.報酬率 !== null);
         // 分析:每個勾選標籤在當天前N名中有幾檔(找出「完全沒有」的標籤=交集斷點)
         let missingTags = [];
@@ -5708,6 +5741,7 @@
     function makeBtCacheKey(meta, dataFingerprint) {
         // 條件 + 資料指紋(最新日期),資料更新後 key 改變→舊快取自動失效
         return [meta.start, meta.end, meta.holdN, meta.topN, meta.stopLoss,
+                meta.useEntry?'E'+(meta.entryMaxPct||10):'E0',
                 (meta.selectedTags||[]).slice().sort().join('+'), dataFingerprint].join('|');
     }
     function setBtCache(key, payload) {
@@ -5759,6 +5793,8 @@
             selectedTags: [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value),
             tagMode: document.querySelector('input[name="btTagMode"]:checked')?.value || 'and',
             stopLoss: parseFloat(document.getElementById('btStopLoss')?.value) || 0,
+            useEntry: document.getElementById('btUseEntry')?.checked || false,
+            entryMaxPct: parseFloat(document.getElementById('btEntryMaxPct')?.value) || 10,
         };
 
         // 資料指紋:repo 最新日期(資料有更新時快取自動失效)
@@ -5836,7 +5872,7 @@
             ? `<span style="color:#fbbf24">🔗 交集篩選:${meta.selectedTags.join(' ∩ ')}</span>(只回測同時具備這些標籤的標的)`
             : `<span style="color:#86efac">全部 TOP${meta.topN}</span>(未篩選)`;
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">📊 批次區間回測:${startL} ~ ${endL}</div>`;
-        html += `<div style="margin-bottom:12px;font-size:13px;padding:8px 12px;background:var(--bg2);border-radius:6px">當前模式:${filterDesc}<br><span style="font-size:11px;color:#64748b">${valid.length}/${meta.totalDays} 個有效入場日,持有${meta.holdN||'—'}日${meta.stopLoss?',停損'+meta.stopLoss+'%':''}</span></div>`;
+        html += `<div style="margin-bottom:12px;font-size:13px;padding:8px 12px;background:var(--bg2);border-radius:6px">當前模式:${filterDesc}<br><span style="font-size:11px;color:#64748b">${valid.length}/${meta.totalDays} 個有效入場日,持有${meta.holdN||'—'}日${meta.stopLoss?',停損'+meta.stopLoss+'%':''}</span>${meta.useEntry?`<br><span style="font-size:11px;color:#4ade80">✅ 進場條件:站上週布林上軌且超出≤${meta.entryMaxPct||10}%</span>`:`<br><span style="font-size:11px;color:#64748b">○ 未啟用進場條件(全部符合標籤的標的)</span>`}</div>`;
 
         // 卡片區
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">` +
