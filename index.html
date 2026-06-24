@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dn</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dp</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2706,6 +2706,9 @@
                     .filter(e => e.收盤價 && e.收盤價 > 0)
                     .map(e => [e.代號, e.收盤價])
             ),
+            // 全市場開週布林/開月布林代號清單(供回測精準判斷跌破,不受 top50 限制)
+            bollUp: Object.values(masterDict).filter(e => e.週布林站上上軌===true).map(e => e.代號),
+            mbollUp: Object.values(masterDict).filter(e => e.月布林站上上軌===true).map(e => e.代號),
             // 5日/1月漲幅排行前40（含完整資料，供歷史載入顯示）
             riseStart: [...riseStartSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
             morgan5d:  [...morganSymbols].map(sym=>masterDict[sym]).filter(Boolean).map(slimEntry),
@@ -4892,6 +4895,9 @@
             rise1m: [...rise1mTop],
             riseDay: [...riseDayTop],
             priceMap: Object.fromEntries(rows.filter(r=>r.收盤價>0).map(r=>[r.代號, r.收盤價])),
+            // 全市場開週布林/開月布林代號清單(供回測精準判斷跌破,不受 top50 限制)
+            bollUp: bollMap ? Object.keys(bollMap).filter(s=>bollMap[s] && bollMap[s].aboveUpper) : [],
+            mbollUp: mbollMap ? Object.keys(mbollMap).filter(s=>mbollMap[s] && mbollMap[s].aboveUpper) : [],
             riseStart: [], morgan5d: [], trustRank: [],
             rise5dRank: rows.filter(r=>rise5dTop.has(r.代號)).sort((a,b)=>b.漲幅5日-a.漲幅5日).slice(0,50)
                 .map(r=>({代號:r.代號,名稱:r.名稱,相關產業:r.相關產業,漲幅:r.漲幅5日,綜合評分:r.綜合評分,
@@ -5233,9 +5239,18 @@
                     topNSet: new Set(ranked.map(r=>r.代號)),
                     top50: p.top50 || [],
                     hotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🔥熱門族群')).map(r=>r.代號)),
-                    bollSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('📈開週布林') || r.週布林站上上軌===true).map(r=>r.代號)),
+                    bollSet: new Set(
+                        (Array.isArray(p.bollUp) && p.bollUp.length)
+                            ? p.bollUp   // 全市場開週布林清單(精準,不受 top50 限制)
+                            : (p.top50||[]).filter(r=>(r.狀態標註||'').includes('📈開週布林') || r.週布林站上上軌===true).map(r=>r.代號)
+                    ),
                     waveHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌊波段熱門族群')).map(r=>r.代號)),
-                    moonBollSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('📅開月布林') || r.月布林站上上軌===true).map(r=>r.代號)),
+                    moonBollSet: new Set(
+                        (Array.isArray(p.mbollUp) && p.mbollUp.length)
+                            ? p.mbollUp   // 全市場開月布林清單
+                            : (p.top50||[]).filter(r=>(r.狀態標註||'').includes('📅開月布林') || r.月布林站上上軌===true).map(r=>r.代號)
+                    ),
+                    moonHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌙長線熱門族群')).map(r=>r.代號)),
                     moonHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌙長線熱門族群')).map(r=>r.代號)),
                 };
             } catch(e) { /* 跳過 */ }
@@ -5344,9 +5359,18 @@
                 }
             }
         }
-        // 沒觸發任何出場 → 持有至今(用最後收盤)
+        // 沒觸發任何出場 → 持有至今(用最後收盤)。依當下獲利層級分類,避免飆股與低獲利殭屍單混在一起
         const finalRet = (lastClose - entryPrice) / entryPrice * 100;
-        return mkTrade(sym, name, entryPrice, finalRet, entryDk, futureDates[futureDates.length-1]||entryDk, entryTags, '持有中(未出場)', peakRet);
+        let holdTier;
+        if (cfg.exitMode === 'custom4' && cfg.custom4) {
+            const c4 = cfg.custom4;
+            if (finalRet < c4.t2) holdTier = `持有中(低獲利<${c4.t2}%)`;
+            else if (finalRet < c4.t3hi) holdTier = `持有中(中獲利${c4.t3lo}-${c4.t3hi}%)`;
+            else holdTier = `持有中(高獲利≥${c4.t4}%)`;
+        } else {
+            holdTier = '持有中(未出場)';
+        }
+        return mkTrade(sym, name, entryPrice, finalRet, entryDk, futureDates[futureDates.length-1]||entryDk, entryTags, holdTier, peakRet);
     }
 
     function mkTrade(sym, name, entryPrice, ret, entryDk, exitDk, tags, reason, peakRet) {
