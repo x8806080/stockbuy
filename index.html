@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dq</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ds</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3564,15 +3564,20 @@
         const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
         const csvRows = dataRows.map(row => row.map(stripHtml));
 
-        // 收集所有 TAG（從每列資料中找 s-tag）
+        // 收集所有 TAG（從每列資料中找 s-tag,含帶 data-* 屬性的產業標籤 ind-tag）
         const tagSet = new Map(); // tag文字 → class
+        const indTagTexts = new Set(); // 產業名稱標籤(PCB/記憶體…),供排序歸類
         dataRows.forEach(row => {
             row.forEach(cell => {
                 if (typeof cell !== 'string') return;
-                const matches = cell.matchAll(/<span class="s-tag ([^"]+)">([^<]+)<\/span>/g);
+                // 容忍 class 後面有其他屬性(如 data-sym/data-ind);文字取到下一個 < 為止(巢狀×span之前)
+                const matches = cell.matchAll(/<span class="s-tag ([^"]+)"[^>]*>([^<]+)/g);
                 for (const m of matches) {
-                    const cls = m[1].trim().split(' ').find(x => x !== 's-tag') || 'blue';
+                    const rawCls = m[1];
+                    const cls = rawCls.trim().split(' ').filter(x => x !== 's-tag' && x !== 'ind-tag')[0] || 'blue';
                     const txt = m[2].trim();
+                    if (!txt || txt === '×' || txt === '✏️編輯族群') continue;  // 跳過刪除鈕/編輯鈕
+                    if (rawCls.includes('ind-tag')) indTagTexts.add(txt);       // 標記為產業標籤
                     if (!tagSet.has(txt)) tagSet.set(txt, cls);
                 }
             });
@@ -3620,6 +3625,8 @@
                 if (t.includes('退出')) return 72;
                 // 檔名標籤(📁)
                 if (t.includes('📁')) return 80;
+                // 產業名稱標籤(PCB/記憶體/被動元件…)聚在一起
+                if (indTagTexts.has(t)) return 85;
                 // 熱門族群（青色）放最後
                 return 90;
             }
@@ -4038,6 +4045,36 @@
         patchRatios(top50); patchRatios(inv); patchRatios(top20); patchRatios(resonance); patchRatios(etfRes);
         patchRatios(payload.rise5dRank); patchRatios(payload.rise1mRank); patchRatios(payload.riseStart);
 
+        // ── 相容舊資料:若 top50 缺族群/布林標籤,即時補標(讓圓餅圖+篩選列正常) ──
+        (function patchHotTags(){
+            // 1) 開週/開月布林標籤:用全市場 bollUp/mbollUp 或個股布林欄補
+            const bollUpSet = new Set(Array.isArray(payload.bollUp)?payload.bollUp:[]);
+            const mbollUpSet = new Set(Array.isArray(payload.mbollUp)?payload.mbollUp:[]);
+            top50.forEach(r=>{
+                const st = r.狀態標註||'';
+                const isW = r.週布林站上上軌===true || bollUpSet.has(r.代號) || (r.布林上軌>0 && r.收盤價>0 && r.收盤價>r.布林上軌);
+                const isM = r.月布林站上上軌===true || mbollUpSet.has(r.代號) || (r.月布林上軌>0 && r.收盤價>0 && r.收盤價>r.月布林上軌);
+                if (isW) { r.週布林站上上軌=true; if(!st.includes('📈開週布林')) r.狀態標註 = st?st+' / 📈開週布林':'📈開週布林'; }
+                if (isM) { r.月布林站上上軌=true; const s2=r.狀態標註||''; if(!s2.includes('📅開月布林')) r.狀態標註 = s2?s2+' / 📅開月布林':'📅開月布林'; }
+            });
+            // 2) 波段/長線族群標籤:用站上布林的個股統計前5大族群,補標
+            const splitI = s => (s||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
+            function top5By(flag){
+                const m={};
+                top50.forEach(r=>{ if(!r[flag]) return; splitI(r.相關產業).forEach(ind=>{m[ind]=(m[ind]||0)+1;}); });
+                return new Set(Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k));
+            }
+            // 僅當 top50 完全沒有🌊/🌙標籤時才重算補(避免覆蓋已正確標記的)
+            if (!top50.some(r=>(r.狀態標註||'').includes('🌊波段熱門族群'))) {
+                const w5 = top5By('週布林站上上軌');
+                top50.forEach(r=>{ if(r.週布林站上上軌 && splitI(r.相關產業).some(i=>w5.has(i))){ const s=r.狀態標註||''; if(!s.includes('🌊波段熱門族群')) r.狀態標註=s?s+' / 🌊波段熱門族群':'🌊波段熱門族群'; }});
+            }
+            if (!top50.some(r=>(r.狀態標註||'').includes('🌙長線熱門族群'))) {
+                const m5 = top5By('月布林站上上軌');
+                top50.forEach(r=>{ if(r.月布林站上上軌 && splitI(r.相關產業).some(i=>m5.has(i))){ const s=r.狀態標註||''; if(!s.includes('🌙長線熱門族群')) r.狀態標註=s?s+' / 🌙長線熱門族群':'🌙長線熱門族群'; }});
+            }
+        })();
+
         // ── 套用最新自訂族群(覆蓋歷史 payload 的相關產業,讓族群修改連動歷史載入) ──
         const customInd = getCustomIndustry();
         const applyCustomInd = arr => (arr||[]).forEach(r => {
@@ -4173,9 +4210,23 @@
             indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
             out4 += `</table></div>`;
 
-            // 波段熱門族群圓餅圖(歷史載入:用 payload.waveInds)
-            if (Array.isArray(payload.waveInds) && payload.waveInds.length) {
-                const waveUse = payload.waveInds;
+            // 波段熱門族群圓餅圖(歷史載入:優先用 payload.waveInds,舊資料沒有則從 top50 即時重算)
+            let waveUseSrc = (Array.isArray(payload.waveInds) && payload.waveInds.length) ? payload.waveInds : null;
+            if (!waveUseSrc) {
+                // 從 top50 狀態標註含🌊波段熱門族群 的個股,統計族群
+                const wm = {};
+                top50.forEach(r => {
+                    if (!(r.狀態標註||'').includes('🌊波段熱門族群') && r.週布林站上上軌!==true) return;
+                    (r.相關產業||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean).forEach(ind=>{
+                        if(!wm[ind]) wm[ind]={ind,count:0,corp:0};
+                        wm[ind].count++; wm[ind].corp += (r.三大法人5日買超||0);
+                    });
+                });
+                const arr = Object.values(wm).sort((a,b)=>(b.count-a.count)||(b.corp-a.corp)).slice(0,8);
+                if (arr.length) waveUseSrc = arr;
+            }
+            if (waveUseSrc && waveUseSrc.length) {
+                const waveUse = waveUseSrc;
                 const wavePie = waveUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
                 out4 += `<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
                     <div style="font-size:15px;font-weight:700;color:#5eead4;margin-bottom:6px">🌊 波段熱門族群（開週布林）</div>`;
@@ -4184,9 +4235,22 @@
                 waveUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${((d.corp||0)/100).toFixed(1)}億</td></tr>`; });
                 out4 += `</table></div></div>`;
             }
-            // 長線熱門族群圓餅圖(歷史載入:用 payload.moonInds)
-            if (Array.isArray(payload.moonInds) && payload.moonInds.length) {
-                const moonUse = payload.moonInds;
+            // 長線熱門族群圓餅圖(歷史載入:優先用 payload.moonInds,舊資料沒有則從 top50 即時重算)
+            let moonUseSrc = (Array.isArray(payload.moonInds) && payload.moonInds.length) ? payload.moonInds : null;
+            if (!moonUseSrc) {
+                const mm = {};
+                top50.forEach(r => {
+                    if (!(r.狀態標註||'').includes('🌙長線熱門族群') && r.月布林站上上軌!==true) return;
+                    (r.相關產業||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean).forEach(ind=>{
+                        if(!mm[ind]) mm[ind]={ind,count:0,corp:0};
+                        mm[ind].count++; mm[ind].corp += (r.三大法人5日買超||0);
+                    });
+                });
+                const arr = Object.values(mm).sort((a,b)=>(b.count-a.count)||(b.corp-a.corp)).slice(0,8);
+                if (arr.length) moonUseSrc = arr;
+            }
+            if (moonUseSrc && moonUseSrc.length) {
+                const moonUse = moonUseSrc;
                 const moonPie = moonUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
                 out4 += `<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
                     <div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">🌙 長線熱門族群（開月布林）</div>`;
