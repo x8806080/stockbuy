@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dk</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dl</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1636,11 +1636,12 @@
             const revKey   = headers.find(k => k.includes('營收年增') || (k.includes('年增') && k.includes('率')));
             // 布林三軌（週K / 120日均線）
             // 週布林欄:布林+上軌,優先抓含「120/週」的,排除月布林(420)
-            const isMonthBoll = k => k.includes('420') || k.includes('月');
+            // 月布林(長線)欄:含「2年/420/月」的布林上軌(用2年均線當長線)
+            const isMonthBoll = k => k.includes('2年') || k.includes('420') || k.includes('月');
             const bollUpKey  = headers.find(k => k.includes('布林') && (k.includes('上軌') || k.includes('上通道') || k.includes('UB') || k.includes('upper')) && !isMonthBoll(k));
             const bollMidKey = headers.find(k => k.includes('布林') && (k.includes('中軌') || k.includes('中線') || k.includes('MB') || k.includes('middle')) && !isMonthBoll(k));
             const bollDnKey  = headers.find(k => k.includes('布林') && (k.includes('下軌') || k.includes('下通道') || k.includes('LB') || k.includes('lower')) && !isMonthBoll(k));
-            // 月布林欄:布林+上軌且含「420/月」
+            // 月布林(長線)欄:布林+上軌且含「2年/420/月」(帶寬不含上軌字樣,不會誤抓)
             const mbollUpKey  = headers.find(k => k.includes('布林') && (k.includes('上軌') || k.includes('上通道')) && isMonthBoll(k));
             const mbollMidKey = headers.find(k => k.includes('布林') && (k.includes('中軌') || k.includes('中線')) && isMonthBoll(k));
             const mbollDnKey  = headers.find(k => k.includes('布林') && (k.includes('下軌') || k.includes('下通道')) && isMonthBoll(k));
