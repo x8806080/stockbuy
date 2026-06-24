@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dl</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dm</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2295,6 +2295,41 @@
             STD_HEADERS,
             top50.map((r,i) => stdRow(r, addIndTag, i+1))
         );
+
+        // ── 三種熱門族群所屬個股清單(格式同 TOP50)──
+        // 🔥熱門族群:相關產業屬前5大熱門族群的個股,依評分排序
+        const hotStocks = finalData
+            .filter(r => splitInds(r.相關產業).some(i => top5Inds.has(i)))
+            .sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0));
+        if (hotStocks.length) {
+            outputHTML += createSection(
+                `🔥 熱門族群個股清單（${hotStocks.length} 檔，屬前5大熱門族群）`, '輸出_熱門族群個股.csv',
+                STD_HEADERS,
+                hotStocks.map((r,i) => stdRow(r, addIndTag, i+1))
+            );
+        }
+        // 🌊波段熱門族群:屬前5大波段族群 且 站上週布林的個股
+        const waveStocks = finalData
+            .filter(r => r.週布林站上上軌 && splitInds(r.相關產業).some(i => top5WaveInds.has(i)))
+            .sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0));
+        if (waveStocks.length) {
+            outputHTML += createSection(
+                `🌊 波段熱門族群個股清單（${waveStocks.length} 檔，開週布林＋屬前5大波段族群）`, '輸出_波段族群個股.csv',
+                STD_HEADERS,
+                waveStocks.map((r,i) => stdRow(r, addIndTag, i+1))
+            );
+        }
+        // 🌙長線熱門族群:屬前5大長線族群 且 站上月布林的個股
+        const moonStocks = finalData
+            .filter(r => r.月布林站上上軌 && splitInds(r.相關產業).some(i => top5MoonInds.has(i)))
+            .sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0));
+        if (moonStocks.length) {
+            outputHTML += createSection(
+                `🌙 長線熱門族群個股清單（${moonStocks.length} 檔，開月布林＋屬前5大長線族群）`, '輸出_長線族群個股.csv',
+                STD_HEADERS,
+                moonStocks.map((r,i) => stdRow(r, addIndTag, i+1))
+            );
+        }
 
         // 輸出 2
         if (isInventoryUploaded) {
@@ -4079,6 +4114,26 @@
             STD_HEADERS,
             top50.map((r,i) => stdRow(r, histAddIndTag, i+1))
         );
+
+        // ── 三種熱門族群所屬個股清單(歷史載入:從 top50 用標籤篩,格式同 TOP50)──
+        const histHot = top50.filter(r => (r.狀態標註||'').includes('🔥熱門族群'));
+        if (histHot.length) {
+            outputHTML += createSection(
+                `🔥 熱門族群個股清單（${histHot.length} 檔）`, `熱門族群個股_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS, histHot.map((r,i) => stdRow(r, histAddIndTag, i+1)));
+        }
+        const histWave = top50.filter(r => (r.狀態標註||'').includes('🌊波段熱門族群'));
+        if (histWave.length) {
+            outputHTML += createSection(
+                `🌊 波段熱門族群個股清單（${histWave.length} 檔，開週布林）`, `波段族群個股_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS, histWave.map((r,i) => stdRow(r, histAddIndTag, i+1)));
+        }
+        const histMoon = top50.filter(r => (r.狀態標註||'').includes('🌙長線熱門族群'));
+        if (histMoon.length) {
+            outputHTML += createSection(
+                `🌙 長線熱門族群個股清單（${histMoon.length} 檔，開月布林）`, `長線族群個股_${label.replace(/\//g,'')}.csv`,
+                STD_HEADERS, histMoon.map((r,i) => stdRow(r, histAddIndTag, i+1)));
+        }
 
         // 輸出2
         if (inv.length) {
