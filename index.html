@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dp</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dq</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -5263,7 +5263,11 @@
             const st = r.狀態標註 || '';
             return tagMode === 'or' ? selectedTags.some(t => st.includes(t)) : selectedTags.every(t => st.includes(t));
         };
-        for (const entryDk of entryDates) {
+        // 買進規則:① 收盤須站上週布林上軌且超出不到10%(剛突破才追) ② 已持有未出場不重複買進
+        const buyMaxAbovePct = 10;          // 收盤超出週布林上軌的上限%
+        const heldUntil = {};                // { sym: 出場日dk } 該股持有到此日(含),之前不重複買進
+        const entryDatesSorted = entryDates.slice().sort((a,b)=>a.localeCompare(b));
+        for (const entryDk of entryDatesSorted) {
             const ed = dayData[entryDk];
             if (!ed) continue;
             const ranked = ed.top50.slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN).filter(passTag);
@@ -5272,9 +5276,17 @@
                 const sym = stock.代號;
                 const entryPrice = stock.收盤價 || ed.priceMap[sym];
                 if (!entryPrice || entryPrice <= 0) continue;
+                // 規則②:已買進未賣出 → 跳過(出場日 >= 本入場日表示仍持有)
+                if (heldUntil[sym] && heldUntil[sym] >= entryDk) continue;
+                // 規則①:買進價須在週布林上軌之上、但超出不到10%
+                const up = stock.布林上軌;
+                if (!up || up <= 0) continue;                       // 沒有布林上軌資料 → 不買(無法判斷站上)
+                if (entryPrice < up) continue;                      // 沒站上上軌 → 不買
+                if ((entryPrice - up) / up * 100 > buyMaxAbovePct) continue;  // 超出上軌>10% → 追太高,不買
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
                                      futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, custom4 });
                 trades.push(t);
+                if (t && t.出場日) heldUntil[sym] = t.出場日;        // 記錄持有到出場日
             }
         }
 
@@ -5409,6 +5421,7 @@
 
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">🎯 策略停利回測:${startL} ~ ${endL}</div>`;
         html += `<div style="margin-bottom:12px;font-size:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;line-height:1.7">
+            <b style="color:#4ade80">買進規則:</b> 收盤站上週布林上軌且超出≤10%(剛突破才追)｜已持有未出場不重複買進<br>
             <b style="color:#fbbf24">停利規則(收盤近似版):</b><br>
             ${meta.exitMode === 'custom4' && meta.custom4
               ? `• 獲利≤-<b>${meta.custom4.stopLoss}%</b> → 停損出場<br>
