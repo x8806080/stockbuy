@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dt</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04du</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1696,7 +1696,8 @@
                         大摩5日排名: Infinity, 投信週排名: Infinity,
                         族群加分已算: false,
                         布林上軌: null, 布林中軌: null, 布林下軌: null,
-                        月布林上軌: null, 月布林中軌: null, 月布林下軌: null, 收盤價: null
+                        月布林上軌: null, 月布林中軌: null, 月布林下軌: null,
+                        布林來源收盤: null, 月布林來源收盤: null, 收盤價: null
                     };
                 }
                 const entry = masterDict[symbol];
@@ -1769,11 +1770,14 @@
                 }
 
                 // 布林三軌寫入（取最後讀到的值，不取 max）
-                if (bollUpKey)  { const v = parseNum(row[bollUpKey]);  if (v !== null) entry.布林上軌 = v; }
+                // 關鍵:布林上軌與「判定站上用的收盤」必須同一來源(同一個CSV這行),
+                // 否則不同CSV的收盤(可能不同日/不同定義)和布林上軌對不起來 → 誤判未站上。
+                const rowClose = parseNum(row[closeKey]) ?? parseNum(row['成交']);  // 這一行的收盤
+                if (bollUpKey)  { const v = parseNum(row[bollUpKey]);  if (v !== null) { entry.布林上軌 = v; if (rowClose !== null && rowClose > 0) entry.布林來源收盤 = rowClose; } }
                 if (bollMidKey) { const v = parseNum(row[bollMidKey]); if (v !== null) entry.布林中軌 = v; }
                 if (bollDnKey)  { const v = parseNum(row[bollDnKey]);  if (v !== null) entry.布林下軌 = v; }
-                // 月布林欄寫入
-                if (mbollUpKey)  { const v = parseNum(row[mbollUpKey]);  if (v !== null) entry.月布林上軌 = v; }
+                // 月布林欄寫入(同理記錄月布林來源收盤)
+                if (mbollUpKey)  { const v = parseNum(row[mbollUpKey]);  if (v !== null) { entry.月布林上軌 = v; if (rowClose !== null && rowClose > 0) entry.月布林來源收盤 = rowClose; } }
                 if (mbollMidKey) { const v = parseNum(row[mbollMidKey]); if (v !== null) entry.月布林中軌 = v; }
                 if (mbollDnKey)  { const v = parseNum(row[mbollDnKey]);  if (v !== null) entry.月布林下軌 = v; }
                 if (closeKey)   { const v = parseNum(row[closeKey]);   if (v !== null) entry.收盤價   = v; }
@@ -1825,15 +1829,17 @@
                 } else {
                     e.布林σ位置 = null;
                 }
-                // 站上布林上軌:收盤價 > 布林上軌(CSV 已附布林欄時直接判定,不必載入歷史算週布林)
-                if (e.收盤價 && e.收盤價 > e.布林上軌) e.週布林站上上軌 = true;
+                // 站上布林上軌:用「布林來源收盤」(與布林上軌同一CSV來源)判定,避免被其他CSV的收盤覆蓋而誤判
+                const wClose = e.布林來源收盤 ?? e.收盤價;
+                if (wClose && wClose > e.布林上軌) e.週布林站上上軌 = true;
             } else {
                 e.布林3倍上軌 = null;
                 e.布林3倍下軌 = null;
                 e.布林σ位置   = null;
             }
-            // 站上月布林上軌:收盤 > 月布林上軌
-            if (e.月布林上軌 && e.收盤價 && e.收盤價 > e.月布林上軌) e.月布林站上上軌 = true;
+            // 站上月布林上軌:用「月布林來源收盤」判定
+            const mClose = e.月布林來源收盤 ?? e.收盤價;
+            if (e.月布林上軌 && mClose && mClose > e.月布林上軌) e.月布林站上上軌 = true;
         });
 
         // ── 依「前N%」計算漲幅排行進榜集合(取代固定TOP40) ──
