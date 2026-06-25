@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04du</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dv</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1089,6 +1089,10 @@
                     style="background:#16a34a">💾 儲存設定</button>
                 <button class="btn-del-cfg" onclick="deleteScorePreset()"
                     style="background:#475569">🗑️ 刪除設定</button>
+                <button onclick="pushScorePresetsToRepo()" title="把所有具名設定上傳到 GitHub repo,供其他裝置共用"
+                    style="background:#0ea5e9;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">☁️ 上傳設定到雲端</button>
+                <button onclick="pullScorePresetsFromRepo()" title="從 GitHub repo 載入設定(其他裝置存的也能取得)"
+                    style="background:#6366f1;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">⬇️ 從雲端載入設定</button>
                 <button class="btn-reset" onclick="resetScores()">↺ 還原預設值</button>
                 <button class="btn-export-cfg" onclick="exportConfig()">📥 匯出設定 CSV</button>
                 <span style="font-size:13px;color:#888">改完按「開始分析」套用；可儲存多組設定下次載入</span>
@@ -1257,6 +1261,34 @@
 
     // ── 評分設定 儲存/載入（localStorage 多組具名設定）──
     const SCORE_PRESETS_KEY = 'scorePresets_v1';
+    // 評分設定 repo 同步路徑(跨裝置共用)
+    function scorePresetsRepoURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/config/score_presets.json`;
+    }
+    // 把 localStorage 的具名設定推上 repo(覆蓋)
+    async function pushScorePresetsToRepo() {
+        if (!hasRepo()) { alert('未設定 GitHub Token,無法跨裝置同步。請先到「設定」填入 Token。'); return; }
+        const presets = getScorePresets();
+        try {
+            let sha = null;
+            try { const cur = await repoGet(scorePresetsRepoURL()); sha = cur?.sha || null; } catch(_){}
+            await repoPut(scorePresetsRepoURL(), { presets, savedAt: Date.now() }, sha, '更新評分設定(跨裝置同步)');
+            alert('✅ 評分設定已上傳到 repo,其他裝置按「⬇️ 從雲端載入設定」即可取得');
+        } catch(e) { alert('上傳失敗:' + e.message); }
+    }
+    // 從 repo 拉具名設定,合併進 localStorage
+    async function pullScorePresetsFromRepo() {
+        if (!hasRepo()) { alert('未設定 GitHub Token,無法跨裝置同步。請先到「設定」填入 Token。'); return; }
+        try {
+            const data = await rawFetch('config/score_presets.json');
+            if (!data || !data.presets) { alert('雲端尚無評分設定,請先在某台裝置按「☁️ 上傳設定到雲端」'); return; }
+            const local = getScorePresets();
+            const merged = { ...local, ...data.presets };  // 雲端覆蓋同名
+            localStorage.setItem(SCORE_PRESETS_KEY, JSON.stringify(merged));
+            renderPresetSelect();
+            alert(`✅ 已從雲端載入 ${Object.keys(data.presets).length} 組設定`);
+        } catch(e) { alert('載入失敗:' + e.message); }
+    }
     function getScorePresets() {
         try { return JSON.parse(localStorage.getItem(SCORE_PRESETS_KEY) || '{}'); }
         catch(e) { return {}; }
@@ -1283,7 +1315,13 @@
         localStorage.setItem(SCORE_PRESETS_KEY, JSON.stringify(presets));
         renderPresetSelect();
         document.getElementById('presetSelect').value = name;
-        alert(`已儲存設定：「${name}」`);
+        // 自動同步到 repo(跨裝置),失敗不影響本機儲存
+        if (hasRepo()) {
+            pushScorePresetsToRepo().catch(()=>{});
+            alert(`已儲存設定：「${name}」(同時同步到雲端)`);
+        } else {
+            alert(`已儲存設定：「${name}」(僅本機。設定 GitHub Token 後可跨裝置同步)`);
+        }
     }
     function loadScorePreset(name) {
         if (!name) return;
@@ -5338,7 +5376,9 @@
                             : (p.top50||[]).filter(r=>(r.狀態標註||'').includes('📅開月布林') || r.月布林站上上軌===true).map(r=>r.代號)
                     ),
                     moonHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌙長線熱門族群')).map(r=>r.代號)),
-                    moonHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌙長線熱門族群')).map(r=>r.代號)),
+                    // 布林上軌數值 map(供「當週/月最高價<上軌」精準跌破判定)
+                    bollUpVal: Object.fromEntries((p.top50||[]).filter(r=>r.布林上軌>0).map(r=>[r.代號, r.布林上軌])),
+                    mbollUpVal: Object.fromEntries((p.top50||[]).filter(r=>r.月布林上軌>0).map(r=>[r.代號, r.月布林上軌])),
                 };
             } catch(e) { /* 跳過 */ }
         }
@@ -5392,6 +5432,7 @@
         let belowDays = 0;      // 獲利<10%的累積天數(時間停損模式用)
         let lastClose = entryPrice;
         let peakRet = 0;
+        const recentCloses = [];   // 最近的收盤序列(供當週/當月最高價估算,收盤近似)
         for (const dk of futureDates) {
             const dd = dayData[dk];
             if (!dd) continue;
@@ -5401,8 +5442,13 @@
                 continue;
             }
             lastClose = close;
+            recentCloses.push(close);
+            if (recentCloses.length > 25) recentCloses.shift();   // 保留最近約一個月(25交易日)
             const ret = (close - entryPrice) / entryPrice * 100;
             peakRet = Math.max(peakRet, ret);
+            // 當週最高價(最近5個交易日收盤最高)、當月最高價(最近約21交易日收盤最高)— 收盤近似
+            const weekHigh  = Math.max(...recentCloses.slice(-5));
+            const monthHigh = Math.max(...recentCloses.slice(-21));
 
             // 規則1:停損(優先)。custom4 用自己的停損值
             const slPct = (cfg.exitMode === 'custom4' && cfg.custom4) ? cfg.custom4.stopLoss : cfg.stopLossPct;
@@ -5425,8 +5471,20 @@
                     case 'losehot':  condMet = !(dd.hotSet && dd.hotSet.has(sym)); break;       // 失去熱門族群
                     case 'losewave': condMet = !(dd.waveHotSet && dd.waveHotSet.has(sym)); break; // 失去波段熱門
                     case 'losemoon': condMet = !(dd.moonHotSet && dd.moonHotSet.has(sym)); break; // 失去長線熱門
-                    case 'loseboll': condMet = !(dd.bollSet && dd.bollSet.has(sym)); break;      // 跌破週布林
-                    case 'losemboll':condMet = !(dd.moonBollSet && dd.moonBollSet.has(sym)); break; // 跌破月布林
+                    case 'loseboll': {
+                        // 跌破週布林:當週最高價(最近5日收盤最高)< 週布林上軌 = 整週連最高都沒碰到上軌
+                        const up = dd.bollUpVal && dd.bollUpVal[sym];
+                        if (up > 0) condMet = weekHigh < up;
+                        else condMet = !(dd.bollSet && dd.bollSet.has(sym));   // 無上軌數值 → 退回站上清單判定
+                        break;
+                    }
+                    case 'losemboll': {
+                        // 跌破月布林:當月最高價(最近約21日收盤最高)< 月布林上軌
+                        const mup = dd.mbollUpVal && dd.mbollUpVal[sym];
+                        if (mup > 0) condMet = monthHigh < mup;
+                        else condMet = !(dd.moonBollSet && dd.moonBollSet.has(sym));
+                        break;
+                    }
                     case 'time':     condMet = true; break;                                       // 純時間,每天都計
                     case 'leave':
                     default:         condMet = !dd.topNSet.has(sym); break;                        // 離開TOP50
@@ -5494,6 +5552,7 @@
         const wins = trades.filter(t => t.報酬率 > 0);
         const winRate = wins.length / trades.length * 100;
         const avgRet = trades.reduce((s,t)=>s+t.報酬率,0)/trades.length;
+        const totalRet = trades.reduce((s,t)=>s+t.報酬率,0);  // 總報酬=每筆報酬相加(累計%)
         const maxWin = Math.max(0, ...trades.map(t=>t.報酬率));
         const maxLoss = Math.min(0, ...trades.map(t=>t.報酬率));
         // 出場原因分布
@@ -5511,7 +5570,7 @@
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">🎯 策略停利回測:${startL} ~ ${endL}</div>`;
         html += `<div style="margin-bottom:12px;font-size:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;line-height:1.7">
             <b style="color:#4ade80">買進規則:</b> 收盤站上週布林上軌且超出≤10%(剛突破才追)｜已持有未出場不重複買進<br>
-            <b style="color:#fbbf24">停利規則(收盤近似版):</b><br>
+            <b style="color:#fbbf24">停利規則(收盤近似版):</b> <span style="font-size:11px;color:#64748b">跌破布林=當週/月最高價(收盤估)&lt;布林上軌</span><br>
             ${meta.exitMode === 'custom4' && meta.custom4
               ? `• 獲利≤-<b>${meta.custom4.stopLoss}%</b> → 停損出場<br>
                  • 獲利&lt;${meta.custom4.t2}% → ${condLabel(meta.custom4.cond2)}連續<b>${meta.custom4.n2}日</b>出場<br>
@@ -5528,6 +5587,7 @@
                 ['交易筆數', `${trades.length}`, '#94a3b8'],
                 ['勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#f87171'],
                 ['平均報酬', `${avgRet>=0?'+':''}${avgRet.toFixed(2)}%`, avgRet>=0?'#4ade80':'#f87171'],
+                ['總報酬(累計)', `${totalRet>=0?'+':''}${totalRet.toFixed(1)}%`, totalRet>=0?'#4ade80':'#f87171'],
                 ['最大獲利', `${maxWin>=0?'+':''}${maxWin.toFixed(1)}%`, maxWin>0?'#4ade80':'#94a3b8'],
                 ['最大虧損', `${maxLoss.toFixed(1)}%`, maxLoss<0?'#f87171':'#94a3b8'],
             ].map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
@@ -5539,7 +5599,7 @@
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
             <thead><tr style="background:var(--bg2)"><th style="padding:8px;text-align:left">出場原因</th>
             <th style="padding:8px;text-align:right">筆數</th><th style="padding:8px;text-align:right">佔比</th>
-            <th style="padding:8px;text-align:right">勝率</th><th style="padding:8px;text-align:right">平均報酬</th></tr></thead><tbody>`;
+            <th style="padding:8px;text-align:right">勝率</th><th style="padding:8px;text-align:right">平均報酬</th><th style="padding:8px;text-align:right">總報酬(累計)</th></tr></thead><tbody>`;
         Object.entries(reasonStats).sort((a,b)=>b[1].n-a[1].n).forEach(([r,s])=>{
             const avg = s.totRet/s.n, wr = s.wins/s.n*100;
             html += `<tr style="border-bottom:1px solid var(--border)">
@@ -5547,7 +5607,8 @@
                 <td style="padding:8px;text-align:right">${s.n}</td>
                 <td style="padding:8px;text-align:right;color:#94a3b8">${(s.n/trades.length*100).toFixed(0)}%</td>
                 <td style="padding:8px;text-align:right;color:${wr>=50?'#4ade80':'#f87171'}">${wr.toFixed(0)}%</td>
-                <td style="padding:8px;text-align:right;color:${avg>=0?'#4ade80':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</td></tr>`;
+                <td style="padding:8px;text-align:right;color:${avg>=0?'#4ade80':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</td>
+                <td style="padding:8px;text-align:right;color:${s.totRet>=0?'#4ade80':'#f87171'}">${s.totRet>=0?'+':''}${s.totRet.toFixed(1)}%</td></tr>`;
         });
         html += `</tbody></table></div>`;
 
