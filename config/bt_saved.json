@@ -1,0 +1,34 @@
+{
+  "config": {
+    "topN": "50",
+    "holdDays": "5",
+    "stopLoss": "0",
+    "useEntry": true,
+    "entryMaxPct": "10",
+    "useExit": true,
+    "exitMode": "custom4",
+    "custom4": {
+      "c4_stopLoss": "",
+      "c4_t2": "",
+      "c4_cond2": "leave",
+      "c4_n2": "",
+      "c4_t3lo": "",
+      "c4_t3hi": "",
+      "c4_cond3": "leave",
+      "c4_n3": "",
+      "c4_t4": "",
+      "c4_cond4": "leave",
+      "c4_n4": ""
+    },
+    "selectedTags": [],
+    "tagMode": "and"
+  },
+  "result": {
+    "trades": 17,
+    "winRate": "0.0",
+    "avgRet": "0.00",
+    "totalRet": "0.0",
+    "at": 1782429761941
+  },
+  "savedAt": 1782429770113
+}
