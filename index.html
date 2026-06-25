@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dw</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dx</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -750,6 +750,10 @@
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             🎯 策略停利回測
                         </button>
+                        <button onclick="saveBtToCloud()" title="把目前回測條件+最後結果存到 GitHub repo"
+                            style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 存回測到雲端</button>
+                        <button onclick="loadBtFromCloud()" title="從 GitHub repo 載入回測條件"
+                            style="background:#6366f1;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">⬇️ 載入雲端回測</button>
                         <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1a2e;border:1px solid #1e3a5f;padding:8px 12px;border-radius:6px;width:100%">
                             <span style="font-weight:700;color:#4ade80">🔧 回測條件開關（兩種回測共用）:</span>
                             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
@@ -5440,11 +5444,16 @@
                 if (useEntry) {
                     // 規則②:已買進未賣出 → 跳過(出場日 >= 本入場日表示仍持有)
                     if (heldUntil[sym] && heldUntil[sym] >= entryDk) continue;
-                    // 規則①:買進價須在週布林上軌之上、但超出不到 entryMaxPct%
+                    // 規則①:買進價須站上週布林上軌、且超出不到 entryMaxPct%
                     const up = stock.布林上軌;
-                    if (!up || up <= 0) continue;                       // 沒有布林上軌資料 → 不買
-                    if (entryPrice < up) continue;                      // 沒站上上軌 → 不買
-                    if ((entryPrice - up) / up * 100 > buyMaxAbovePct) continue;  // 超出上軌>門檻 → 追太高,不買
+                    if (up && up > 0) {
+                        // 有布林上軌數值 → 精準判斷站上+超出%
+                        if (entryPrice < up) continue;                      // 沒站上上軌 → 不買
+                        if ((entryPrice - up) / up * 100 > buyMaxAbovePct) continue;  // 超出>門檻 → 追太高,不買
+                    } else {
+                        // 無布林上軌數值(批次歷史不足算不出)→ 改用「開週布林清單」判站上,不卡10%
+                        if (!(ed.bollSet && ed.bollSet.has(sym))) continue;  // 不在開週布林清單 → 沒站上 → 不買
+                    }
                 }
                 const t = traceExit(sym, stock.名稱, entryPrice, entryDk, stock.狀態標註,
                                      futureDates, dayData, { stopLossPct, exitN1, exitN2, exitN3, exitMode, breakoutN, loseHotN, custom4 });
@@ -5587,6 +5596,8 @@
         const winRate = wins.length / trades.length * 100;
         const avgRet = trades.reduce((s,t)=>s+t.報酬率,0)/trades.length;
         const totalRet = trades.reduce((s,t)=>s+t.報酬率,0);  // 總報酬=每筆報酬相加(累計%)
+        // 存最後結果摘要(供雲端儲存)
+        window._lastBtResult = { trades: trades.length, winRate: winRate.toFixed(1), avgRet: avgRet.toFixed(2), totalRet: totalRet.toFixed(1), at: Date.now() };
         const maxWin = Math.max(0, ...trades.map(t=>t.報酬率));
         const maxLoss = Math.min(0, ...trades.map(t=>t.報酬率));
         // 出場原因分布
@@ -5835,6 +5846,65 @@
     // ════════════════════════════════════════════════
     // ── 回測結果快取(localStorage,同條件免重算) ──
     const BT_CACHE_KEY = 'btRangeCache_v3';  // v2:加入熱門族群即時補標籤,舊快取失效
+    // ── 回測條件 + 結果 雲端儲存(跨裝置) ──
+    function btConfigRepoURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/config/bt_saved.json`;
+    }
+    // 蒐集目前回測所有條件設定
+    function collectBtConfig() {
+        const g = id => document.getElementById(id);
+        const c4ids = ['c4_stopLoss','c4_t2','c4_cond2','c4_n2','c4_t3lo','c4_t3hi','c4_cond3','c4_n3','c4_t4','c4_cond4','c4_n4'];
+        const custom4 = {};
+        c4ids.forEach(id => { const e=g(id); if(e) custom4[id]=e.value; });
+        return {
+            topN: g('btTopN')?.value, holdDays: g('btHoldDays')?.value,
+            stopLoss: g('btStopLoss')?.value, start: g('btStart')?.value, end: g('btEnd')?.value,
+            useEntry: g('btUseEntry')?.checked, entryMaxPct: g('btEntryMaxPct')?.value,
+            useExit: g('btUseExit')?.checked,
+            exitMode: document.querySelector('input[name="exitMode"]:checked')?.value,
+            custom4,
+            selectedTags: [...document.querySelectorAll('#btTagFilterBox input:checked')].map(cb=>cb.value),
+            tagMode: document.querySelector('input[name="btTagMode"]:checked')?.value,
+        };
+    }
+    // 套用雲端回測條件到 UI
+    function applyBtConfig(cfg) {
+        if (!cfg) return;
+        const g = id => document.getElementById(id);
+        const setV=(id,v)=>{ const e=g(id); if(e&&v!=null) e.value=v; };
+        const setC=(id,v)=>{ const e=g(id); if(e&&v!=null) e.checked=!!v; };
+        setV('btTopN',cfg.topN); setV('btHoldDays',cfg.holdDays); setV('btStopLoss',cfg.stopLoss);
+        setV('btStart',cfg.start); setV('btEnd',cfg.end);
+        setC('btUseEntry',cfg.useEntry); setV('btEntryMaxPct',cfg.entryMaxPct); setC('btUseExit',cfg.useExit);
+        if (cfg.exitMode) { const r=document.querySelector(`input[name="exitMode"][value="${cfg.exitMode}"]`); if(r){r.checked=true; r.dispatchEvent(new Event('change'));} }
+        if (cfg.custom4) { Object.entries(cfg.custom4).forEach(([id,v])=>setV(id,v)); }
+        if (cfg.tagMode) { const r=document.querySelector(`input[name="btTagMode"][value="${cfg.tagMode}"]`); if(r)r.checked=true; }
+        if (Array.isArray(cfg.selectedTags)) {
+            document.querySelectorAll('#btTagFilterBox input').forEach(cb=>{ cb.checked = cfg.selectedTags.includes(cb.value); });
+        }
+    }
+    async function saveBtToCloud() {
+        if (!hasRepo()) { alert('未設定 GitHub Token,無法雲端儲存'); return; }
+        const cfg = collectBtConfig();
+        const result = window._lastBtResult || null;  // 最後一次回測結果摘要
+        try {
+            let sha=null; try{ const cur=await repoGet(btConfigRepoURL()); sha=cur?.sha||null; }catch(_){}
+            await repoPut(btConfigRepoURL(), { config: cfg, result, savedAt: Date.now() }, sha, '儲存回測條件+結果');
+            alert('✅ 回測條件與結果已存到雲端');
+        } catch(e){ alert('儲存失敗:'+e.message); }
+    }
+    async function loadBtFromCloud() {
+        if (!hasRepo()) { alert('未設定 GitHub Token,無法雲端載入'); return; }
+        try {
+            const data = await rawFetch('config/bt_saved.json');
+            if (!data || !data.config) { alert('雲端尚無回測設定'); return; }
+            applyBtConfig(data.config);
+            const when = data.savedAt ? new Date(data.savedAt).toLocaleString() : '?';
+            const r = data.result;
+            const summary = r ? `\n\n上次結果(${when}):\n筆數${r.trades} 勝率${r.winRate}% 平均${r.avgRet}% 總報酬${r.totalRet}%` : '';
+            alert(`✅ 已載入雲端回測條件${summary}\n\n按「策略停利回測」即可用此條件重跑`);
+        } catch(e){ alert('載入失敗:'+e.message); }
+    }
     function getBtCache() {
         try { return JSON.parse(localStorage.getItem(BT_CACHE_KEY) || '{}'); }
         catch(e) { return {}; }
