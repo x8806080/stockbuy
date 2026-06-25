@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dv</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dw</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4267,8 +4267,25 @@
             indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
             out4 += `</table></div>`;
 
-            // 波段熱門族群圓餅圖(歷史載入:優先用 payload.waveInds,舊資料沒有則從 top50 即時重算)
-            let waveUseSrc = (Array.isArray(payload.waveInds) && payload.waveInds.length) ? payload.waveInds : null;
+            // 波段熱門族群圓餅圖(歷史載入)
+            // 優先序:① 全市場 bollUp 清單+字典產業重算(最準) ② payload.waveInds ③ top50 fallback
+            let waveUseSrc = null;
+            if (Array.isArray(payload.bollUp) && payload.bollUp.length && typeof STOCK_DICT !== 'undefined') {
+                const wm = {};
+                const corpMap = {};
+                (payload.top50||[]).forEach(r => { corpMap[r.代號] = r.三大法人5日買超 || 0; });
+                payload.bollUp.forEach(sym => {
+                    const ind = (customInd[sym]) || (STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+                    if (!ind) return;
+                    ind.split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean).forEach(i=>{
+                        if(!wm[i]) wm[i]={ind:i,count:0,corp:0};
+                        wm[i].count++; wm[i].corp += (corpMap[sym]||0);
+                    });
+                });
+                const arr = Object.values(wm).sort((a,b)=>(b.count-a.count)||(b.corp-a.corp)).slice(0,8);
+                if (arr.length) waveUseSrc = arr;
+            }
+            if (!waveUseSrc && Array.isArray(payload.waveInds) && payload.waveInds.length) waveUseSrc = payload.waveInds;
             if (!waveUseSrc) {
                 // 從 top50 狀態標註含🌊波段熱門族群 的個股,統計族群
                 const wm = {};
@@ -4292,8 +4309,25 @@
                 waveUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${((d.corp||0)/100).toFixed(1)}億</td></tr>`; });
                 out4 += `</table></div></div>`;
             }
-            // 長線熱門族群圓餅圖(歷史載入:優先用 payload.moonInds,舊資料沒有則從 top50 即時重算)
-            let moonUseSrc = (Array.isArray(payload.moonInds) && payload.moonInds.length) ? payload.moonInds : null;
+            // 長線熱門族群圓餅圖(歷史載入)
+            // 優先序:① 全市場 mbollUp 清單+字典產業重算 ② payload.moonInds ③ top50 fallback
+            let moonUseSrc = null;
+            if (Array.isArray(payload.mbollUp) && payload.mbollUp.length && typeof STOCK_DICT !== 'undefined') {
+                const mm = {};
+                const corpMap = {};
+                (payload.top50||[]).forEach(r => { corpMap[r.代號] = r.三大法人5日買超 || 0; });
+                payload.mbollUp.forEach(sym => {
+                    const ind = (customInd[sym]) || (STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+                    if (!ind) return;
+                    ind.split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean).forEach(i=>{
+                        if(!mm[i]) mm[i]={ind:i,count:0,corp:0};
+                        mm[i].count++; mm[i].corp += (corpMap[sym]||0);
+                    });
+                });
+                const arr = Object.values(mm).sort((a,b)=>(b.count-a.count)||(b.corp-a.corp)).slice(0,8);
+                if (arr.length) moonUseSrc = arr;
+            }
+            if (!moonUseSrc && Array.isArray(payload.moonInds) && payload.moonInds.length) moonUseSrc = payload.moonInds;
             if (!moonUseSrc) {
                 const mm = {};
                 top50.forEach(r => {
