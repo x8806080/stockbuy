@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dx</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dy</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -750,10 +750,16 @@
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
                             🎯 策略停利回測
                         </button>
-                        <button onclick="saveBtToCloud()" title="把目前回測條件+最後結果存到 GitHub repo"
-                            style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 存回測到雲端</button>
-                        <button onclick="loadBtFromCloud()" title="從 GitHub repo 載入回測條件"
-                            style="background:#6366f1;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">⬇️ 載入雲端回測</button>
+                        <button onclick="saveBtToCloud()" title="把目前回測條件+結果具名存到 GitHub repo"
+                            style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 儲存回測(命名)</button>
+                        <select id="btSavedSelect" onchange="loadBtSaved(this.value)" title="載入已存回測"
+                            style="padding:8px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px;min-width:160px">
+                            <option value="">— 載入已存回測 —</option>
+                        </select>
+                        <button onclick="refreshBtSavedSelect()" title="重新整理雲端回測清單"
+                            style="background:#475569;color:#fff;border:none;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer">🔄</button>
+                        <button onclick="deleteBtSaved()" title="刪除選取的回測"
+                            style="background:#7f1d1d;color:#fff;border:none;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer">🗑️</button>
                         <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1a2e;border:1px solid #1e3a5f;padding:8px 12px;border-radius:6px;width:100%">
                             <span style="font-weight:700;color:#4ade80">🔧 回測條件開關（兩種回測共用）:</span>
                             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
@@ -1450,6 +1456,45 @@
 
     // ─── 圓餅圖 ────────────────────────────────────
     const PIE_COLORS = ['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+
+    // 報酬率長條圖(每年/每月):data=[{label, value}],正綠負紅,0軸置中
+    function buildBarChart(data, opts) {
+        data = (data || []).filter(d => d && Number.isFinite(d.value));
+        if (!data.length) return '<div style="color:#64748b;font-size:12px;padding:8px">無資料</div>';
+        const W = (opts && opts.width) || 640, barH = 22, gap = 8, padL = 70, padR = 60, padT = 10;
+        const H = padT*2 + data.length*(barH+gap);
+        const maxAbs = Math.max(1, ...data.map(d => Math.abs(d.value)));
+        const halfW = (W - padL - padR) / 2;
+        const zeroX = padL + halfW;
+        let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:system-ui">`;
+        svg += `<line x1="${zeroX}" y1="${padT}" x2="${zeroX}" y2="${H-padT}" stroke="#475569" stroke-width="1"/>`;
+        data.forEach((d,i) => {
+            const y = padT + i*(barH+gap);
+            const w = halfW * (Math.abs(d.value)/maxAbs);
+            const pos = d.value >= 0;
+            const x = pos ? zeroX : zeroX - w;
+            const col = pos ? '#4ade80' : '#f87171';
+            svg += `<text x="${padL-6}" y="${y+barH/2+4}" text-anchor="end" font-size="12" fill="#cbd5e1">${d.label}</text>`;
+            svg += `<rect x="${x}" y="${y}" width="${Math.max(1,w)}" height="${barH}" fill="${col}" opacity="0.85" rx="2"/>`;
+            const vx = pos ? x+w+4 : x-4;
+            svg += `<text x="${vx}" y="${y+barH/2+4}" text-anchor="${pos?'start':'end'}" font-size="11" fill="${col}" font-weight="600">${d.value>=0?'+':''}${d.value.toFixed(1)}%</text>`;
+        });
+        svg += `</svg>`;
+        return svg;
+    }
+    // 把交易依出場日的年/月分組,算各期間總報酬(累計%)
+    function periodReturns(trades) {
+        const byYear = {}, byMonth = {};
+        trades.forEach(t => {
+            const dk = t.出場日; if (!dk || dk.length < 6) return;
+            const y = dk.slice(0,4), ym = dk.slice(0,4)+'/'+dk.slice(4,6);
+            byYear[y] = (byYear[y]||0) + t.報酬率;
+            byMonth[ym] = (byMonth[ym]||0) + t.報酬率;
+        });
+        const yearArr = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k]}));
+        const monthArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k]}));
+        return { yearArr, monthArr };
+    }
 
     function buildPieChart(data, width) {
         const W = width || 260, H = W;
@@ -5597,7 +5642,9 @@
         const avgRet = trades.reduce((s,t)=>s+t.報酬率,0)/trades.length;
         const totalRet = trades.reduce((s,t)=>s+t.報酬率,0);  // 總報酬=每筆報酬相加(累計%)
         // 存最後結果摘要(供雲端儲存)
-        window._lastBtResult = { trades: trades.length, winRate: winRate.toFixed(1), avgRet: avgRet.toFixed(2), totalRet: totalRet.toFixed(1), at: Date.now() };
+        window._lastBtResult = { type:'strategy', trades: trades.length, winRate: winRate.toFixed(1), avgRet: avgRet.toFixed(2), totalRet: totalRet.toFixed(1), at: Date.now(),
+            yearArr: periodReturns(trades).yearArr, monthArr: periodReturns(trades).monthArr,
+            config: (typeof collectBtConfig==='function'?collectBtConfig():null) };
         const maxWin = Math.max(0, ...trades.map(t=>t.報酬率));
         const maxLoss = Math.min(0, ...trades.map(t=>t.報酬率));
         // 出場原因分布
@@ -5658,6 +5705,13 @@
         html += `</tbody></table></div>`;
 
         // 交易明細(報酬排序,前100筆)
+        // ── 每年 / 每月報酬率圖表(依出場日分組,總報酬累計%)──
+        const { yearArr, monthArr } = periodReturns(trades);
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:640})}</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640})}</div>`;
+
         html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📋 交易明細(報酬排序,前100筆)</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="background:var(--bg2)">
@@ -5885,25 +5939,66 @@
     }
     async function saveBtToCloud() {
         if (!hasRepo()) { alert('未設定 GitHub Token,無法雲端儲存'); return; }
-        const cfg = collectBtConfig();
-        const result = window._lastBtResult || null;  // 最後一次回測結果摘要
+        const result = window._lastBtResult;
+        if (!result) { alert('請先執行一次回測,才有結果可儲存'); return; }
+        const name = prompt('請輸入此筆回測的名稱(例:三族群交集_布林停利):');
+        if (!name) return;
         try {
-            let sha=null; try{ const cur=await repoGet(btConfigRepoURL()); sha=cur?.sha||null; }catch(_){}
-            await repoPut(btConfigRepoURL(), { config: cfg, result, savedAt: Date.now() }, sha, '儲存回測條件+結果');
-            alert('✅ 回測條件與結果已存到雲端');
+            let store = {}, sha = null;
+            try { const cur = await repoGet(btSavedRepoURL()); sha = cur?.sha || null; } catch(_){}
+            try { const ex = await rawFetch('config/bt_saved.json'); if (ex && ex.items) store = ex.items; } catch(_){}
+            store[name] = { config: collectBtConfig(), result, savedAt: Date.now() };
+            await repoPut(btSavedRepoURL(), { items: store, updatedAt: Date.now() }, sha, `儲存回測:${name}`);
+            await refreshBtSavedSelect();
+            alert(`✅ 已儲存回測「${name}」到雲端(共 ${Object.keys(store).length} 筆)`);
         } catch(e){ alert('儲存失敗:'+e.message); }
     }
-    async function loadBtFromCloud() {
-        if (!hasRepo()) { alert('未設定 GitHub Token,無法雲端載入'); return; }
+    function btSavedRepoURL() {
+        return `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/contents/config/bt_saved.json`;
+    }
+    async function refreshBtSavedSelect() {
+        const sel = document.getElementById('btSavedSelect');
+        if (!sel) return;
         try {
-            const data = await rawFetch('config/bt_saved.json');
-            if (!data || !data.config) { alert('雲端尚無回測設定'); return; }
-            applyBtConfig(data.config);
-            const when = data.savedAt ? new Date(data.savedAt).toLocaleString() : '?';
-            const r = data.result;
-            const summary = r ? `\n\n上次結果(${when}):\n筆數${r.trades} 勝率${r.winRate}% 平均${r.avgRet}% 總報酬${r.totalRet}%` : '';
-            alert(`✅ 已載入雲端回測條件${summary}\n\n按「策略停利回測」即可用此條件重跑`);
-        } catch(e){ alert('載入失敗:'+e.message); }
+            const ex = await rawFetch('config/bt_saved.json');
+            const items = (ex && ex.items) || {};
+            const names = Object.keys(items).sort();
+            sel.innerHTML = '<option value="">— 載入已存回測 —</option>' +
+                names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
+            window._btSavedItems = items;
+        } catch(e) { window._btSavedItems = {}; }
+    }
+    function loadBtSaved(name) {
+        if (!name) return;
+        const items = window._btSavedItems || {};
+        const entry = items[name];
+        if (!entry) { alert('找不到此筆,請先按🔄重新整理'); return; }
+        applyBtConfig(entry.config);
+        const r = entry.result || {};
+        const when = entry.savedAt ? new Date(entry.savedAt).toLocaleString() : '?';
+        const box = document.getElementById('strategyResult') || document.getElementById('rangeResult');
+        let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">💾 載入回測「${name}」(${when})</div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">` +
+            [['筆數',r.trades,'#94a3b8'],['勝率',(r.winRate||'-')+'%','#4ade80'],['平均報酬',(r.avgRet||'-')+'%','#4ade80'],['總報酬累計',(r.totalRet||'-')+'%','#4ade80']]
+            .map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:11px;color:var(--text-dim)">${k}</div><div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
+        if (r.yearArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearArr,{width:640})}</div>`;
+        if (r.monthArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthArr,{width:640})}</div>`;
+        html += `<div style="margin-top:10px;font-size:12px;color:#64748b">條件已填回上方,可按「🎯 策略停利回測」用相同條件重跑(取得完整明細)</div>`;
+        if (box) box.innerHTML = html;
+    }
+    async function deleteBtSaved() {
+        const sel = document.getElementById('btSavedSelect');
+        const name = sel?.value;
+        if (!name) { alert('請先從下拉選一筆要刪除的回測'); return; }
+        if (!confirm(`確定刪除回測「${name}」?`)) return;
+        try {
+            let sha=null; try{ const cur=await repoGet(btSavedRepoURL()); sha=cur?.sha||null; }catch(_){}
+            const store = window._btSavedItems || {};
+            delete store[name];
+            await repoPut(btSavedRepoURL(), { items: store, updatedAt: Date.now() }, sha, `刪除回測:${name}`);
+            await refreshBtSavedSelect();
+            alert(`已刪除「${name}」`);
+        } catch(e){ alert('刪除失敗:'+e.message); }
     }
     function getBtCache() {
         try { return JSON.parse(localStorage.getItem(BT_CACHE_KEY) || '{}'); }
@@ -6029,6 +6124,15 @@
         let equity = 100;
         valid.forEach(d => { equity *= (1 + d.stats.avgRet/100); });
         const totalReturn = equity - 100;
+        // 存區間回測結果摘要(供雲端儲存)。用入場日做年月分組
+        const _pr = (recs => {
+            const byY={}, byM={};
+            recs.forEach(r=>{ const dk=r.入場日; if(!dk||dk.length<6)return; const y=dk.slice(0,4),ym=dk.slice(0,4)+'/'+dk.slice(4,6); byY[y]=(byY[y]||0)+r.報酬率; byM[ym]=(byM[ym]||0)+r.報酬率; });
+            return { yearArr:Object.keys(byY).sort().map(k=>({label:k,value:byY[k]})), monthArr:Object.keys(byM).sort().map(k=>({label:k,value:byM[k]})) };
+        })(allRecords);
+        window._lastBtResult = { type:'range', trades: totalN, winRate: overallWinRate.toFixed(1), avgRet: overallAvg.toFixed(2),
+            totalRet: allRecords.reduce((s,r)=>s+r.報酬率,0).toFixed(1), at: Date.now(),
+            yearArr:_pr.yearArr, monthArr:_pr.monthArr, config: (typeof collectBtConfig==='function'?collectBtConfig():null) };
         // 每日平均報酬的勝率(幾天賺)
         const profitDays = valid.filter(d => d.stats.avgRet > 0).length;
         const dayWinRate = valid.length ? profitDays/valid.length*100 : 0;
@@ -6086,6 +6190,10 @@
                 tagStats[t] = { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
             }
         });
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%,依入場日)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:640})}</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%,依入場日)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:640})}</div>`;
         html += `<div style="margin:18px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨勝率比較</div>`;
         html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">基於全部 TOP${meta.topN}(不受上方勾選影響),每個標籤「單獨」計算,用來比較哪個標籤策略強。想看交集請在上方勾選2個以上標籤後重跑。</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
@@ -6905,6 +7013,7 @@
     // 評分設定的填充與自動載入 — 無條件執行(不依賴 GitHub Token)
     renderPresetSelect();   // 填充評分設定下拉
     loadLastConfig();       // 自動載入上次使用的評分設定
+    if (typeof refreshBtSavedSelect === 'function') refreshBtSavedSelect().catch(()=>{});  // 填充雲端回測下拉
     renderBtTagFilter();    // 產生回測標籤篩選清單
     switchTab('analysis');  // 預設顯示「分析」分頁
     if (hasRepo()) {
