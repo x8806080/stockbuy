@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dy</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dz</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1140,10 +1140,20 @@
                 <span style="color:#fbbf24">⚠️ 市值與相關產業自動由內建字典對應(1834檔):有市值者法人P90/月P90用「買超÷市值」分位計算,查無市值者退回絕對金額保底。無投信獨立欄位,投信P90不計算。相關產業優先序:網頁手改 > 字典 > CSV。</span>
             </div>
             <div class="upload-row" style="margin-bottom:10px">
-                <input type="file" id="batchHistFiles" multiple accept=".csv" style="flex:1;min-width:0">
+                <input type="file" id="batchHistFiles" multiple accept=".csv" style="flex:1;min-width:0" onchange="renderBatchFileList()">
+            </div>
+            <div id="batchFileListBox" style="display:none;margin-bottom:10px;background:#0a0e1a;border:1px solid var(--border);border-radius:6px;padding:8px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+                    <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:#4ade80;cursor:pointer">
+                        <input type="checkbox" id="batchSelectAll" checked onchange="toggleAllBatchFiles(this.checked)" style="width:15px;height:15px"> 全選/取消
+                    </label>
+                    <span id="batchFileCount" style="font-size:12px;color:var(--text-dim)"></span>
+                </div>
+                <div id="batchFileList" style="max-height:200px;overflow-y:auto;font-size:12px"></div>
             </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                 <button onclick="runBatchHistImport()" style="background:#15803d;width:auto;padding:10px 20px">🚀 開始批次匯入</button>
+                <button onclick="recomputeFromRepo()" title="不必上傳檔案,直接用 repo 既有收盤資料重算布林/族群/標籤(套用最新邏輯)" style="background:#7c3aed;width:auto;padding:10px 20px">🔄 從雲端重算族群/布林</button>
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer">
                     <input type="checkbox" id="batchOverwrite" checked style="width:14px;height:14px"> 覆蓋已存在的同日期資料
                 </label>
@@ -5120,12 +5130,48 @@
     }
 
     // 批次匯入主流程
+    // ── 批次匯入檔案清單 + 全選勾選(行動裝置友善)──
+    function renderBatchFileList() {
+        const fileEl = document.getElementById('batchHistFiles');
+        const box = document.getElementById('batchFileListBox');
+        const list = document.getElementById('batchFileList');
+        const files = [...(fileEl?.files || [])];
+        if (!files.length) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        // 依檔名排序顯示,每個一行+勾選(預設全勾)
+        list.innerHTML = files.map((f, i) =>
+            `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;border-bottom:1px solid #1a2435">
+                <input type="checkbox" class="batchFileChk" data-idx="${i}" checked style="width:14px;height:14px" onchange="updateBatchFileCount()">
+                <span style="color:#cbd5e1">${f.name}</span>
+            </label>`).join('');
+        document.getElementById('batchSelectAll').checked = true;
+        updateBatchFileCount();
+    }
+    function toggleAllBatchFiles(checked) {
+        document.querySelectorAll('.batchFileChk').forEach(cb => cb.checked = checked);
+        updateBatchFileCount();
+    }
+    function updateBatchFileCount() {
+        const all = document.querySelectorAll('.batchFileChk');
+        const checked = document.querySelectorAll('.batchFileChk:checked');
+        const cnt = document.getElementById('batchFileCount');
+        if (cnt) cnt.textContent = `已選 ${checked.length} / ${all.length} 個檔案`;
+        const selAll = document.getElementById('batchSelectAll');
+        if (selAll) selAll.checked = (all.length > 0 && checked.length === all.length);
+    }
+
     async function runBatchHistImport() {
         const fileEl = document.getElementById('batchHistFiles');
         const log = document.getElementById('batchHistLog');
         log.style.display = 'block';
-        const files = [...(fileEl?.files || [])];
-        if (!files.length) { alert('請選擇 CSV 檔案'); return; }
+        let files = [...(fileEl?.files || [])];
+        // 只匯入勾選的檔案(若清單已渲染)
+        const chks = [...document.querySelectorAll('.batchFileChk')];
+        if (chks.length) {
+            const keepIdx = new Set(chks.filter(cb=>cb.checked).map(cb=>+cb.dataset.idx));
+            files = files.filter((_,i)=>keepIdx.has(i));
+        }
+        if (!files.length) { alert('請選擇(勾選)CSV 檔案'); return; }
         if (!hasRepo()) { log.innerHTML = '<div style="color:#f87171">❌ 尚未設定 GitHub repo 同步,無法存入歷史資料</div>'; return; }
 
         const overwrite = document.getElementById('batchOverwrite')?.checked;
@@ -5286,6 +5332,97 @@
         if (typeof initBacktestDateList === 'function') await initBacktestDateList();
     }
     window.runBatchHistImport = runBatchHistImport;
+
+    // ── 從 repo 既有資料重算布林/族群/標籤(不必上傳檔案)──
+    // 用每天 payload 的全市場收盤(priceMap)串成歷史序列,重算週/月布林、波段/長線族群、bollUp/mbollUp,
+    // 套用最新邏輯覆蓋回 repo。修正舊資料用舊程式算出的族群錯誤。
+    async function recomputeFromRepo() {
+        const log = document.getElementById('batchHistLog');
+        if (log) { log.style.display = 'block'; }
+        const L = (msg, col) => { if(log){ log.innerHTML += `<div style="color:${col||'#cbd5e1'};font-size:12px">${msg}</div>`; log.scrollTop = log.scrollHeight; } };
+        if (!hasRepo()) { L('❌ 未設定 GitHub Token,無法重算', '#f87171'); return; }
+        if (!confirm('將讀取 repo 所有歷史日期,用最新邏輯重算布林/族群/標籤並覆蓋回 repo。\n資料多時需數分鐘,確定執行?')) return;
+
+        L('📂 讀取日期索引…', '#fbbf24');
+        const allDates = (await loadDailyIndex().catch(()=>[])).slice().sort();
+        if (!allDates.length) { L('❌ repo 無歷史資料', '#f87171'); return; }
+        L(`共 ${allDates.length} 個日期,開始重算(逐日累積收盤序列)`, '#4ade80');
+
+        const bollHist = {};   // { sym: [{dk, close}] } 累積歷史收盤
+        const splitI = s => (s||'').split(/[,、，;；\/]/).map(x=>x.trim()).filter(Boolean);
+        const customInd = (typeof getCustomIndustry === 'function') ? getCustomIndustry() : {};
+        let done = 0, ok = 0, fail = 0;
+
+        for (const dk of allDates) {
+            done++;
+            let payload;
+            try { payload = await loadDailyResult(dk); } catch(e){ fail++; continue; }
+            if (!payload || !payload.priceMap) {
+                if (done % 20 === 0) L(`　${done}/${allDates.length}…(${dk} 無 priceMap,跳過)`, '#64748b');
+                continue;
+            }
+            // 1) 累積收盤序列
+            for (const sym in payload.priceMap) {
+                const c = payload.priceMap[sym];
+                if (c > 0) {
+                    if (!bollHist[sym]) bollHist[sym] = [];
+                    bollHist[sym].push({ dk, close: c });
+                    if (bollHist[sym].length > 460) bollHist[sym] = bollHist[sym].slice(-460);
+                }
+            }
+            // 2) 算週/月布林(用累積序列)
+            const bollMap = computeWeeklyBollinger(bollHist, 20, 2);
+            const mbollMap = computeMonthlyBollinger(bollHist, 20, 2);
+            // 3) 全市場開週/開月布林清單
+            const bollUp = Object.keys(bollMap).filter(s => bollMap[s] && bollMap[s].aboveUpper);
+            const mbollUp = Object.keys(mbollMap).filter(s => mbollMap[s] && mbollMap[s].aboveUpper);
+            payload.bollUp = bollUp;
+            payload.mbollUp = mbollUp;
+            // 4) 重算波段/長線族群(用全市場清單+字典產業)
+            const corpMap = {};
+            (payload.top50||[]).forEach(r => { corpMap[r.代號] = r.三大法人5日買超 || 0; });
+            const tally = (syms) => {
+                const m = {};
+                syms.forEach(sym => {
+                    const ind = customInd[sym] || (typeof STOCK_DICT!=='undefined' && STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+                    splitI(ind).forEach(i => { if(!m[i]) m[i]={ind:i,count:0,corp:0}; m[i].count++; m[i].corp += (corpMap[sym]||0); });
+                });
+                return Object.entries(m).sort((a,b)=>(b[1].count-a[1].count)||(b[1].corp-a[1].corp)).slice(0,8).map(([k,v])=>({ind:k,count:v.count,corp:v.corp}));
+            };
+            payload.waveInds = tally(bollUp);
+            payload.moonInds = tally(mbollUp);
+            // 5) 更新 top50 的布林站上旗標 + 標籤
+            const top5Wave = new Set(payload.waveInds.slice(0,5).map(d=>d.ind));
+            const top5Moon = new Set(payload.moonInds.slice(0,5).map(d=>d.ind));
+            const bollUpSet = new Set(bollUp), mbollUpSet = new Set(mbollUp);
+            (payload.top50||[]).forEach(r => {
+                const isW = bollUpSet.has(r.代號), isM = mbollUpSet.has(r.代號);
+                r.週布林站上上軌 = isW; r.月布林站上上軌 = isM;
+                if (bollMap[r.代號]) { r.布林上軌 = bollMap[r.代號].upper; }
+                if (mbollMap[r.代號]) { r.月布林上軌 = mbollMap[r.代號].upper; }
+                // 重建標籤:移除舊布林/族群標籤,依新結果加回
+                let tags = splitI(r.狀態標註).filter(t => !['📈開週布林','📅開月布林','🌊波段熱門族群','🌙長線熱門族群','📈站上週布林'].includes(t));
+                const myInds = splitI(r.相關產業);
+                if (myInds.some(i=>top5Wave.has(i))) tags.push('🌊波段熱門族群');
+                if (myInds.some(i=>top5Moon.has(i))) tags.push('🌙長線熱門族群');
+                if (isW) tags.push('📈開週布林');
+                if (isM) tags.push('📅開月布林');
+                r.狀態標註 = tags.join(' / ');
+            });
+            // 6) 存回 repo
+            try { await saveDailyResult(payload, dk, true); ok++; }
+            catch(e){ fail++; L(`　${dk} 存回失敗:${e.message}`, '#f87171'); }
+
+            if (done % 10 === 0 || done === allDates.length) {
+                const wn = bollUp.length, mn = mbollUp.length;
+                L(`　${done}/${allDates.length}　${dk}：開週布林${wn}檔/開月布林${mn}檔　波段Top:${(payload.waveInds[0]||{}).ind||'-'}`, '#4ade80');
+                await new Promise(r=>setTimeout(r,0));
+            }
+        }
+        L(`✅ 重算完成:成功 ${ok} 天,失敗 ${fail} 天。重新載入歷史日期即可看到修正後的族群`, '#4ade80');
+        try { await rebuildDailyIndex(); } catch(_){}
+    }
+    window.recomputeFromRepo = recomputeFromRepo;
 
     async function fetchWithTimeout(url, ms) {
         const timeout = new Promise((_, reject) =>
