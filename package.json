@@ -1,0 +1,12 @@
+{
+  "name": "stockbuy-recompute",
+  "version": "1.0.0",
+  "description": "雲端重算台股布林/族群/標籤(GitHub Actions)",
+  "type": "module",
+  "scripts": {
+    "recompute": "node recompute.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
