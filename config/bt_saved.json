@@ -1,34 +1,180 @@
 {
-  "config": {
-    "topN": "50",
-    "holdDays": "5",
-    "stopLoss": "0",
-    "useEntry": true,
-    "entryMaxPct": "10",
-    "useExit": true,
-    "exitMode": "custom4",
-    "custom4": {
-      "c4_stopLoss": "",
-      "c4_t2": "",
-      "c4_cond2": "leave",
-      "c4_n2": "",
-      "c4_t3lo": "",
-      "c4_t3hi": "",
-      "c4_cond3": "leave",
-      "c4_n3": "",
-      "c4_t4": "",
-      "c4_cond4": "leave",
-      "c4_n4": ""
-    },
-    "selectedTags": [],
-    "tagMode": "and"
+  "items": {
+    "長中短 熱門族群交集": {
+      "config": {
+        "topN": "50",
+        "holdDays": "5",
+        "stopLoss": "0",
+        "useEntry": true,
+        "entryMaxPct": "10",
+        "useExit": true,
+        "exitMode": "custom4",
+        "custom4": {
+          "c4_stopLoss": "",
+          "c4_t2": "",
+          "c4_cond2": "losewave",
+          "c4_n2": "",
+          "c4_t3lo": "",
+          "c4_t3hi": "40",
+          "c4_cond3": "losewave",
+          "c4_n3": "5",
+          "c4_t4": "40",
+          "c4_cond4": "losemboll",
+          "c4_n4": "5"
+        },
+        "selectedTags": [
+          "🔥熱門族群",
+          "🌊波段熱門族群",
+          "🌙長線熱門族群"
+        ],
+        "tagMode": "and"
+      },
+      "result": {
+        "type": "strategy",
+        "trades": 579,
+        "winRate": "49.7",
+        "avgRet": "3.69",
+        "totalRet": "2135.4",
+        "at": 1782465431963,
+        "yearArr": [
+          {
+            "label": "2024",
+            "value": 1.6413248202755606
+          },
+          {
+            "label": "2025",
+            "value": 526.1334403133599
+          },
+          {
+            "label": "2026",
+            "value": 1607.6241328944775
+          }
+        ],
+        "monthArr": [
+          {
+            "label": "2024/08",
+            "value": 10.613926348502016
+          },
+          {
+            "label": "2024/09",
+            "value": 23.625964305099508
+          },
+          {
+            "label": "2024/10",
+            "value": 30.973065987434886
+          },
+          {
+            "label": "2024/11",
+            "value": -39.19550427633517
+          },
+          {
+            "label": "2024/12",
+            "value": -24.37612754442567
+          },
+          {
+            "label": "2025/01",
+            "value": 21.601146946916227
+          },
+          {
+            "label": "2025/02",
+            "value": 33.855864903784614
+          },
+          {
+            "label": "2025/03",
+            "value": -1.4498162572735114
+          },
+          {
+            "label": "2025/04",
+            "value": -4.051498256548211
+          },
+          {
+            "label": "2025/05",
+            "value": -12.90419611212231
+          },
+          {
+            "label": "2025/06",
+            "value": -1.4915735795858955
+          },
+          {
+            "label": "2025/07",
+            "value": 85.12865335270068
+          },
+          {
+            "label": "2025/08",
+            "value": 79.19776771440185
+          },
+          {
+            "label": "2025/09",
+            "value": 100.09449101087034
+          },
+          {
+            "label": "2025/10",
+            "value": 110.1884447069242
+          },
+          {
+            "label": "2025/11",
+            "value": 42.19077942471695
+          },
+          {
+            "label": "2025/12",
+            "value": 73.77337645857496
+          },
+          {
+            "label": "2026/01",
+            "value": 24.859374921389694
+          },
+          {
+            "label": "2026/02",
+            "value": 205.25240534782066
+          },
+          {
+            "label": "2026/03",
+            "value": -172.8330344587506
+          },
+          {
+            "label": "2026/04",
+            "value": 17.256723028964686
+          },
+          {
+            "label": "2026/05",
+            "value": 446.86813802576046
+          },
+          {
+            "label": "2026/06",
+            "value": 1086.220526029292
+          }
+        ],
+        "config": {
+          "topN": "50",
+          "holdDays": "5",
+          "stopLoss": "0",
+          "useEntry": true,
+          "entryMaxPct": "10",
+          "useExit": true,
+          "exitMode": "custom4",
+          "custom4": {
+            "c4_stopLoss": "",
+            "c4_t2": "",
+            "c4_cond2": "losewave",
+            "c4_n2": "",
+            "c4_t3lo": "",
+            "c4_t3hi": "40",
+            "c4_cond3": "losewave",
+            "c4_n3": "5",
+            "c4_t4": "40",
+            "c4_cond4": "losemboll",
+            "c4_n4": "5"
+          },
+          "selectedTags": [
+            "🔥熱門族群",
+            "🌊波段熱門族群",
+            "🌙長線熱門族群"
+          ],
+          "tagMode": "and"
+        }
+      },
+      "savedAt": 1782465479245
+    }
   },
-  "result": {
-    "trades": 17,
-    "winRate": "0.0",
-    "avgRet": "0.00",
-    "totalRet": "0.0",
-    "at": 1782429761941
-  },
-  "savedAt": 1782429770113
+  "updatedAt": 1782465479245
 }
