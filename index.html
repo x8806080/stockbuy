@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04dz</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ea</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1484,7 +1484,7 @@
             const pos = d.value >= 0;
             const x = pos ? zeroX : zeroX - w;
             const col = pos ? '#4ade80' : '#f87171';
-            svg += `<text x="${padL-6}" y="${y+barH/2+4}" text-anchor="end" font-size="12" fill="#cbd5e1">${d.label}</text>`;
+            svg += `<text x="${padL-6}" y="${y+barH/2+4}" text-anchor="end" font-size="12" fill="#cbd5e1">${d.label}${(opts&&opts.showN&&d.n!=null)?` <tspan fill="#64748b" font-size="10">(${d.n})</tspan>`:''}</text>`;
             svg += `<rect x="${x}" y="${y}" width="${Math.max(1,w)}" height="${barH}" fill="${col}" opacity="0.85" rx="2"/>`;
             const vx = pos ? x+w+4 : x-4;
             svg += `<text x="${vx}" y="${y+barH/2+4}" text-anchor="${pos?'start':'end'}" font-size="11" fill="${col}" font-weight="600">${d.value>=0?'+':''}${d.value.toFixed(1)}%</text>`;
@@ -1498,12 +1498,17 @@
         trades.forEach(t => {
             const dk = t.出場日; if (!dk || dk.length < 6) return;
             const y = dk.slice(0,4), ym = dk.slice(0,4)+'/'+dk.slice(4,6);
-            byYear[y] = (byYear[y]||0) + t.報酬率;
-            byMonth[ym] = (byMonth[ym]||0) + t.報酬率;
+            if (!byYear[y]) byYear[y] = { sum:0, n:0 };
+            if (!byMonth[ym]) byMonth[ym] = { sum:0, n:0 };
+            byYear[y].sum += t.報酬率; byYear[y].n++;
+            byMonth[ym].sum += t.報酬率; byMonth[ym].n++;
         });
-        const yearArr = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k]}));
-        const monthArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k]}));
-        return { yearArr, monthArr };
+        // 累計(sum)與獨立平均(avg)各一組
+        const yearArr  = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k].sum, n:byYear[k].n}));
+        const monthArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k].sum, n:byMonth[k].n}));
+        const yearAvgArr  = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k].sum/byYear[k].n, n:byYear[k].n}));
+        const monthAvgArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k].sum/byMonth[k].n, n:byMonth[k].n}));
+        return { yearArr, monthArr, yearAvgArr, monthAvgArr };
     }
 
     function buildPieChart(data, width) {
@@ -5780,7 +5785,6 @@
         const totalRet = trades.reduce((s,t)=>s+t.報酬率,0);  // 總報酬=每筆報酬相加(累計%)
         // 存最後結果摘要(供雲端儲存)
         window._lastBtResult = { type:'strategy', trades: trades.length, winRate: winRate.toFixed(1), avgRet: avgRet.toFixed(2), totalRet: totalRet.toFixed(1), at: Date.now(),
-            yearArr: periodReturns(trades).yearArr, monthArr: periodReturns(trades).monthArr,
             config: (typeof collectBtConfig==='function'?collectBtConfig():null) };
         const maxWin = Math.max(0, ...trades.map(t=>t.報酬率));
         const maxLoss = Math.min(0, ...trades.map(t=>t.報酬率));
@@ -5842,12 +5846,20 @@
         html += `</tbody></table></div>`;
 
         // 交易明細(報酬排序,前100筆)
-        // ── 每年 / 每月報酬率圖表(依出場日分組,總報酬累計%)──
-        const { yearArr, monthArr } = periodReturns(trades);
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div>`;
-        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:640})}</div>`;
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
-        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640})}</div>`;
+        // ── 每年 / 每月報酬率圖表(依出場日分組;累計總和 + 獨立平均各一組)──
+        const { yearArr, monthArr, yearAvgArr, monthAvgArr } = periodReturns(trades);
+        // 補上年月圖表資料到結果摘要(供雲端儲存/載入重現)
+        if (window._lastBtResult) Object.assign(window._lastBtResult, { yearArr, monthArr, yearAvgArr, monthAvgArr });
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率</div>`;
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:320, showN:true})}</div></div>
+            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%(每筆平均)</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearAvgArr, {width:320, showN:true})}</div></div>
+        </div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率</div>`;
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:320, showN:true})}</div></div>
+            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%(每筆平均)</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthAvgArr, {width:320, showN:true})}</div></div>
+        </div>`;
 
         html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📋 交易明細(報酬排序,前100筆)</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:12px">
@@ -6113,13 +6125,13 @@
         applyBtConfig(entry.config);
         const r = entry.result || {};
         const when = entry.savedAt ? new Date(entry.savedAt).toLocaleString() : '?';
-        const box = document.getElementById('strategyResult') || document.getElementById('rangeResult');
+        const box = document.getElementById('backtestResult');
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">💾 載入回測「${name}」(${when})</div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">` +
             [['筆數',r.trades,'#94a3b8'],['勝率',(r.winRate||'-')+'%','#4ade80'],['平均報酬',(r.avgRet||'-')+'%','#4ade80'],['總報酬累計',(r.totalRet||'-')+'%','#4ade80']]
             .map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:11px;color:var(--text-dim)">${k}</div><div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
-        if (r.yearArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearArr,{width:640})}</div>`;
-        if (r.monthArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthArr,{width:640})}</div>`;
+        if (r.yearArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📅 每年報酬率</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearAvgArr||r.yearArr,{width:320,showN:true})}</div></div></div>`;
+        if (r.monthArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📆 每月報酬率</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthAvgArr||r.monthArr,{width:320,showN:true})}</div></div></div>`;
         html += `<div style="margin-top:10px;font-size:12px;color:#64748b">條件已填回上方,可按「🎯 策略停利回測」用相同條件重跑(取得完整明細)</div>`;
         if (box) box.innerHTML = html;
     }
@@ -6261,15 +6273,23 @@
         let equity = 100;
         valid.forEach(d => { equity *= (1 + d.stats.avgRet/100); });
         const totalReturn = equity - 100;
-        // 存區間回測結果摘要(供雲端儲存)。用入場日做年月分組
+        // 存區間回測結果摘要(供雲端儲存)。用入場日做年月分組;累計+平均各一組
         const _pr = (recs => {
             const byY={}, byM={};
-            recs.forEach(r=>{ const dk=r.入場日; if(!dk||dk.length<6)return; const y=dk.slice(0,4),ym=dk.slice(0,4)+'/'+dk.slice(4,6); byY[y]=(byY[y]||0)+r.報酬率; byM[ym]=(byM[ym]||0)+r.報酬率; });
-            return { yearArr:Object.keys(byY).sort().map(k=>({label:k,value:byY[k]})), monthArr:Object.keys(byM).sort().map(k=>({label:k,value:byM[k]})) };
+            recs.forEach(r=>{ const dk=r.入場日; if(!dk||dk.length<6)return; const y=dk.slice(0,4),ym=dk.slice(0,4)+'/'+dk.slice(4,6);
+                if(!byY[y])byY[y]={sum:0,n:0}; if(!byM[ym])byM[ym]={sum:0,n:0};
+                byY[y].sum+=r.報酬率; byY[y].n++; byM[ym].sum+=r.報酬率; byM[ym].n++; });
+            return {
+                yearArr:Object.keys(byY).sort().map(k=>({label:k,value:byY[k].sum,n:byY[k].n})),
+                monthArr:Object.keys(byM).sort().map(k=>({label:k,value:byM[k].sum,n:byM[k].n})),
+                yearAvgArr:Object.keys(byY).sort().map(k=>({label:k,value:byY[k].sum/byY[k].n,n:byY[k].n})),
+                monthAvgArr:Object.keys(byM).sort().map(k=>({label:k,value:byM[k].sum/byM[k].n,n:byM[k].n})),
+            };
         })(allRecords);
         window._lastBtResult = { type:'range', trades: totalN, winRate: overallWinRate.toFixed(1), avgRet: overallAvg.toFixed(2),
             totalRet: allRecords.reduce((s,r)=>s+r.報酬率,0).toFixed(1), at: Date.now(),
-            yearArr:_pr.yearArr, monthArr:_pr.monthArr, config: (typeof collectBtConfig==='function'?collectBtConfig():null) };
+            yearArr:_pr.yearArr, monthArr:_pr.monthArr, yearAvgArr:_pr.yearAvgArr, monthAvgArr:_pr.monthAvgArr,
+            config: (typeof collectBtConfig==='function'?collectBtConfig():null) };
         // 每日平均報酬的勝率(幾天賺)
         const profitDays = valid.filter(d => d.stats.avgRet > 0).length;
         const dayWinRate = valid.length ? profitDays/valid.length*100 : 0;
@@ -6327,10 +6347,10 @@
                 tagStats[t] = { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
             }
         });
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%,依入場日)</div>`;
-        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:640})}</div>`;
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%,依入場日)</div>`;
-        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:640})}</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(依入場日)</div>`;
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearAvgArr,{width:320,showN:true})}</div></div></div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(依入場日)</div>`;
+        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthAvgArr,{width:320,showN:true})}</div></div></div>`;
         html += `<div style="margin:18px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨勝率比較</div>`;
         html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">基於全部 TOP${meta.topN}(不受上方勾選影響),每個標籤「單獨」計算,用來比較哪個標籤策略強。想看交集請在上方勾選2個以上標籤後重跑。</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
