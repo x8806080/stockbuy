@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eb</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ec</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -5657,6 +5657,42 @@
     window.runStrategyBacktest = runStrategyBacktest;
 
     // 追蹤單檔從入場到出場
+    // 建立全期間 dayData(策略停利+矩陣回測共用):dateKey → { priceMap, top50, 各族群Set, 布林上軌值 }
+    async function buildDayData(allDatesSorted, topN, msgEl) {
+        const dayData = {};
+        for (let i = 0; i < allDatesSorted.length; i++) {
+            const dk = allDatesSorted[i];
+            if (msgEl) msgEl.textContent = `載入資料 ${i+1}/${allDatesSorted.length}…`;
+            try {
+                const p = await loadDailyResult(dk);
+                if (!p) continue;
+                recomputeHotIndustryTag(p);
+                const ranked = (p.top50||[]).slice().sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0, topN);
+                dayData[dk] = {
+                    priceMap: p.priceMap || {},
+                    topNSet: new Set(ranked.map(r=>r.代號)),
+                    top50: p.top50 || [],
+                    hotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🔥熱門族群')).map(r=>r.代號)),
+                    bollSet: new Set(
+                        (Array.isArray(p.bollUp) && p.bollUp.length)
+                            ? p.bollUp
+                            : (p.top50||[]).filter(r=>(r.狀態標註||'').includes('📈開週布林') || r.週布林站上上軌===true).map(r=>r.代號)
+                    ),
+                    waveHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌊波段熱門族群')).map(r=>r.代號)),
+                    moonBollSet: new Set(
+                        (Array.isArray(p.mbollUp) && p.mbollUp.length)
+                            ? p.mbollUp
+                            : (p.top50||[]).filter(r=>(r.狀態標註||'').includes('📅開月布林') || r.月布林站上上軌===true).map(r=>r.代號)
+                    ),
+                    moonHotSet: new Set((p.top50||[]).filter(r=>(r.狀態標註||'').includes('🌙長線熱門族群')).map(r=>r.代號)),
+                    bollUpVal: Object.fromEntries((p.top50||[]).filter(r=>r.布林上軌>0).map(r=>[r.代號, r.布林上軌])),
+                    mbollUpVal: Object.fromEntries((p.top50||[]).filter(r=>r.月布林上軌>0).map(r=>[r.代號, r.月布林上軌])),
+                };
+            } catch(e) { /* 跳過 */ }
+        }
+        return dayData;
+    }
+
     function traceExit(sym, name, entryPrice, entryDk, entryTags, futureDates, dayData, cfg) {
         let leftDays = 0;       // 連續離開TOP50天數(離榜模式用)
         let belowDays = 0;      // 獲利<10%的累積天數(時間停損模式用)
@@ -5911,7 +5947,7 @@
     window.recomputeHotIndustryTag = recomputeHotIndustryTag;
 
     async function computeDayBacktest(dateKey, opts) {
-        const { holdN, topN, selectedTags, stopLoss, useEntry, entryMaxPct } = opts;
+        const { holdN, topN, selectedTags, stopLoss, useEntry, entryMaxPct, useExit, exitMode, custom4, _dayData, _allDatesSorted } = opts;
         let entryPayload;
         try { entryPayload = await loadDailyResult(dateKey); }
         catch(e) { return { error: `載入失敗:${e.message}` }; }
@@ -5932,7 +5968,10 @@
         const allD = await loadDailyIndex().catch(()=>[]);
         const newerSorted = allD.filter(d => d > dateKey).sort();
         let exitDateKey = null;
-        if (holdN > 0) {
+        if (useExit && custom4 && _dayData) {
+            // 四層停利模式:出場由 traceExit 決定,不需固定 holdN 出場日;exitPrices 不必預載
+            exitDateKey = newerSorted.length ? newerSorted[newerSorted.length-1] : dateKey;
+        } else if (holdN > 0) {
             // 嚴格要求:必須有滿 holdN 個交易日的未來資料才算數
             // 若不足(入場日太接近資料庫最新日),直接排除此筆,避免出場日被迫拉到很遠的未來造成報酬率失真
             if (newerSorted.length >= holdN) {
@@ -5982,6 +6021,16 @@
         // 先算「前N名」的全量 records(不套標籤篩選),供標籤拆解表用
         const buildRec = r => {
             const ep = r.收盤價 || entryPriceMap[r.代號] || null;
+            // 啟用四層停利:用 traceExit 條件出場(與策略停利一致),需要預建的 dayData
+            if (useExit && custom4 && _dayData && _allDatesSorted) {
+                if (!ep || ep <= 0) return { 代號:r.代號, 名稱:r.名稱, 入場評分:r.綜合評分, 入場收盤:ep, 現在收盤:null, 報酬率:null, 停損:false, 狀態標註:r.狀態標註 };
+                const futureDates = _allDatesSorted.filter(d => d > dateKey);
+                const t = traceExit(r.代號, r.名稱, ep, dateKey, r.狀態標註, futureDates, _dayData,
+                                    { stopLossPct: custom4.stopLoss, exitMode: 'custom4', custom4 });
+                const cpv = (t.報酬率 != null) ? ep * (1 + t.報酬率/100) : null;
+                return { 代號:r.代號, 名稱:r.名稱, 入場評分:r.綜合評分, 入場收盤:ep,
+                         現在收盤:cpv, 報酬率:t.報酬率, 停損:(t.出場原因||'').includes('停損'), 狀態標註:r.狀態標註, 出場原因:t.出場原因 };
+            }
             const cp = exitPrices[r.代號] || null;
             let ret = (ep && cp) ? ((cp-ep)/ep*100) : null;
             let stopped = false;
@@ -6151,6 +6200,7 @@
         // 條件 + 資料指紋(最新日期),資料更新後 key 改變→舊快取自動失效
         return [meta.start, meta.end, meta.holdN, meta.topN, meta.stopLoss,
                 meta.useEntry?'E'+(meta.entryMaxPct||10):'E0',
+                meta.useExit?'X'+(meta.custom4?JSON.stringify(meta.custom4):'1'):'X0',
                 (meta.selectedTags||[]).slice().sort().join('+'), dataFingerprint].join('|');
     }
     function setBtCache(key, payload) {
@@ -6196,6 +6246,16 @@
         const entryDates = allD.filter(d => d >= start && d <= end);
         if (!entryDates.length) { alert('區間內無資料'); return; }
 
+        // 讀四層停利設定(與策略停利共用)
+        const useExit = document.getElementById('btUseExit')?.checked || false;
+        const exitMode = document.querySelector('input[name="exitMode"]:checked')?.value || 'leave';
+        const c4read = id => parseFloat(document.getElementById(id)?.value);
+        const custom4 = {
+            stopLoss: c4read('c4_stopLoss')||10,
+            t2: c4read('c4_t2')||10, cond2: document.getElementById('c4_cond2')?.value||'loseboll', n2: c4read('c4_n2')||3,
+            t3lo: c4read('c4_t3lo')||10, t3hi: c4read('c4_t3hi')||40, cond3: document.getElementById('c4_cond3')?.value||'loseboll', n3: c4read('c4_n3')||5,
+            t4: c4read('c4_t4')||40, cond4: document.getElementById('c4_cond4')?.value||'losemboll', n4: c4read('c4_n4')||20,
+        };
         const opts = {
             holdN: parseInt(document.getElementById('btHoldDays').value) || 0,
             topN: parseInt(document.getElementById('btTopN').value) || 50,
@@ -6204,6 +6264,7 @@
             stopLoss: parseFloat(document.getElementById('btStopLoss')?.value) || 0,
             useEntry: document.getElementById('btUseEntry')?.checked || false,
             entryMaxPct: parseFloat(document.getElementById('btEntryMaxPct')?.value) || 10,
+            useExit, exitMode, custom4,
         };
 
         // 資料指紋:repo 最新日期(資料有更新時快取自動失效)
@@ -6227,6 +6288,16 @@
         }
 
         result.innerHTML = '';
+        // 啟用四層停利時:預建全期間 dayData,讓矩陣回測改用 traceExit 條件出場(與策略停利一致)
+        let sharedDayData = null;
+        if (useExit) {
+            msg.textContent = '載入區間資料(四層停利需逐日追蹤)…';
+            const earliest = entryDates.slice().sort()[0];
+            const allAfter = allD.slice().sort().filter(d => d >= earliest);
+            sharedDayData = await buildDayData(allAfter, opts.topN, msg);
+            opts._dayData = sharedDayData;
+            opts._allDatesSorted = allAfter;
+        }
         const dayResults = [];
         const allRecords = [];      // 篩選後的(供主統計+每日明細)
         const allFullRecords = [];  // 全量前N名未篩選(供標籤拆解表)
@@ -6298,7 +6369,7 @@
             ? `<span style="color:#fbbf24">🔗 交集篩選:${meta.selectedTags.join(' ∩ ')}</span>(只回測同時具備這些標籤的標的)`
             : `<span style="color:#86efac">全部 TOP${meta.topN}</span>(未篩選)`;
         let html = `<div style="margin-bottom:8px;font-size:13px;color:#93c5fd">📊 批次區間回測:${startL} ~ ${endL}</div>`;
-        html += `<div style="margin-bottom:12px;font-size:13px;padding:8px 12px;background:var(--bg2);border-radius:6px">當前模式:${filterDesc}<br><span style="font-size:11px;color:#64748b">${valid.length}/${meta.totalDays} 個有效入場日,持有${meta.holdN||'—'}日${meta.stopLoss?',停損'+meta.stopLoss+'%':''}</span>${meta.useEntry?`<br><span style="font-size:11px;color:#4ade80">✅ 進場條件:站上週布林上軌且超出≤${meta.entryMaxPct||10}%</span>`:`<br><span style="font-size:11px;color:#64748b">○ 未啟用進場條件(全部符合標籤的標的)</span>`}</div>`;
+        html += `<div style="margin-bottom:12px;font-size:13px;padding:8px 12px;background:var(--bg2);border-radius:6px">當前模式:${filterDesc}<br><span style="font-size:11px;color:#64748b">${valid.length}/${meta.totalDays} 個有效入場日,${meta.useExit?'四層停利條件出場':'持有'+(meta.holdN||'—')+'日'}${meta.stopLoss&&!meta.useExit?',停損'+meta.stopLoss+'%':''}</span>${meta.useEntry?`<br><span style="font-size:11px;color:#4ade80">✅ 進場條件:站上週布林上軌且超出≤${meta.entryMaxPct||10}%</span>`:`<br><span style="font-size:11px;color:#64748b">○ 未啟用進場條件(全部符合標籤的標的)</span>`}${meta.useExit?`<br><span style="font-size:11px;color:#f97316">✅ 四層停利:依獲利層級跌破布林/月布林出場(與策略停利一致)</span>`:''}</div>`;
 
         // 卡片區
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">` +
