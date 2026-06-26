@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ea</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eb</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1503,7 +1503,7 @@
             byYear[y].sum += t.報酬率; byYear[y].n++;
             byMonth[ym].sum += t.報酬率; byMonth[ym].n++;
         });
-        // 累計(sum)與獨立平均(avg)各一組
+        // 累計(sum),另附平均(avg)備用
         const yearArr  = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k].sum, n:byYear[k].n}));
         const monthArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k].sum, n:byMonth[k].n}));
         const yearAvgArr  = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k].sum/byYear[k].n, n:byYear[k].n}));
@@ -5846,20 +5846,14 @@
         html += `</tbody></table></div>`;
 
         // 交易明細(報酬排序,前100筆)
-        // ── 每年 / 每月報酬率圖表(依出場日分組;累計總和 + 獨立平均各一組)──
+        // ── 每年 / 每月報酬率圖表(依出場日分組,累計總和%)──
         const { yearArr, monthArr, yearAvgArr, monthAvgArr } = periodReturns(trades);
         // 補上年月圖表資料到結果摘要(供雲端儲存/載入重現)
         if (window._lastBtResult) Object.assign(window._lastBtResult, { yearArr, monthArr, yearAvgArr, monthAvgArr });
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率</div>`;
-        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:320, showN:true})}</div></div>
-            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%(每筆平均)</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearAvgArr, {width:320, showN:true})}</div></div>
-        </div>`;
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率</div>`;
-        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:320, showN:true})}</div></div>
-            <div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%(每筆平均)</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthAvgArr, {width:320, showN:true})}</div></div>
-        </div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:640, showN:true})}</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640, showN:true})}</div>`;
 
         html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📋 交易明細(報酬排序,前100筆)</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:12px">
@@ -6130,8 +6124,8 @@
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">` +
             [['筆數',r.trades,'#94a3b8'],['勝率',(r.winRate||'-')+'%','#4ade80'],['平均報酬',(r.avgRet||'-')+'%','#4ade80'],['總報酬累計',(r.totalRet||'-')+'%','#4ade80']]
             .map(([k,v,col])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:11px;color:var(--text-dim)">${k}</div><div style="font-size:18px;font-weight:700;color:${col}">${v}</div></div>`).join('') + `</div>`;
-        if (r.yearArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📅 每年報酬率</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearAvgArr||r.yearArr,{width:320,showN:true})}</div></div></div>`;
-        if (r.monthArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📆 每月報酬率</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthAvgArr||r.monthArr,{width:320,showN:true})}</div></div></div>`;
+        if (r.yearArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(r.yearArr,{width:640,showN:true})}</div>`;
+        if (r.monthArr) html += `<div style="margin:14px 0 6px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(r.monthArr,{width:640,showN:true})}</div>`;
         html += `<div style="margin-top:10px;font-size:12px;color:#64748b">條件已填回上方,可按「🎯 策略停利回測」用相同條件重跑(取得完整明細)</div>`;
         if (box) box.innerHTML = html;
     }
@@ -6347,10 +6341,10 @@
                 tagStats[t] = { n:recs.length, winRate:w/recs.length*100, avg:recs.reduce((s,r)=>s+r.報酬率,0)/recs.length };
             }
         });
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(依入場日)</div>`;
-        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearAvgArr,{width:320,showN:true})}</div></div></div>`;
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(依入場日)</div>`;
-        html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">累計總和%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:320,showN:true})}</div></div><div><div style="font-size:12px;color:#94a3b8;margin-bottom:4px">獨立平均%</div><div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthAvgArr,{width:320,showN:true})}</div></div></div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%,依入場日)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:640,showN:true})}</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%,依入場日)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:640,showN:true})}</div>`;
         html += `<div style="margin:18px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨勝率比較</div>`;
         html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">基於全部 TOP${meta.topN}(不受上方勾選影響),每個標籤「單獨」計算,用來比較哪個標籤策略強。想看交集請在上方勾選2個以上標籤後重跑。</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
