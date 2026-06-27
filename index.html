@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ec</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ed</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1468,6 +1468,28 @@
     const PIE_COLORS = ['#3498db','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
 
     // 報酬率長條圖(每年/每月):data=[{label, value}],正綠負紅,0軸置中
+    // ── 大盤(加權指數)月漲跌幅% — 內建歷史(來源:證交所/Goodinfo),最新月可由 GitHub Actions 更新 config/taiex_monthly.json ──
+    const TAIEX_MONTHLY_BUILTIN = {
+        '2023/01':7.98,'2023/02':1.56,'2023/03':2.35,'2023/04':-1.82,'2023/05':6.42,'2023/06':2.03,
+        '2023/07':1.36,'2023/08':-2.98,'2023/09':-1.69,'2023/10':-2.16,'2023/11':8.95,'2023/12':2.85,
+        '2024/01':-0.23,'2024/02':6.02,'2024/03':7.00,'2024/04':0.50,'2024/05':3.81,'2024/06':8.77,
+        '2024/07':-3.62,'2024/08':0.31,'2024/09':-0.20,'2024/10':2.68,'2024/11':-2.44,'2024/12':3.47,
+        '2025/01':2.13,'2025/02':-2.01,'2025/03':-10.2,'2025/04':-2.23,'2025/05':5.50,'2025/06':4.26,
+        '2025/07':5.78,'2025/08':2.93,'2025/09':6.55,'2025/10':9.34,'2025/11':-2.15,'2025/12':4.84,
+        '2026/01':10.7,'2026/02':10.5,'2026/03':-10.4,'2026/04':22.7,'2026/05':14.9,'2026/06':-0.36,
+    };
+    // 執行期合併:內建 + 雲端最新(雲端覆蓋同月)
+    let TAIEX_MONTHLY = { ...TAIEX_MONTHLY_BUILTIN };
+    async function loadTaiexMonthly() {
+        try {
+            const data = await rawFetch('config/taiex_monthly.json');
+            if (data && typeof data === 'object') {
+                const m = data.monthly || data;  // 容許 {monthly:{...}} 或直接 {...}
+                TAIEX_MONTHLY = { ...TAIEX_MONTHLY_BUILTIN, ...m };
+            }
+        } catch(e) { /* 無雲端檔,用內建 */ }
+    }
+
     function buildBarChart(data, opts) {
         data = (data || []).filter(d => d && Number.isFinite(d.value));
         if (!data.length) return '<div style="color:#64748b;font-size:12px;padding:8px">無資料</div>';
@@ -1509,6 +1531,51 @@
         const yearAvgArr  = Object.keys(byYear).sort().map(k=>({label:k, value:byYear[k].sum/byYear[k].n, n:byYear[k].n}));
         const monthAvgArr = Object.keys(byMonth).sort().map(k=>({label:k, value:byMonth[k].sum/byMonth[k].n, n:byMonth[k].n}));
         return { yearArr, monthArr, yearAvgArr, monthAvgArr };
+    }
+
+    // 策略 vs 大盤 對照長條圖:每月兩條(策略每筆均值% / 大盤漲跌%),並列比較
+    function buildCompareBarChart(monthAvgArr, opts) {
+        const rows = (monthAvgArr||[]).map(d => ({
+            label: d.label, strat: d.value, n: d.n,
+            taiex: (typeof TAIEX_MONTHLY !== 'undefined' && TAIEX_MONTHLY[d.label] != null) ? TAIEX_MONTHLY[d.label] : null,
+        }));
+        if (!rows.length) return '<div style="color:#64748b;font-size:12px;padding:8px">無資料</div>';
+        const W = (opts && opts.width) || 680, rowH = 40, gap = 6, padL = 64, padR = 70, padT = 12;
+        const H = padT*2 + rows.length*(rowH+gap);
+        const vals = [];
+        rows.forEach(r => { vals.push(Math.abs(r.strat||0)); if(r.taiex!=null) vals.push(Math.abs(r.taiex)); });
+        const maxAbs = Math.max(5, ...vals);
+        const halfW = (W - padL - padR) / 2;
+        const zeroX = padL + halfW;
+        const barH = 15;
+        let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:system-ui">`;
+        svg += `<line x1="${zeroX}" y1="${padT}" x2="${zeroX}" y2="${H-padT}" stroke="#475569" stroke-width="1"/>`;
+        rows.forEach((r,i) => {
+            const yTop = padT + i*(rowH+gap);
+            svg += `<text x="${padL-6}" y="${yTop+rowH/2+4}" text-anchor="end" font-size="11" fill="#cbd5e1">${r.label} <tspan fill="#64748b" font-size="9">(${r.n})</tspan></text>`;
+            // 第一條:策略(青色系)
+            const drawBar = (val, yy, posCol, negCol, tag) => {
+                if (val == null) {
+                    svg += `<text x="${zeroX+4}" y="${yy+barH/2+4}" font-size="9" fill="#64748b">${tag}無資料</text>`;
+                    return;
+                }
+                const w = halfW * (Math.abs(val)/maxAbs);
+                const pos = val >= 0;
+                const x = pos ? zeroX : zeroX - w;
+                const col = pos ? posCol : negCol;
+                svg += `<rect x="${x}" y="${yy}" width="${Math.max(1,w)}" height="${barH}" fill="${col}" opacity="0.9" rx="2"/>`;
+                const vx = pos ? x+w+4 : x-4;
+                svg += `<text x="${vx}" y="${yy+barH/2+4}" text-anchor="${pos?'start':'end'}" font-size="9" fill="${col}" font-weight="600">${val>=0?'+':''}${val.toFixed(1)}</text>`;
+            };
+            drawBar(r.strat, yTop, '#2dd4bf', '#fb923c', '策略');          // 策略:青/橘
+            drawBar(r.taiex, yTop+barH+2, '#60a5fa', '#f87171', '大盤');   // 大盤:藍/紅
+        });
+        svg += `</svg>`;
+        // 圖例
+        const legend = `<div style="display:flex;gap:16px;font-size:11px;margin:4px 0 8px;flex-wrap:wrap">
+            <span style="color:#2dd4bf">■ 策略每筆均值(漲)</span><span style="color:#fb923c">■ 策略(跌)</span>
+            <span style="color:#60a5fa">■ 大盤(漲)</span><span style="color:#f87171">■ 大盤(跌)</span></div>`;
+        return legend + svg;
     }
 
     function buildPieChart(data, width) {
@@ -5891,6 +5958,10 @@
         html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640, showN:true})}</div>`;
 
+        // 策略 vs 大盤 對照(策略每筆均值 vs 加權指數月漲跌幅)
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">⚖️ 策略 vs 大盤(每月,策略用每筆均值對比加權指數漲跌%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:600px;overflow-y:auto">${buildCompareBarChart(monthAvgArr, {width:680})}</div>`;
+
         html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📋 交易明細(報酬排序,前100筆)</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="background:var(--bg2)">
@@ -7236,6 +7307,7 @@
     renderPresetSelect();   // 填充評分設定下拉
     loadLastConfig();       // 自動載入上次使用的評分設定
     if (typeof refreshBtSavedSelect === 'function') refreshBtSavedSelect().catch(()=>{});  // 填充雲端回測下拉
+    if (typeof loadTaiexMonthly === 'function') loadTaiexMonthly().catch(()=>{});  // 載入雲端大盤月資料(最新月)
     renderBtTagFilter();    // 產生回測標籤篩選清單
     switchTab('analysis');  // 預設顯示「分析」分頁
     if (hasRepo()) {
