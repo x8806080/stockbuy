@@ -1,0 +1,50 @@
+name: 抓取並轉換歷史資料(一鍵)
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: '起始日 YYYYMMDD(例 20221101)'
+        required: true
+        default: '20221101'
+      end:
+        description: '結束日 YYYYMMDD(例 20221130)'
+        required: true
+        default: '20221130'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安裝 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 安裝 Python 套件
+        run: pip install -r requirements.txt
+      - name: 第1步 抓取籌碼+股價 → data/raw CSV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end }}
+        run: python fetch_history.py
+      - name: 第2步 轉換 CSV → data/daily JSON
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end }}
+        run: node convert_raw.mjs
