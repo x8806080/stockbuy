@@ -101,16 +101,23 @@ function computeMonthlyBollinger(hist,period=20,k=2){ const out={}; for(const s 
 const splitI = s => (s||'').split(/[,、，;；/]/).map(x=>x.trim()).filter(Boolean);
 
 // 把一天的 CSV rows 算成 payload
-function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
-  // 解析欄位 + 補產業/市值(字典)
+function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
+  // 解析欄位 + 補產業/市值(字典),並算當日市值
   const data = rows.map(r => {
     const code = (r['代號']||'').trim();
     const dict = DICT[code] || {};
     const ind = dict.i || '';
-    const mcap億 = dict.m || 0;
+    const dictMcap億 = dict.m || 0;        // 字典市值(對應基準日股價)
+    const close = num(r['當日收盤價']) || 0;
+    const base = (baseClose && baseClose[code]) || 0;   // 基準日收盤
+    // 當日市值 = 字典市值 × (當日收盤 ÷ 基準收盤);股數假設不變
+    let mcap億 = dictMcap億;
+    if (dictMcap億 > 0 && base > 0 && close > 0) {
+      mcap億 = dictMcap億 * (close / base);
+    }
     return {
       代號: code, 名稱: r['名稱']||'',
-      收盤價: num(r['當日收盤價']) || 0,
+      收盤價: close,
       當日漲幅: num(r['當日漲幅(%)']),
       漲幅5日: num(r['5日漲幅(%)']),
       漲幅1月: num(r['1個月漲幅(%)']),
@@ -246,6 +253,20 @@ async function main() {
   if (!dates.length) { console.error('data/raw 無符合的 CSV'); process.exit(1); }
   console.log(`  待轉換 ${dates.length} 天`);
 
+  // 預掃:取每檔在「整個 data/raw 範圍最後一天」的收盤,當作字典市值對應的基準股價
+  // 股數 = 字典市值 ÷ 基準收盤;當日市值 = 股數 × 當日收盤(近似,假設股數不變)
+  console.log('  預掃基準收盤(算當日市值用)…');
+  const baseClose = {};   // { 代號: 最後一天收盤 }
+  const allRaw = await listRawFiles();
+  const lastDate = allRaw[allRaw.length-1];
+  if (lastDate) {
+    try {
+      const lr = await getRaw(`data/raw/final_output_${lastDate}.csv`);
+      if (lr) parseCSV(lr.text).forEach(r => { const c=(r['代號']||'').trim(); const v=num(r['當日收盤價']); if(/^\d{4}$/.test(c)&&v>0) baseClose[c]=v; });
+    } catch(_){}
+  }
+  console.log(`  基準收盤 ${Object.keys(baseClose).length} 檔(基準日 ${lastDate})`);
+
   const bollHist = {};
   let ok=0, fail=0;
   const t0 = Date.now();
@@ -260,7 +281,7 @@ async function main() {
     rows.forEach(r => { const code=(r['代號']||'').trim(); const c=num(r['當日收盤價']); if(/^\d{4}$/.test(code)&&c>0){ if(!bollHist[code])bollHist[code]=[]; bollHist[code].push({dk,close:c}); if(bollHist[code].length>460)bollHist[code]=bollHist[code].slice(-460);} });
     const bollMap = computeWeeklyBollinger(bollHist,20,2);
     const mbollMap = computeMonthlyBollinger(bollHist,20,2);
-    const payload = buildPayload(rows, dk, bollMap, mbollMap, DICT);
+    const payload = buildPayload(rows, dk, bollMap, mbollMap, DICT, baseClose);
     // 寫 data/daily/YYYYMMDD.json
     try {
       let sha=null; try{ const cur=await getJSON(`data/daily/${dk}.json`); sha=cur?.sha||null; }catch(_){}
