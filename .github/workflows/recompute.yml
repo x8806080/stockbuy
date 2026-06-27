@@ -30,3 +30,10 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           TARGET_BRANCH: ${{ github.ref_name }}
         run: node recompute.mjs
+        
+- name: 抓取最新月大盤
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: node fetch_taiex.mjs
