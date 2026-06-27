@@ -1,0 +1,35 @@
+name: 盤點歷史資料缺口
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: '起始年月 YYYYMM(例 201601)'
+        required: true
+        default: '201601'
+      end:
+        description: '結束年月 YYYYMM(例 202212)'
+        required: true
+        default: '202212'
+
+permissions:
+  contents: write
+
+jobs:
+  check-missing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+      - name: 安裝 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 盤點缺口
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end }}
+        run: node check_missing.mjs
