@@ -1,14 +1,10 @@
 name: 雲端重算族群布林
 
-# 觸發方式:
-#   1. 手動觸發(在 GitHub 網頁 Actions 頁按 Run workflow)
-#   2. (選用)排程:每天收盤後自動跑,取消下面 schedule 註解即可
 on:
-  workflow_dispatch:        # 手動觸發按鈕
+  workflow_dispatch:
   # schedule:
-  #   - cron: '0 9 * * 1-5'  # 每週一~五 UTC 09:00(台灣 17:00)自動跑
+  #   - cron: '0 9 * * 1-5'  # 台灣17:00自動跑
 
-# 給 workflow 寫 repo 的權限
 permissions:
   contents: write
 
@@ -18,22 +14,13 @@ jobs:
     steps:
       - name: 取出程式碼
         uses: actions/checkout@v4
-
       - name: 安裝 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: 執行雲端重算
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           TARGET_BRANCH: ${{ github.ref_name }}
         run: node recompute.mjs
-        
-      - name: 抓取最新月大盤
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          TARGET_BRANCH: ${{ github.ref_name }}
-        run: node fetch_taiex.mjs
