@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eh</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ei</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1520,7 +1520,7 @@
     function periodReturns(trades) {
         const byYear = {}, byMonth = {};
         trades.forEach(t => {
-            const dk = t.出場日; if (!dk || dk.length < 6) return;
+            const dk = t.入場日; if (!dk || dk.length < 6) return;   // 改用入場日分組:獲利歸到買進那個月
             const y = dk.slice(0,4), ym = dk.slice(0,4)+'/'+dk.slice(4,6);
             if (!byYear[y]) byYear[y] = { sum:0, n:0 };
             if (!byMonth[ym]) byMonth[ym] = { sum:0, n:0 };
@@ -6041,14 +6041,14 @@
         const { yearArr, monthArr, yearAvgArr, monthAvgArr } = periodReturns(trades);
         // 補上年月圖表資料到結果摘要(供雲端儲存/載入重現)
         if (window._lastBtResult) Object.assign(window._lastBtResult, { yearArr, monthArr, yearAvgArr, monthAvgArr });
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%)</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📅 每年報酬率(累計%,依入場日)</div>`;
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:640, showN:true})}</div>`;
-        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%,依入場日)</div>`;
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640, showN:true})}</div>`;
 
         // 每月明細(可點月份展開該月所有交易)
         window._btMonthTrades = {};
-        trades.forEach(t => { const dk=t.出場日; if(!dk||dk.length<6)return; const ym=dk.slice(0,4)+'/'+dk.slice(4,6); (window._btMonthTrades[ym]=window._btMonthTrades[ym]||[]).push(t); });
+        trades.forEach(t => { const dk=t.入場日; if(!dk||dk.length<6)return; const ym=dk.slice(0,4)+'/'+dk.slice(4,6); (window._btMonthTrades[ym]=window._btMonthTrades[ym]||[]).push(t); });
         const monthsSorted = Object.keys(window._btMonthTrades).sort();
         html += `<div style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#c7d2fe">🔍 點月份看當月買賣明細</div>`;
         html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">` +
