@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ej</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ek</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -747,6 +747,11 @@
                             style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:11px 24px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
                             🎯 完整回測(績效+標籤比較)
                         </button>
+                        <button onclick="runPoolBacktest()"
+                            title="模擬抱N檔、資金滾動複利、月比值汰換,最接近真實操作"
+                            style="background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
+                            💰 資金池複利回測
+                        </button>
                         <button onclick="runRangeBacktest()"
                             title="進階:標籤交集矩陣分析(比較多標籤同時成立的效果)"
                             style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer">
@@ -787,6 +792,12 @@
                                 <span>啟用停利條件</span>
                                 <span style="color:#64748b;font-size:11px">(用下方離場策略；不勾則固定持有N天)</span>
                             </label>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1f1e;border:1px solid #155e5a;padding:8px 12px;border-radius:6px;width:100%">
+                            <span style="font-weight:700;color:#06b6d4">💰 資金池參數(資金池複利回測用):</span>
+                            <label style="display:flex;align-items:center;gap:4px">初始資金<input type="number" id="poolInitCap" value="100" min="1" style="width:60px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">萬</label>
+                            <label style="display:flex;align-items:center;gap:4px">最多持有<input type="number" id="poolMaxHold" value="25" min="1" max="100" style="width:48px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">檔</label>
+                            <span style="color:#64748b;font-size:11px">等金額分配,月比值高者優先,汰弱留強</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px;width:100%">
                             <span style="font-weight:600;color:#f97316">離場策略:</span>
@@ -6506,6 +6517,240 @@
         try { localStorage.removeItem(BT_CACHE_KEY); } catch(e) {}
     }
     window.clearBtCache = clearBtCache;
+
+    // ═══════════════ 資金池複利回測(模擬抱N檔、資金滾動、月比值汰換)═══════════════
+    function _monthRatioOf(rec) {
+        // 從 top50 的 法人月市值比pct 取數值(字串 "0.123%" → 0.123),無則 -1
+        const s = rec && rec.法人月市值比pct;
+        if (!s || s === '-') return -1;
+        const v = parseFloat(String(s).replace('%',''));
+        return Number.isFinite(v) ? v : -1;
+    }
+    async function runPoolBacktest(forceRecalc) {
+        const result = document.getElementById('backtestResult');
+        const msg = document.getElementById('backtestMsg');
+        if (!hasRepo()) { msg.textContent = '請先設定 GitHub Token'; return; }
+
+        // 讀參數
+        const initCap = parseFloat(document.getElementById('poolInitCap')?.value) || 100;  // 萬
+        const maxHold = parseInt(document.getElementById('poolMaxHold')?.value) || 25;
+        const sel = getCalSelected('backtestDateList');
+        const entryDates = (sel || []).slice().sort();
+        if (entryDates.length < 2) { msg.textContent = '請在日曆點起訖2天(區間)'; return; }
+
+        // 進場/停利條件(沿用既有 UI)
+        const useEntry = document.getElementById('btUseEntry')?.checked || false;
+        const entryMaxPct = parseFloat(document.getElementById('btEntryMaxPct')?.value) || 10;
+        const custom4 = {
+            stopLoss: parseFloat(document.getElementById('c4_stopLoss')?.value)||10,
+            t2: parseFloat(document.getElementById('c4_t2')?.value)||10, cond2: document.getElementById('c4_cond2')?.value||'loseboll', n2: parseFloat(document.getElementById('c4_n2')?.value)||3,
+            t3lo: parseFloat(document.getElementById('c4_t3lo')?.value)||10, t3hi: parseFloat(document.getElementById('c4_t3hi')?.value)||40, cond3: document.getElementById('c4_cond3')?.value||'loseboll', n3: parseFloat(document.getElementById('c4_n3')?.value)||5,
+            t4: parseFloat(document.getElementById('c4_t4')?.value)||40, cond4: document.getElementById('c4_cond4')?.value||'losemboll', n4: parseFloat(document.getElementById('c4_n4')?.value)||20,
+        };
+
+        msg.textContent = '建立每日資料…';
+        // 全期間日期(從第一個入場日到最後)
+        const allD = (await loadDailyIndex().catch(()=>[])).slice().sort();
+        const startDk = entryDates[0], endDk = entryDates[entryDates.length-1];
+        const simDates = allD.filter(d => d >= startDk && d <= endDk);
+        if (simDates.length < 2) { msg.textContent = '區間內無足夠資料'; return; }
+        const dayData = await buildDayData(simDates, 50, msg);
+
+        // 資金池狀態
+        let cash = initCap;                 // 可用現金(萬)
+        const holdings = {};                // 代號 → { entryPrice, shares投入金額, entryDk, monthRatio, peakRet }
+        const perShareCap = () => initCap / maxHold;  // 等金額:固定用「初始資金÷檔數」當每檔投入(避免複利後越買越大)
+        const closedTrades = [];            // 已出場交易
+        const equityCurve = [];             // 每日權益曲線 [{dk, equity}]
+
+        // 估某檔在某日的現價
+        const priceAt = (sym, dk) => (dayData[dk] && dayData[dk].priceMap[sym]) || null;
+        // 某檔在某日的 top50 rec(取月比值/布林)
+        const recAt = (sym, dk) => (dayData[dk] && (dayData[dk].top50||[]).find(r=>r.代號===sym)) || null;
+
+        msg.textContent = '資金池模擬中…';
+        for (let di = 0; di < simDates.length; di++) {
+            const dk = simDates[di];
+            const dd = dayData[dk];
+            if (!dd) continue;
+
+            // ── 1. 更新持倉現價、檢查停利出場 ──
+            for (const sym of Object.keys(holdings)) {
+                const h = holdings[sym];
+                const px = priceAt(sym, dk);
+                if (px == null) continue;
+                const ret = (px - h.entryPrice) / h.entryPrice * 100;
+                h.peakRet = Math.max(h.peakRet||0, ret);
+                // 四層停利判斷(簡化:用當日是否跌破布林 + 獲利層級)
+                const rec = recAt(sym, dk);
+                const belowBoll = rec ? !(dd.bollSet.has(sym)) : false;       // 不在開週布林=跌破
+                const belowMboll = rec ? !(dd.moonBollSet.has(sym)) : false;
+                let exit = null;
+                if (ret <= -custom4.stopLoss) exit = `停損-${custom4.stopLoss}%`;
+                else if (ret < custom4.t2 && belowBoll) exit = `跌破布林(獲利<${custom4.t2}%)`;
+                else if (ret >= custom4.t2 && ret < custom4.t3hi && belowBoll) exit = `跌破布林(中獲利)`;
+                else if (ret >= custom4.t4 && belowMboll) exit = `跌破月布林(高獲利)`;
+                if (exit) {
+                    const proceeds = h.投入 * (1 + ret/100);
+                    cash += proceeds;
+                    closedTrades.push({ 代號:sym, 名稱:h.名稱, 入場日:h.entryDk, 出場日:dk, 報酬率:ret, 出場原因:exit, 投入:h.投入, 損益:proceeds-h.投入 });
+                    delete holdings[sym];
+                }
+            }
+
+            // ── 2. 找當日訊號(站上布林 + 進場條件),依月比值排序 ──
+            let signals = (dd.top50||[]).filter(r => {
+                if (holdings[r.代號]) return false;             // 已持有不重複買
+                const isBoll = dd.bollSet.has(r.代號);
+                if (!isBoll) return false;                       // 必須站上週布林
+                if (useEntry) {
+                    const px = dd.priceMap[r.代號], up = r.布林上軌;
+                    if (!(px>0 && up>0 && px>=up && (px-up)/up*100 <= entryMaxPct)) return false;
+                }
+                return true;
+            }).map(r => ({ sym:r.代號, name:r.名稱, mr:_monthRatioOf(r), px:dd.priceMap[r.代號] }))
+              .filter(s => s.px > 0)
+              .sort((a,b) => b.mr - a.mr);   // 月比值高→低
+
+            // ── 3. 進場 / 汰換 ──
+            for (const sig of signals) {
+                const holdSyms = Object.keys(holdings);
+                if (holdSyms.length < maxHold) {
+                    // 有空位:有資金就買
+                    const cap = perShareCap();
+                    if (cash >= cap) { cash -= cap; holdings[sig.sym] = { 名稱:sig.name, entryPrice:sig.px, entryDk:dk, 投入:cap, monthRatio:sig.mr, peakRet:0 }; }
+                } else {
+                    // 位置滿:新訊號月比值 > 庫存最低月比值,且該庫存「低獲利<10%」→ 汰換
+                    let worst = null, worstMr = Infinity;
+                    for (const s of holdSyms) {
+                        const h = holdings[s];
+                        const px = priceAt(s, dk); if (px==null) continue;
+                        const ret = (px - h.entryPrice)/h.entryPrice*100;
+                        const curMr = (() => { const rec=recAt(s,dk); return rec? _monthRatioOf(rec) : h.monthRatio; })();
+                        if (ret < custom4.t2 && curMr < worstMr) { worstMr = curMr; worst = { sym:s, ret, px }; }  // 只考慮低獲利的
+                    }
+                    if (worst && sig.mr > worstMr) {
+                        // 賣掉 worst,買 sig
+                        const h = holdings[worst.sym];
+                        const proceeds = h.投入 * (1 + worst.ret/100);
+                        cash += proceeds;
+                        closedTrades.push({ 代號:worst.sym, 名稱:h.名稱, 入場日:h.entryDk, 出場日:dk, 報酬率:worst.ret, 出場原因:`汰弱(月比值低+獲利<${custom4.t2}%)`, 投入:h.投入, 損益:proceeds-h.投入 });
+                        delete holdings[worst.sym];
+                        const cap = perShareCap();
+                        if (cash >= cap) { cash -= cap; holdings[sig.sym] = { 名稱:sig.name, entryPrice:sig.px, entryDk:dk, 投入:cap, monthRatio:sig.mr, peakRet:0 }; }
+                    }
+                }
+            }
+
+            // ── 4. 記錄當日權益(現金 + 持倉市值)──
+            let holdValue = 0;
+            for (const sym of Object.keys(holdings)) {
+                const h = holdings[sym]; const px = priceAt(sym, dk) || h.entryPrice;
+                holdValue += h.投入 * (px / h.entryPrice);
+            }
+            equityCurve.push({ dk, equity: cash + holdValue });
+        }
+
+        // ── 結算:期末強制平倉(用最後一天現價)──
+        const lastDk = simDates[simDates.length-1];
+        for (const sym of Object.keys(holdings)) {
+            const h = holdings[sym]; const px = priceAt(sym, lastDk) || h.entryPrice;
+            const ret = (px - h.entryPrice)/h.entryPrice*100;
+            closedTrades.push({ 代號:sym, 名稱:h.名稱, 入場日:h.entryDk, 出場日:lastDk, 報酬率:ret, 出場原因:'期末平倉', 投入:h.投入, 損益:h.投入*(ret/100) });
+        }
+        const finalEquity = equityCurve.length ? equityCurve[equityCurve.length-1].equity : initCap;
+        const totalRetPct = (finalEquity - initCap) / initCap * 100;
+
+        renderPoolResult({ initCap, maxHold, finalEquity, totalRetPct, closedTrades, equityCurve, simDates });
+        msg.textContent = '';
+    }
+    window.runPoolBacktest = runPoolBacktest;
+
+    // 資金池回測結果渲染(資金成長曲線 vs 大盤、交易統計)
+    function renderPoolResult({ initCap, maxHold, finalEquity, totalRetPct, closedTrades, equityCurve, simDates }) {
+        const box = document.getElementById('backtestResult');
+        if (!box) return;
+        const wins = closedTrades.filter(t=>t.報酬率>0).length;
+        const winRate = closedTrades.length ? (wins/closedTrades.length*100) : 0;
+        // 年化報酬(CAGR)
+        const days = simDates.length;
+        const years = days/250;
+        const cagr = years>0 ? (Math.pow(finalEquity/initCap, 1/years)-1)*100 : 0;
+        // 最大回撤(MDD)
+        let peak = -Infinity, mdd = 0;
+        equityCurve.forEach(p => { peak = Math.max(peak, p.equity); const dd = (peak-p.equity)/peak*100; mdd = Math.max(mdd, dd); });
+
+        let html = `<div style="margin-bottom:12px;font-size:13px;padding:10px 14px;background:var(--bg2);border-radius:8px">
+            <span style="color:#93c5fd;font-weight:700">💰 資金池複利回測</span>　初始 ${initCap}萬｜最多持有 ${maxHold} 檔｜等金額(每檔 ${(initCap/maxHold).toFixed(1)}萬)<br>
+            <span style="font-size:11px;color:#94a3b8">規則:月比值高者優先進場;位置滿時新訊號月比值更高且舊檔低獲利則汰換;中高獲利依四層停利出場</span></div>`;
+
+        html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">`;
+        const card = (label, val, color) => `<div style="background:var(--bg2);border-radius:8px;padding:12px"><div style="font-size:11px;color:#94a3b8">${label}</div><div style="font-size:20px;font-weight:700;color:${color}">${val}</div></div>`;
+        html += card('期末資金', `${finalEquity.toFixed(1)}萬`, finalEquity>=initCap?'#4ade80':'#f87171');
+        html += card('總報酬(複利)', `${totalRetPct>=0?'+':''}${totalRetPct.toFixed(1)}%`, totalRetPct>=0?'#4ade80':'#f87171');
+        html += card('年化報酬(CAGR)', `${cagr>=0?'+':''}${cagr.toFixed(1)}%`, cagr>=0?'#4ade80':'#f87171');
+        html += card('最大回撤(MDD)', `-${mdd.toFixed(1)}%`, '#f87171');
+        html += card('交易筆數', closedTrades.length, '#e2e8f0');
+        html += card('勝率', `${winRate.toFixed(1)}%`, winRate>=50?'#4ade80':'#fbbf24');
+        html += `</div>`;
+
+        // 資金成長曲線 vs 大盤(把權益曲線正規化成%,跟大盤累積比)
+        html += `<div style="margin:14px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📈 資金成長曲線 vs 大盤(同期)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:10px">${buildEquityVsTaiex(equityCurve, initCap)}</div>`;
+
+        // 出場原因分布
+        const reasonStat = {};
+        closedTrades.forEach(t => { const r=t.出場原因||'?'; if(!reasonStat[r])reasonStat[r]={n:0,sum:0,wins:0}; reasonStat[r].n++; reasonStat[r].sum+=t.報酬率; if(t.報酬率>0)reasonStat[r].wins++; });
+        html += `<div style="margin:16px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📊 出場原因分布</div>`;
+        html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg2)">
+            <th style="padding:6px;text-align:left">原因</th><th style="padding:6px;text-align:right">筆數</th><th style="padding:6px;text-align:right">勝率</th><th style="padding:6px;text-align:right">平均報酬</th></tr></thead><tbody>`;
+        Object.entries(reasonStat).sort((a,b)=>b[1].n-a[1].n).forEach(([r,s])=>{
+            const avg=s.sum/s.n, wr=s.wins/s.n*100;
+            html += `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">${r}</td><td style="padding:6px;text-align:right">${s.n}</td><td style="padding:6px;text-align:right;color:${wr>=50?'#4ade80':'#f87171'}">${wr.toFixed(0)}%</td><td style="padding:6px;text-align:right;color:${avg>=0?'#4ade80':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+
+        box.innerHTML = html;
+    }
+
+    // 資金權益曲線(正規化%) vs 大盤累積
+    function buildEquityVsTaiex(equityCurve, initCap) {
+        if (!equityCurve || equityCurve.length < 2) return '<div style="color:#64748b">資料不足</div>';
+        // 抽樣到每月一點(取每月最後一天權益)
+        const byMonth = {};
+        equityCurve.forEach(p => { byMonth[p.dk.slice(0,6)] = p.equity; });
+        const months = Object.keys(byMonth).sort();
+        const stratPts = months.map(m => ({ label: m.slice(0,4)+'/'+m.slice(4,6), v: (byMonth[m]-initCap)/initCap*100 }));
+        // 大盤累積(同月)
+        let tCum = 0; const taiexPts = months.map(m => {
+            const key = m.slice(0,4)+'/'+m.slice(4,6);
+            if (typeof TAIEX_MONTHLY!=='undefined' && TAIEX_MONTHLY[key]!=null) tCum += TAIEX_MONTHLY[key];
+            return { label:key, v:tCum };
+        });
+        // 畫雙線
+        const W=700,H=300,padL=52,padR=20,padT=20,padB=46;
+        const all=[...stratPts.map(p=>p.v),...taiexPts.map(p=>p.v)];
+        const maxY=Math.max(...all,1),minY=Math.min(...all,-1),rangeY=(maxY-minY)||1;
+        const plotW=W-padL-padR,plotH=H-padT-padB;
+        const x=i=>padL+plotW*(stratPts.length===1?0.5:i/(stratPts.length-1));
+        const y=v=>padT+plotH*(1-(v-minY)/rangeY);
+        const zeroY=y(0);
+        let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:system-ui">`;
+        svg+=`<line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#475569" stroke-dasharray="3 3"/>`;
+        svg+=`<text x="${padL-6}" y="${zeroY+3}" text-anchor="end" font-size="10" fill="#64748b">0%</text>`;
+        svg+=`<text x="${padL-6}" y="${padT+4}" text-anchor="end" font-size="10" fill="#64748b">${maxY>=0?'+':''}${maxY.toFixed(0)}%</text>`;
+        const path=pts=>pts.map((p,i)=>`${i===0?'M':'L'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+        svg+=`<path d="${path(taiexPts)}" fill="none" stroke="#60a5fa" stroke-width="2"/>`;
+        svg+=`<path d="${path(stratPts)}" fill="none" stroke="#fb923c" stroke-width="2.5"/>`;
+        const step=Math.ceil(stratPts.length/12);
+        stratPts.forEach((p,i)=>{ if(i%step===0||i===stratPts.length-1) svg+=`<text x="${x(i).toFixed(1)}" y="${H-padB+16}" text-anchor="middle" font-size="9" fill="#94a3b8" transform="rotate(45 ${x(i).toFixed(1)} ${H-padB+16})">${p.label}</text>`; });
+        const ls=stratPts[stratPts.length-1].v, lt=taiexPts[taiexPts.length-1].v;
+        svg+=`<text x="${x(stratPts.length-1)-4}" y="${y(ls)-6}" text-anchor="end" font-size="11" fill="#fb923c" font-weight="700">資金 ${ls>=0?'+':''}${ls.toFixed(0)}%</text>`;
+        svg+=`<text x="${x(taiexPts.length-1)-4}" y="${y(lt)+14}" text-anchor="end" font-size="11" fill="#60a5fa" font-weight="700">大盤 ${lt>=0?'+':''}${lt.toFixed(0)}%</text>`;
+        svg+=`</svg>`;
+        const legend=`<div style="display:flex;gap:16px;font-size:12px;margin:4px 0 6px"><span style="color:#fb923c">━ 我的資金(複利)</span><span style="color:#60a5fa">━ 大盤(同期累積)</span></div>`;
+        return legend+svg;
+    }
 
     async function runRangeBacktest(forceRecalc) {
         const msg = document.getElementById('backtestMsg');
