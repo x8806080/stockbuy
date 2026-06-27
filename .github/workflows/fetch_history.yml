@@ -1,0 +1,38 @@
+name: 抓取歷史資料(試一個月)
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: '起始日 YYYYMMDD(例 20221201)'
+        required: true
+        default: '20221201'
+      end:
+        description: '結束日 YYYYMMDD(例 20221231)'
+        required: true
+        default: '20221231'
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # 接近6小時上限前自動停
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+      - name: 抓取歷史
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end }}
+        run: python fetch_history.py
