@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ed</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ee</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1577,6 +1577,39 @@
             <span style="color:#60a5fa">■ 大盤(漲)</span><span style="color:#f87171">■ 大盤(跌)</span></div>`;
         return legend + svg;
     }
+
+    // 點月份 → 顯示該月所有交易明細(買什麼、如何進出)
+    function showMonthTrades(ym) {
+        const box = document.getElementById('monthTradesDetail');
+        if (!box) return;
+        const arr = (window._btMonthTrades && window._btMonthTrades[ym]) || [];
+        if (!arr.length) { box.innerHTML = ''; return; }
+        const sorted = arr.slice().sort((a,b)=>b.報酬率-a.報酬率);
+        const sum = arr.reduce((s,t)=>s+t.報酬率,0);
+        const wins = arr.filter(t=>t.報酬率>0).length;
+        let h = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px">`;
+        h += `<div style="font-size:13px;font-weight:700;color:#c7d2fe;margin-bottom:8px">📅 ${ym} 當月交易(${arr.length}筆,勝率${(wins/arr.length*100).toFixed(0)}%,累計${sum>=0?'+':''}${sum.toFixed(1)}%)</div>`;
+        h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg)">
+            <th style="padding:5px;text-align:left">代號</th><th style="padding:5px;text-align:left">名稱</th>
+            <th style="padding:5px;text-align:center">入場日</th><th style="padding:5px;text-align:right">入場價</th>
+            <th style="padding:5px;text-align:center">出場日</th><th style="padding:5px;text-align:right">報酬</th>
+            <th style="padding:5px;text-align:left">出場原因</th></tr></thead><tbody>`;
+        sorted.forEach(t => {
+            const col = t.報酬率>=0?'#4ade80':'#f87171';
+            h += `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px">${t.代號}</td><td style="padding:5px">${t.名稱||''}</td>
+                <td style="padding:5px;text-align:center;color:#94a3b8">${t.入場日標||t.入場日||''}</td>
+                <td style="padding:5px;text-align:right">${t.入場價?t.入場價.toFixed(1):'-'}</td>
+                <td style="padding:5px;text-align:center;color:#94a3b8">${t.出場日標||t.出場日||''}</td>
+                <td style="padding:5px;text-align:right;color:${col};font-weight:600">${t.報酬率>=0?'+':''}${t.報酬率.toFixed(1)}%</td>
+                <td style="padding:5px;font-size:11px;color:#cbd5e1">${t.出場原因||''}</td></tr>`;
+        });
+        h += `</tbody></table></div></div>`;
+        box.innerHTML = h;
+        box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+    window.showMonthTrades = showMonthTrades;
 
     function buildPieChart(data, width) {
         const W = width || 260, H = W;
@@ -5957,6 +5990,20 @@
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(yearArr, {width:640, showN:true})}</div>`;
         html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%)</div>`;
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(monthArr, {width:640, showN:true})}</div>`;
+
+        // 每月明細(可點月份展開該月所有交易)
+        window._btMonthTrades = {};
+        trades.forEach(t => { const dk=t.出場日; if(!dk||dk.length<6)return; const ym=dk.slice(0,4)+'/'+dk.slice(4,6); (window._btMonthTrades[ym]=window._btMonthTrades[ym]||[]).push(t); });
+        const monthsSorted = Object.keys(window._btMonthTrades).sort();
+        html += `<div style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#c7d2fe">🔍 點月份看當月買賣明細</div>`;
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">` +
+            monthsSorted.map(ym => {
+                const arr = window._btMonthTrades[ym];
+                const sum = arr.reduce((s,t)=>s+t.報酬率,0);
+                const col = sum>=0?'#16a34a':'#dc2626';
+                return `<button onclick="showMonthTrades('${ym}')" style="background:${col};color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">${ym} (${arr.length}) ${sum>=0?'+':''}${sum.toFixed(0)}%</button>`;
+            }).join('') + `</div>`;
+        html += `<div id="monthTradesDetail" style="margin-bottom:12px"></div>`;
 
         // 策略 vs 大盤 對照(策略每筆均值 vs 加權指數月漲跌幅)
         html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">⚖️ 策略 vs 大盤(每月,策略用每筆均值對比加權指數漲跌%)</div>`;
