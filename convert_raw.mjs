@@ -102,10 +102,12 @@ const splitI = s => (s||'').split(/[,、，;；/]/).map(x=>x.trim()).filter(Bool
 
 // 把一天的 CSV rows 算成 payload
 function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
-  // 解析欄位 + 補產業
+  // 解析欄位 + 補產業/市值(字典)
   const data = rows.map(r => {
     const code = (r['代號']||'').trim();
-    const ind = (DICT[code] && DICT[code].i) || '';
+    const dict = DICT[code] || {};
+    const ind = dict.i || '';
+    const mcap億 = dict.m || 0;
     return {
       代號: code, 名稱: r['名稱']||'',
       收盤價: num(r['當日收盤價']) || 0,
@@ -115,9 +117,17 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
       金額當日萬: num(r['當日買賣超金額(萬元)']) || 0,
       金額5日萬: num(r['5日買賣超金額(萬元)']) || 0,
       金額1月萬: num(r['1個月買賣超金額(萬元)']) || 0,
-      相關產業: ind,
+      相關產業: ind, 市值億: mcap億,
     };
   }).filter(r => r.代號 && /^\d{4}$/.test(r.代號));
+
+  // 比值(買超百萬 ÷ 市值百萬;市值億×100=百萬)
+  data.forEach(r => {
+    const mcapM = r.市值億 * 100;
+    r._corp5 = r.金額5日萬/100; r._corp1m = r.金額1月萬/100;
+    r._ratio5  = mcapM > 0 ? r._corp5/mcapM : 0;
+    r._ratio1m = mcapM > 0 ? r._corp1m/mcapM : 0;
+  });
 
   // 動能:前N%門檻
   const topByPct = (field, p) => {
@@ -130,19 +140,43 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
   const rise1mTop = topByPct('漲幅1月', SC.topPct);
   const riseDayTop = topByPct('當日漲幅', SC.dayPct);
 
-  // 評分(絕對金額版,缺市值保底)
+  // 自動分位門檻:用 5日/1月漲幅前N%(進榜標的)的比值算 P90/P70/P50(同網頁)
+  const benchRows = data.filter(r => rise5dTop.has(r.代號) || rise1mTop.has(r.代號));
+  const pctOf = (field, p) => {
+    const arr = benchRows.map(r=>r[field]).filter(v=>v>0).sort((a,b)=>a-b);
+    if (!arr.length) return 0;
+    return arr[Math.max(0, Math.floor(arr.length*p/100)-1)];
+  };
+  const auto5A=pctOf('_ratio5',90), auto5B=pctOf('_ratio5',70), auto5C=pctOf('_ratio5',50);
+  const auto1A=pctOf('_ratio1m',90), auto1B=pctOf('_ratio1m',70), auto1C=pctOf('_ratio1m',50);
+
+  // 評分:有市值用比值分位,無市值用絕對金額保底(同網頁)
   data.forEach(r => {
     let score = 0; const tags = [];
-    const c5 = r.金額5日萬/100, c1 = r.金額1月萬/100;  // 萬→百萬
-    if (c5 > SC.f5A/100) { score+=SC.s5A; tags.push('🏆P90'); }
-    else if (c5 >= SC.f5B/100) { score+=SC.s5B; tags.push('P70'); }
-    else if (c5 >= SC.f5C/100) { score+=SC.s5C; tags.push('P50'); }
-    if (c1 > SC.f1A/100) score+=SC.s1A;
-    else if (c1 >= SC.f1B/100) score+=SC.s1B;
-    else if (c1 >= SC.f1C/100) score+=SC.s1C;
+    const hasMcap = r.市值億 > 0;
+    // 法人5日
+    if (hasMcap && r._ratio5 > 0) {
+      if      (auto5A>0 && r._ratio5>=auto5A) { score+=SC.s5A; tags.push('🏆P90'); }
+      else if (auto5B>0 && r._ratio5>=auto5B) { score+=SC.s5B; tags.push('P70'); }
+      else if (auto5C>0 && r._ratio5>=auto5C) { score+=SC.s5C; tags.push('P50'); }
+    } else if (r._corp5 > 0) {
+      if      (r._corp5 > SC.f5A/100)  { score+=SC.s5A; tags.push('🏆P90'); }
+      else if (r._corp5 >= SC.f5B/100) { score+=SC.s5B; tags.push('P70'); }
+      else if (r._corp5 >= SC.f5C/100) { score+=SC.s5C; tags.push('P50'); }
+    }
+    // 法人月
+    if (hasMcap && r._ratio1m > 0) {
+      if      (auto1A>0 && r._ratio1m>=auto1A) score+=SC.s1A;
+      else if (auto1B>0 && r._ratio1m>=auto1B) score+=SC.s1B;
+      else if (auto1C>0 && r._ratio1m>=auto1C) score+=SC.s1C;
+    } else if (r._corp1m > 0) {
+      if      (r._corp1m > SC.f1A/100)  score+=SC.s1A;
+      else if (r._corp1m >= SC.f1B/100) score+=SC.s1B;
+      else if (r._corp1m >= SC.f1C/100) score+=SC.s1C;
+    }
     // 動能
     const in5 = rise5dTop.has(r.代號), in1 = rise1mTop.has(r.代號);
-    if (in5 && in1) { score+=SC.mBoth; } else if (in5) { score+=SC.m5d; } else if (in1) { score+=SC.m1m; }
+    if (in5 && in1) score+=SC.mBoth; else if (in5) score+=SC.m5d; else if (in1) score+=SC.m1m;
     if (riseDayTop.has(r.代號)) score+=SC.mDay;
     // 布林標籤
     const b = bollMap[r.代號], mb = mbollMap[r.代號];
