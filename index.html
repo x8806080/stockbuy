@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ei</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ej</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -645,6 +645,19 @@
             </button>
         </div>
         <div id="histPanelInner" style="margin-top:14px">
+            <!-- 雲端執行(觸發 GitHub Action 抓取+轉換) -->
+            <div style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(168,85,247,.12));border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">
+                <div style="font-size:13px;font-weight:700;color:#93c5fd;margin-bottom:8px">☁️ 雲端抓取+轉換(GitHub Action 代跑,可關閉網頁)</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <label style="font-size:12px;color:var(--text-dim)">起始日<input id="cloudStart" type="text" placeholder="20221001" value="20221001" style="width:100px;margin-left:4px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"></label>
+                    <label style="font-size:12px;color:var(--text-dim)">結束日<input id="cloudEnd" type="text" placeholder="20221031" value="20221031" style="width:100px;margin-left:4px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"></label>
+                    <button onclick="triggerCloudFetch()" style="background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700">☁️ 雲端執行</button>
+                    <button onclick="pollCloudStatus()" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:8px 12px;border-radius:6px;font-size:12px;cursor:pointer">🔄 查狀態</button>
+                </div>
+                <div id="cloudActionMsg" style="font-size:12px;margin-top:8px"></div>
+                <div id="cloudStatusBox" style="font-size:13px;margin-top:6px"></div>
+                <div style="font-size:11px;color:#64748b;margin-top:6px">一次抓一個月(約50分鐘)。觸發後可關閉網頁,雲端會自己跑完。完成後重新載入網頁看新資料。</div>
+            </div>
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">
                 <!-- 日期多選清單 -->
                 <div style="flex:0 0 auto;min-width:260px">
@@ -3192,6 +3205,57 @@
             'Content-Type': 'application/json',
         };
     }
+    // ── 雲端 Action 觸發 + 輪詢狀態 ──────────────────
+    const WORKFLOW_FILE = 'fetch_and_convert.yml';   // 要觸發的 workflow 檔名
+    async function triggerCloudFetch() {
+        const msg = document.getElementById('cloudActionMsg');
+        const start = document.getElementById('cloudStart').value.trim();
+        const end = document.getElementById('cloudEnd').value.trim();
+        if (!/^\d{8}$/.test(start) || !/^\d{8}$/.test(end)) { msg.innerHTML = '<span style="color:#f87171">日期格式需 YYYYMMDD(例 20221001)</span>'; return; }
+        if (!hasRepo()) { msg.innerHTML = '<span style="color:#f87171">未設定 GitHub Token</span>'; return; }
+        msg.innerHTML = '<span style="color:#fbbf24">觸發中…</span>';
+        try {
+            const url = `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`;
+            const res = await fetch(url, { method:'POST', headers: repoHeaders(),
+                body: JSON.stringify({ ref: REPO_CONFIG.BRANCH, inputs: { start, end } }) });
+            if (res.status === 204) {
+                msg.innerHTML = '<span style="color:#4ade80">✅ 已觸發!雲端開始執行(可關閉網頁)。下方追蹤進度…</span>';
+                setTimeout(() => pollCloudStatus(), 3000);
+            } else {
+                const t = await res.text();
+                msg.innerHTML = `<span style="color:#f87171">觸發失敗 ${res.status}:${t.slice(0,150)}</span>`;
+            }
+        } catch(e) { msg.innerHTML = `<span style="color:#f87171">錯誤:${e.message}</span>`; }
+    }
+    let _pollTimer = null;
+    async function pollCloudStatus() {
+        const box = document.getElementById('cloudStatusBox');
+        if (!box) return;
+        try {
+            const url = `https://api.github.com/repos/${REPO_CONFIG.OWNER}/${REPO_CONFIG.REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`;
+            const res = await fetch(url, { headers: repoHeaders() });
+            const data = await res.json();
+            const run = data.workflow_runs && data.workflow_runs[0];
+            if (!run) { box.innerHTML = '<span style="color:#94a3b8">尚無執行紀錄</span>'; return; }
+            const status = run.status;       // queued / in_progress / completed
+            const concl = run.conclusion;    // success / failure / null
+            const started = new Date(run.created_at);
+            const mins = Math.floor((Date.now()-started)/60000);
+            let icon, color, txt;
+            if (status === 'completed') {
+                if (concl === 'success') { icon='✅'; color='#4ade80'; txt='完成!重新載入網頁即可看到新資料'; }
+                else { icon='❌'; color='#f87171'; txt=`失敗(${concl}),點此看 log`; }
+            } else if (status === 'in_progress') { icon='🔄'; color='#fbbf24'; txt=`執行中…已 ${mins} 分鐘`; }
+            else { icon='⏳'; color='#94a3b8'; txt='排隊中…'; }
+            box.innerHTML = `<a href="${run.html_url}" target="_blank" style="color:${color};text-decoration:none">${icon} ${txt}</a> <span style="color:#64748b;font-size:11px">(每15秒更新)</span>`;
+            // 未完成 → 繼續輪詢
+            if (_pollTimer) clearTimeout(_pollTimer);
+            if (status !== 'completed') _pollTimer = setTimeout(() => pollCloudStatus(), 15000);
+        } catch(e) { box.innerHTML = `<span style="color:#f87171">查詢狀態失敗:${e.message}</span>`; }
+    }
+    window.triggerCloudFetch = triggerCloudFetch;
+    window.pollCloudStatus = pollCloudStatus;
+
     function hasRepo() {
         const t = REPO_CONFIG.TOKEN;
         const ok = !!(t && (t.startsWith('ghp_') || t.startsWith('github_pat_')) && t.length > 10);
@@ -7476,6 +7540,7 @@
     loadLastConfig();       // 自動載入上次使用的評分設定
     if (typeof refreshBtSavedSelect === 'function') refreshBtSavedSelect().catch(()=>{});  // 填充雲端回測下拉
     if (typeof loadTaiexMonthly === 'function') loadTaiexMonthly().catch(()=>{});  // 載入雲端大盤月資料(最新月)
+    if (typeof pollCloudStatus === 'function') setTimeout(()=>pollCloudStatus().catch(()=>{}), 1500);  // 開啟時查雲端Action狀態
     renderBtTagFilter();    // 產生回測標籤篩選清單
     switchTab('analysis');  // 預設顯示「分析」分頁
     if (hasRepo()) {
