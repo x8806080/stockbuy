@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ee</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eg</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -730,13 +730,19 @@
                         <span style="margin-left:4px;color:#64748b">（空白=今日）</span>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                        <button onclick="runBacktest()"
-                            style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
-                            📊 執行回測(單日)
+                        <button onclick="runStrategyBacktest()"
+                            style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:11px 24px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
+                            🎯 完整回測(績效+標籤比較)
                         </button>
                         <button onclick="runRangeBacktest()"
-                            style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
-                            📈 批次區間回測
+                            title="進階:標籤交集矩陣分析(比較多標籤同時成立的效果)"
+                            style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer">
+                            🔲 標籤交集矩陣(進階)
+                        </button>
+                        <button onclick="runBacktest()"
+                            title="單日快照:看某一天買進後N天的表現"
+                            style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer">
+                            📊 單日快照
                         </button>
                         <button onclick="if(confirm('清除所有回測快取?')){clearBtCache();document.getElementById('backtestMsg').textContent='✓ 快取已清除';}"
                             title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
@@ -745,10 +751,6 @@
                         <button onclick="if(confirm('掃描repo重建日期索引?用於修復「資料有匯入但日曆選不到」的問題')){rebuildDailyIndex();}"
                             title="掃描repo所有每日資料,重建索引(修復索引遺漏)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
                             🔧 重建索引
-                        </button>
-                        <button onclick="runStrategyBacktest()"
-                            style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:700">
-                            🎯 策略停利回測
                         </button>
                         <button onclick="saveBtToCloud()" title="把目前回測條件+結果具名存到 GitHub repo"
                             style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 儲存回測(命名)</button>
@@ -6026,6 +6028,41 @@
         });
         html += `</tbody></table></div>`;
 
+        // ── 各標籤單獨績效比較(用本次 trades 依標籤拆解,免重跑矩陣)──
+        const TAG_LIST = ['🔥熱門族群','🌊波段熱門族群','🌙長線熱門族群','📈開週布林','📅開月布林','📊站上月線','💎投信認養','🚀動能噴發'];
+        const tagStat = {};
+        trades.forEach(t => {
+            const tags = (t.標籤||'').split(/[\s\/]+/).filter(Boolean);
+            const seen = new Set();
+            tags.forEach(tag => {
+                const key = TAG_LIST.find(T => tag.includes(T) || T.includes(tag)) || null;
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                if (!tagStat[key]) tagStat[key] = { n:0, wins:0, sum:0 };
+                tagStat[key].n++; if (t.報酬率>0) tagStat[key].wins++; tagStat[key].sum += t.報酬率;
+            });
+        });
+        const tagRows = Object.entries(tagStat).filter(([,s])=>s.n>0).sort((a,b)=>b[1].sum-a[1].sum);
+        if (tagRows.length) {
+            html += `<div style="margin:20px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨績效比較</div>`;
+            html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">同一筆交易可能帶多個標籤,各標籤分別統計,看哪類標籤的標的表現最強。</div>`;
+            html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="background:var(--bg2)">
+                <th style="padding:8px;text-align:left">標籤</th><th style="padding:8px;text-align:right">筆數</th>
+                <th style="padding:8px;text-align:right">勝率</th><th style="padding:8px;text-align:right">平均報酬</th>
+                <th style="padding:8px;text-align:right">總報酬(累計)</th></tr></thead><tbody>`;
+            tagRows.forEach(([tag,s]) => {
+                const avg = s.sum/s.n, wr = s.wins/s.n*100;
+                html += `<tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:8px;font-weight:600">${tag}</td>
+                    <td style="padding:8px;text-align:right">${s.n}</td>
+                    <td style="padding:8px;text-align:right;color:${wr>=50?'#4ade80':'#f87171'}">${wr.toFixed(0)}%</td>
+                    <td style="padding:8px;text-align:right;color:${avg>=0?'#4ade80':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</td>
+                    <td style="padding:8px;text-align:right;color:${s.sum>=0?'#4ade80':'#f87171'}">${s.sum>=0?'+':''}${s.sum.toFixed(1)}%</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+        }
+
         result.innerHTML = html;
     }
 
@@ -6534,6 +6571,33 @@
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px">${buildBarChart(_pr.yearArr,{width:640,showN:true})}</div>`;
         html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">📆 每月報酬率(累計%,依入場日)</div>`;
         html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:520px;overflow-y:auto">${buildBarChart(_pr.monthArr,{width:640,showN:true})}</div>`;
+
+        // 策略 vs 大盤 對照(每月,策略每筆均值 vs 加權指數)
+        html += `<div style="margin:18px 0 6px;font-size:14px;font-weight:700;color:#c7d2fe">⚖️ 策略 vs 大盤(每月,策略用每筆均值對比加權指數漲跌%)</div>`;
+        html += `<div style="background:var(--bg2);border-radius:8px;padding:8px;max-height:600px;overflow-y:auto">${buildCompareBarChart(_pr.monthAvgArr,{width:680})}</div>`;
+
+        // 每月明細(可點月份展開該月所有交易,依入場日分組)
+        window._btMonthTrades = {};
+        allRecords.forEach(rec => {
+            if (rec.報酬率 == null) return;
+            const dk = rec.入場日; if(!dk||dk.length<6) return;
+            const ym = dk.slice(0,4)+'/'+dk.slice(4,6);
+            (window._btMonthTrades[ym]=window._btMonthTrades[ym]||[]).push({
+                代號:rec.代號, 名稱:rec.名稱, 報酬率:rec.報酬率, 入場日:dk, 入場日標:dk.slice(4,6)+'/'+dk.slice(6,8),
+                入場價:rec.入場收盤, 出場原因:rec.出場原因||'持有N天/區間'
+            });
+        });
+        const monthsSorted = Object.keys(window._btMonthTrades).sort();
+        html += `<div style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#c7d2fe">🔍 點月份看當月買賣明細</div>`;
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">` +
+            monthsSorted.map(ym => {
+                const arr = window._btMonthTrades[ym];
+                const sum = arr.reduce((s,t)=>s+t.報酬率,0);
+                const col = sum>=0?'#16a34a':'#dc2626';
+                return `<button onclick="showMonthTrades('${ym}')" style="background:${col};color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer">${ym} (${arr.length}) ${sum>=0?'+':''}${sum.toFixed(0)}%</button>`;
+            }).join('') + `</div>`;
+        html += `<div id="monthTradesDetail" style="margin-bottom:12px"></div>`;
+
         html += `<div style="margin:18px 0 4px;font-size:14px;font-weight:700;color:#c7d2fe">🏷️ 各標籤單獨勝率比較</div>`;
         html += `<div style="font-size:11px;color:#64748b;margin-bottom:8px">基於全部 TOP${meta.topN}(不受上方勾選影響),每個標籤「單獨」計算,用來比較哪個標籤策略強。想看交集請在上方勾選2個以上標籤後重跑。</div>`;
         html += `<div style="overflow-x:auto"><table class="bt-result-table" style="width:100%;border-collapse:collapse;font-size:13px">
