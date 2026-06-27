@@ -23,9 +23,13 @@ const API = `https://api.github.com/repos/${OWNER}/${REPO_NAME}`;
 
 // 評分預設(同網頁 DEFAULTS)
 const SC = {
-  f5A:6000, f5B:1000, f5C:500, s5A:60, s5B:40, s5C:30,
-  f1A:20000, f1B:5000, f1C:2000, s1A:15, s1B:10, s1C:5,
+  // 法人5日:有市值用比值分位,score A/B/C
+  s5A:60, s5B:40, s5C:30, f5A:6000, f5B:1000, f5C:500,
+  // 法人月:score A/B/C
+  s1A:40, s1B:20, s1C:10, f1A:20000, f1B:5000, f1C:2000,
+  // 動能
   mBoth:20, m5d:10, m1m:10, mDay:10, topPct:10, dayPct:10,
+  comboP90:15, comboP70:8,
 };
 
 async function gh(url, opts={}) {
@@ -171,20 +175,26 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
       else if (r._corp5 >= SC.f5B/100) { score+=SC.s5B; tags.push('P70'); }
       else if (r._corp5 >= SC.f5C/100) { score+=SC.s5C; tags.push('P50'); }
     }
-    // 法人月
+    // 法人月 P90/P70/P50(+月比值標籤,記 monthLevel 供組合獎勵)
+    let monthLevel = '';
     if (hasMcap && r._ratio1m > 0) {
-      if      (auto1A>0 && r._ratio1m>=auto1A) score+=SC.s1A;
-      else if (auto1B>0 && r._ratio1m>=auto1B) score+=SC.s1B;
-      else if (auto1C>0 && r._ratio1m>=auto1C) score+=SC.s1C;
+      if      (auto1A>0 && r._ratio1m>=auto1A) { score+=SC.s1A; tags.push('🏛️月P90'); monthLevel='P90'; }
+      else if (auto1B>0 && r._ratio1m>=auto1B) { score+=SC.s1B; tags.push('月比P70'); monthLevel='P70'; }
+      else if (auto1C>0 && r._ratio1m>=auto1C) { score+=SC.s1C; tags.push('月比P50'); monthLevel='P50'; }
     } else if (r._corp1m > 0) {
-      if      (r._corp1m > SC.f1A/100)  score+=SC.s1A;
-      else if (r._corp1m >= SC.f1B/100) score+=SC.s1B;
-      else if (r._corp1m >= SC.f1C/100) score+=SC.s1C;
+      if      (r._corp1m > SC.f1A/100)  { score+=SC.s1A; tags.push('🏛️月P90'); monthLevel='P90'; }
+      else if (r._corp1m >= SC.f1B/100) { score+=SC.s1B; tags.push('月比P70'); monthLevel='P70'; }
+      else if (r._corp1m >= SC.f1C/100) { score+=SC.s1C; tags.push('月比P50'); monthLevel='P50'; }
     }
-    // 動能
-    const in5 = rise5dTop.has(r.代號), in1 = rise1mTop.has(r.代號);
-    if (in5 && in1) score+=SC.mBoth; else if (in5) score+=SC.m5d; else if (in1) score+=SC.m1m;
-    if (riseDayTop.has(r.代號)) score+=SC.mDay;
+    // 動能(雙動能共振/5日/一月/當日強勢)
+    const r5In = rise5dTop.has(r.代號), r1mIn = rise1mTop.has(r.代號), rDayIn = riseDayTop.has(r.代號);
+    if (r5In && r1mIn) { score+=SC.mBoth; tags.push('雙動能共振'); }
+    else if (r5In)     { score+=SC.m5d; tags.push('5日動能'); }
+    else if (r1mIn)    { score+=SC.m1m; tags.push('一月動能'); }
+    if (rDayIn)        { score+=SC.mDay; tags.push('當日強勢'); }
+    // 組合獎勵(當日強勢 + 月P90/P70)
+    if (rDayIn && monthLevel==='P90') { score+=SC.comboP90; tags.push('⭐當日+月P90'); }
+    else if (rDayIn && monthLevel==='P70') { score+=SC.comboP70; tags.push('⭐當日+月P70'); }
     // 布林標籤
     const b = bollMap[r.代號], mb = mbollMap[r.代號];
     if (b && b.aboveUpper) tags.push('📈開週布林');
