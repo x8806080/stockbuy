@@ -184,6 +184,10 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
     if (mb && mb.aboveUpper) tags.push('📅開月布林');
     r.綜合評分 = score; r._tags = tags;
     r.三大法人5日買超 = r.金額5日萬;
+    // 市值比顯示值(同網頁:比值×100,3位小數;無市值顯示-)
+    r.法人市值比pct = (r.市值億 > 0 && r._ratio5 > 0) ? (r._ratio5*100).toFixed(3) + '%' : '-';
+    r.法人月市值比pct = (r.市值億 > 0 && r._ratio1m > 0) ? (r._ratio1m*100).toFixed(3) + '%' : '-';
+    r.投信市值比pct = '-';   // final_output 無投信單獨資料,留白
   });
 
   // 族群統計:5日漲幅前N%
@@ -221,6 +225,8 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT) {
     .map(r => ({ 代號:r.代號, 名稱:r.名稱, 綜合評分:r.綜合評分, 收盤價:r.收盤價,
       當日漲幅:r.當日漲幅, 漲幅5日:r.漲幅5日, 漲幅1月:r.漲幅1月,
       相關產業:r.相關產業, 三大法人5日買超:r.金額5日萬, 狀態標註:r.狀態標註,
+      法人市值比pct:r.法人市值比pct, 法人月市值比pct:r.法人月市值比pct, 投信市值比pct:r.投信市值比pct,
+      市值:r.市值億*100,
       布林上軌:r.布林上軌, 月布林上軌:r.月布林上軌, 週布林站上上軌:r.週布林站上上軌, 月布林站上上軌:r.月布林站上上軌 }));
 
   const priceMap = {}; data.forEach(r => { if(r.收盤價>0) priceMap[r.代號]=r.收盤價; });
