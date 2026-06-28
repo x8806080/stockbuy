@@ -47,6 +47,42 @@ async function fetchMonthLastClose(yyyymm) {
   return Number.isFinite(close) ? close : null;
 }
 
+// 抓某月每日收盤,回傳 [{date:'YYYYMMDD', close}]
+async function fetchMonthDailyCloses(yyyymm) {
+  const url = `https://www.twse.com.tw/indicesReport/MI_5MINS_HIST?response=json&date=${yyyymm}01`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!r.ok) throw new Error(`TWSE ${yyyymm} ${r.status}`);
+  const j = await r.json();
+  const rows = j.data || [];
+  return rows.map(row => {
+    // 日期格式 "111/12/01"(民國)或 "2022/12/01";統一成 YYYYMMDD
+    let ds = String(row[0]).trim();
+    let y, mo, d;
+    const parts = ds.split('/');
+    if (parts.length === 3) {
+      y = +parts[0]; mo = +parts[1]; d = +parts[2];
+      if (y < 1911) y += 1911;   // 民國轉西元
+    }
+    const dk = y ? `${y}${String(mo).padStart(2,'0')}${String(d).padStart(2,'0')}` : null;
+    const close = parseFloat(String(row[4]).replace(/,/g,''));
+    return dk && Number.isFinite(close) ? { date: dk, close } : null;
+  }).filter(Boolean);
+}
+
+// 把每日收盤整理成「每週最後交易日收盤」(ISO 週)
+function dailyToWeekly(dailyArr) {
+  const weekKey = dk => {
+    const y=+dk.slice(0,4),mo=+dk.slice(4,6),d=+dk.slice(6,8);
+    const dt=new Date(y,mo-1,d); const dy=dt.getDay()||7;
+    dt.setDate(dt.getDate()-dy+1);  // 該週週一
+    return dt.getFullYear()+String(dt.getMonth()+1).padStart(2,'0')+String(dt.getDate()).padStart(2,'0');
+  };
+  const wk = {};
+  dailyArr.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(({date,close}) => { wk[weekKey(date)] = close; });
+  return wk;  // { 週一日期: 該週最後收盤 }
+}
+
+
 function ym(y, m) { return `${y}${String(m).padStart(2,'0')}`; }
 function ymLabel(y, m) { return `${y}/${String(m).padStart(2,'0')}`; }
 
@@ -71,6 +107,24 @@ async function main() {
   store[ymLabel(y,m)] = pct;
   await putJSON('config/taiex_monthly.json', { monthly: store, updatedAt: Date.now() }, sha, `taiex ${ymLabel(y,m)} ${pct}%`);
   console.log(`✅ 已寫入 config/taiex_monthly.json (${Object.keys(store).length} 個月)`);
+
+  // ── 抓大盤週收盤(最近6個月每日 → 週),供「跌破2根週K」判斷 ──
+  try {
+    console.log('▶ 抓取大盤週收盤(近6個月)…');
+    let allDaily = [];
+    let yy = y, mm = m;
+    for (let k = 0; k < 6; k++) {
+      try { const arr = await fetchMonthDailyCloses(ym(yy, mm)); allDaily = allDaily.concat(arr); } catch(_){}
+      mm--; if (mm < 1) { mm = 12; yy--; }
+    }
+    const newWeekly = dailyToWeekly(allDaily);
+    // 合併既有週資料
+    let wStore = {}, wSha = null;
+    try { const cur = await getJSON('config/taiex_weekly.json'); if (cur) { wStore = cur.data.weekly || cur.data || {}; wSha = cur.sha; } } catch(_){}
+    Object.assign(wStore, newWeekly);
+    await putJSON('config/taiex_weekly.json', { weekly: wStore, updatedAt: Date.now() }, wSha, `taiex weekly ${Object.keys(newWeekly).length}週`);
+    console.log(`✅ 已寫入 config/taiex_weekly.json (共 ${Object.keys(wStore).length} 週)`);
+  } catch(e) { console.warn('週收盤抓取失敗(不影響月資料):', e.message); }
 }
 
 main().catch(e => { console.error('❌ 失敗:', e); process.exit(1); });
