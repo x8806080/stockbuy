@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ek</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04el</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1506,6 +1506,25 @@
     };
     // 執行期合併:內建 + 雲端最新(雲端覆蓋同月)
     let TAIEX_MONTHLY = { ...TAIEX_MONTHLY_BUILTIN };
+    let TAIEX_WEEKLY = {};   // { 週一日期YYYYMMDD: 該週大盤收盤 }
+    async function loadTaiexWeekly() {
+        try {
+            const data = await rawFetch('config/taiex_weekly.json');
+            if (data && typeof data === 'object') TAIEX_WEEKLY = data.weekly || data || {};
+        } catch(e) { /* 無週資料 */ }
+    }
+    // 判斷某日所屬週,大盤是否「跌破前2根週K收盤」(本週收盤 < 前1週 且 < 前2週)
+    function taiexBelowTwoWeeks(dk) {
+        const weeks = Object.keys(TAIEX_WEEKLY).sort();
+        if (weeks.length < 3) return false;   // 資料不足不擋
+        const wkOf = d => { const y=+d.slice(0,4),mo=+d.slice(4,6),dd=+d.slice(6,8); const t=new Date(y,mo-1,dd); const dy=t.getDay()||7; t.setDate(t.getDate()-dy+1); return t.getFullYear()+String(t.getMonth()+1).padStart(2,'0')+String(t.getDate()).padStart(2,'0'); };
+        const myWk = wkOf(dk);
+        const idx = weeks.indexOf(myWk);
+        if (idx < 2) return false;
+        const cur = TAIEX_WEEKLY[weeks[idx]], w1 = TAIEX_WEEKLY[weeks[idx-1]], w2 = TAIEX_WEEKLY[weeks[idx-2]];
+        if (cur==null||w1==null||w2==null) return false;
+        return cur < w1 && cur < w2;   // 跌破前2根週K收盤
+    }
     async function loadTaiexMonthly() {
         try {
             const data = await rawFetch('config/taiex_monthly.json');
@@ -6598,8 +6617,9 @@
                 }
             }
 
-            // ── 2. 找當日訊號(站上布林 + 進場條件),依月比值排序 ──
-            let signals = (dd.top50||[]).filter(r => {
+            // ── 2. 找當日訊號(站上布林 + 進場條件),P90優先→月比值排序 ──
+            const taiexWeak = taiexBelowTwoWeeks(dk);   // 大盤跌破2根週K → 只賣不買
+            let signals = taiexWeak ? [] : (dd.top50||[]).filter(r => {
                 if (holdings[r.代號]) return false;             // 已持有不重複買
                 const isBoll = dd.bollSet.has(r.代號);
                 if (!isBoll) return false;                       // 必須站上週布林
@@ -6608,9 +6628,10 @@
                     if (!(px>0 && up>0 && px>=up && (px-up)/up*100 <= entryMaxPct)) return false;
                 }
                 return true;
-            }).map(r => ({ sym:r.代號, name:r.名稱, mr:_monthRatioOf(r), px:dd.priceMap[r.代號] }))
+            }).map(r => ({ sym:r.代號, name:r.名稱, mr:_monthRatioOf(r), px:dd.priceMap[r.代號],
+                          isP90: (r.狀態標註||'').includes('🏆P90') }))
               .filter(s => s.px > 0)
-              .sort((a,b) => b.mr - a.mr);   // 月比值高→低
+              .sort((a,b) => (b.isP90?1:0)-(a.isP90?1:0) || b.mr - a.mr);   // P90優先,再月比值高→低
 
             // ── 3. 進場 / 汰換 ──
             for (const sig of signals) {
@@ -6682,7 +6703,7 @@
 
         let html = `<div style="margin-bottom:12px;font-size:13px;padding:10px 14px;background:var(--bg2);border-radius:8px">
             <span style="color:#93c5fd;font-weight:700">💰 資金池複利回測</span>　初始 ${initCap}萬｜最多持有 ${maxHold} 檔｜等金額(每檔 ${(initCap/maxHold).toFixed(1)}萬)<br>
-            <span style="font-size:11px;color:#94a3b8">規則:月比值高者優先進場;位置滿時新訊號月比值更高且舊檔低獲利則汰換;中高獲利依四層停利出場</span></div>`;
+            <span style="font-size:11px;color:#94a3b8">規則:P90優先→月比值高者優先進場;大盤跌破前2根週K收盤時「只賣不買」;位置滿時新訊號月比值更高且舊檔低獲利則汰換;中高獲利依四層停利出場</span></div>`;
 
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">`;
         const card = (label, val, color) => `<div style="background:var(--bg2);border-radius:8px;padding:12px"><div style="font-size:11px;color:#94a3b8">${label}</div><div style="font-size:20px;font-weight:700;color:${color}">${val}</div></div>`;
@@ -7785,6 +7806,7 @@
     loadLastConfig();       // 自動載入上次使用的評分設定
     if (typeof refreshBtSavedSelect === 'function') refreshBtSavedSelect().catch(()=>{});  // 填充雲端回測下拉
     if (typeof loadTaiexMonthly === 'function') loadTaiexMonthly().catch(()=>{});  // 載入雲端大盤月資料(最新月)
+    if (typeof loadTaiexWeekly === 'function') loadTaiexWeekly().catch(()=>{});  // 載入大盤週收盤(跌破2週K判斷)
     if (typeof pollCloudStatus === 'function') setTimeout(()=>pollCloudStatus().catch(()=>{}), 1500);  // 開啟時查雲端Action狀態
     renderBtTagFilter();    // 產生回測標籤篩選清單
     switchTab('analysis');  // 預設顯示「分析」分頁
