@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04en</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eo</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -754,12 +754,12 @@
                         </button>
                         <button onclick="runRangeBacktest()"
                             title="進階:標籤交集矩陣分析(比較多標籤同時成立的效果)"
-                            style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer">
+                            style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
                             🔲 標籤交集矩陣(進階)
                         </button>
                         <button onclick="runBacktest()"
                             title="單日快照:看某一天買進後N天的表現"
-                            style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer">
+                            style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
                             📊 單日快照
                         </button>
                         <button onclick="if(confirm('清除所有回測快取?')){clearBtCache();document.getElementById('backtestMsg').textContent='✓ 快取已清除';}"
@@ -4617,10 +4617,11 @@
             // 統一用上方重算的 _sortedInds(5日漲幅TOP40檔數,與當日分析一致)
             const indsUse = _sortedInds.map(([k,v]) => ({ ind: k, count: v.count, corp: v.corp }));
             const pieData = indsUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
-            // 填充族群篩選池(歷史:用 payload 全市場 + 字典產業)
-            const _indOf = sym => (customInd[sym]) || (typeof STOCK_DICT!=='undefined' && STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+            // 填充族群篩選池(歷史:用 payload 全市場 + 字典產業 + nameMap補名稱)
             const _t50map = {}; (payload.top50||[]).forEach(r => { _t50map[r.代號]=r; });
-            const _mkPool = sym => { const r=_t50map[sym]||{}; return { 代號:sym, 名稱:r.名稱||'', 相關產業:_indOf(sym), 綜合評分:r.綜合評分, 收盤價:r.收盤價||(payload.priceMap&&payload.priceMap[sym]), 法人月市值比pct:r.法人月市值比pct, 狀態標註:r.狀態標註 }; };
+            const _indOf = sym => (customInd[sym]) || (typeof STOCK_DICT!=='undefined' && STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+            const _nameOf = sym => (payload.nameMap && payload.nameMap[sym]) || (_t50map[sym] && _t50map[sym].名稱) || '';
+            const _mkPool = sym => { const r=_t50map[sym]||{}; return { 代號:sym, 名稱:_nameOf(sym), 相關產業:_indOf(sym), 綜合評分:r.綜合評分, 收盤價:r.收盤價||(payload.priceMap&&payload.priceMap[sym]), 法人月市值比pct:r.法人月市值比pct, 狀態標註:r.狀態標註 }; };
             window._indStockPool = {
                 hot:  (payload.top50||[]).filter(r=>_indOf(r.代號)).map(r=>_mkPool(r.代號)),
                 wave: (Array.isArray(payload.bollUp)?payload.bollUp:[]).filter(s=>_indOf(s)).map(_mkPool),
