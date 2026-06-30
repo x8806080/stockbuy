@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04el</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04em</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2579,17 +2579,17 @@
             .sort((a,b)=>(b[1].count-a[1].count)||(b[1].corpSum-a[1].corpSum))
             .slice(0, 8);
         console.log('[前5大長線熱門族群]', [...top5MoonInds]);
-        // 為屬於長線熱門族群的個股加「🌙長線熱門族群」標籤
+        // 為「屬於長線熱門族群 且 自己也開月布林」的個股加「🌙長線熱門族群」標籤(嚴格定義)
         finalData.forEach(r => {
             const myInds = splitInds(r.相關產業);
-            if (myInds.some(i => top5MoonInds.has(i)) && !(r.狀態標註||'').includes('🌙長線熱門族群')) {
+            if (myInds.some(i => top5MoonInds.has(i)) && r.月布林站上上軌 === true && !(r.狀態標註||'').includes('🌙長線熱門族群')) {
                 r.狀態標註 = r.狀態標註 ? r.狀態標註 + ' / 🌙長線熱門族群' : '🌙長線熱門族群';
             }
         });
-        // 為屬於波段熱門族群的個股加「🌊波段熱門族群」標籤
+        // 為「屬於波段熱門族群 且 自己也開週布林」的個股加「🌊波段熱門族群」標籤(嚴格定義)
         finalData.forEach(r => {
             const myInds = splitInds(r.相關產業);
-            if (myInds.some(i => top5WaveInds.has(i)) && !(r.狀態標註||'').includes('🌊波段熱門族群')) {
+            if (myInds.some(i => top5WaveInds.has(i)) && r.週布林站上上軌 === true && !(r.狀態標註||'').includes('🌊波段熱門族群')) {
                 r.狀態標註 = r.狀態標註 ? r.狀態標註 + ' / 🌊波段熱門族群' : '🌊波段熱門族群';
             }
         });
