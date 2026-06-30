@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04em</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04en</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1709,13 +1709,15 @@
     }
     window.showMonthTrades = showMonthTrades;
 
-    function buildPieChart(data, width) {
+    function buildPieChart(data, width, groupKey) {
         const W = width || 260, H = W;
         const cx = W/2, cy = H/2, r = W*0.38;
         // 過濾無效 value(NaN/undefined/<=0),避免座標算出 NaN
         data = (data || []).filter(d => d && Number.isFinite(d.value) && d.value > 0);
         const total = data.reduce((s,d) => s + d.value, 0);
         if (!Number.isFinite(total) || total <= 0 || data.length === 0) return '';
+        const clickable = !!groupKey;   // 有 groupKey 才可點選篩選
+        const esc = s => String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');
         let paths = '', startAngle = -Math.PI / 2;
         const slices = [];
         data.forEach((d, i) => {
@@ -1727,13 +1729,14 @@
             const y2 = cy + r * Math.sin(endAngle);
             const large = angle > Math.PI ? 1 : 0;
             const color = PIE_COLORS[i % PIE_COLORS.length];
-            paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+            const clickAttr = clickable ? ` onclick="filterIndustryStocks('${groupKey}','${esc(d.label)}')" style="cursor:pointer"` : '';
+            paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z" fill="${color}" stroke="#fff" stroke-width="2"${clickAttr}><title>${d.label}：${d.value}檔</title></path>`;
             if (angle / (2*Math.PI) > 0.05) {
                 const midA = startAngle + angle/2;
                 const lx = cx + r * 0.65 * Math.cos(midA);
                 const ly = cy + r * 0.65 * Math.sin(midA);
                 const pct = ((d.value/total)*100).toFixed(1);
-                paths += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="bold">${pct}%</text>`;
+                paths += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="bold" pointer-events="none">${pct}%</text>`;
             }
             slices.push({ color, label: d.label, value: d.value, pct: ((d.value/total)*100).toFixed(1) });
             startAngle = endAngle;
@@ -1741,15 +1744,49 @@
         const svgStr = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
         let legendHTML = '<div class="pie-legend">';
         slices.forEach(s => {
-            legendHTML += `<div class="pie-legend-item"><div class="pie-swatch" style="background:${s.color}"></div><span><b>${s.label}</b>：${s.value} 檔 (${s.pct}%)</span></div>`;
+            const clk = clickable ? ` onclick="filterIndustryStocks('${groupKey}','${esc(s.label)}')" style="cursor:pointer"` : '';
+            legendHTML += `<div class="pie-legend-item"${clk}><div class="pie-swatch" style="background:${s.color}"></div><span><b>${s.label}</b>：${s.value} 檔 (${s.pct}%)</span></div>`;
         });
         legendHTML += '</div>';
-        return `<div class="pie-wrap">${svgStr}${legendHTML}</div>`;
+        const hint = clickable ? `<div style="font-size:11px;color:#64748b;margin-top:4px">💡 點圓餅圖或圖例的族群,下方篩出該族群個股</div>` : '';
+        const filterBox = clickable ? `<div id="indFilter_${groupKey}" style="margin-top:10px"></div>` : '';
+        return `<div class="pie-wrap">${svgStr}${legendHTML}</div>${hint}${filterBox}`;
     }
 
-    // ══════════════════════════════════════════════
-    //  主分析流程
-    // ══════════════════════════════════════════════
+    // 點圓餅圖族群 → 在對應容器篩出該族群個股
+    // groupKey: 'hot'/'wave'/'moon';存於 window._indStockPool[groupKey] = [{代號,名稱,相關產業,綜合評分,收盤價,法人月市值比pct,狀態標註}]
+    window._indStockPool = window._indStockPool || {};
+    function filterIndustryStocks(groupKey, ind) {
+        const box = document.getElementById('indFilter_' + groupKey);
+        if (!box) return;
+        const pool = (window._indStockPool && window._indStockPool[groupKey]) || [];
+        const splitFn = (s) => (s||'').split(/[,、，;；/]/).map(x=>x.trim()).filter(Boolean);
+        const matched = pool.filter(r => splitFn(r.相關產業).includes(ind));
+        if (!matched.length) { box.innerHTML = `<div style="font-size:12px;color:#94a3b8;padding:8px">「${ind}」無符合個股</div>`; return; }
+        // 依綜合評分排序
+        matched.sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0));
+        let h = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:13px;font-weight:700;color:#5eead4">📋 ${ind}（${matched.length} 檔）</span>
+            <button onclick="document.getElementById('indFilter_${groupKey}').innerHTML=''" style="background:var(--bg3);color:#94a3b8;border:1px solid var(--border);padding:3px 10px;border-radius:5px;font-size:11px;cursor:pointer">✕ 清除</button></div>`;
+        h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg3)">
+            <th style="padding:5px;text-align:left">代號</th><th style="padding:5px;text-align:left">名稱</th>
+            <th style="padding:5px;text-align:right">評分</th><th style="padding:5px;text-align:right">收盤</th>
+            <th style="padding:5px;text-align:right">月比值</th><th style="padding:5px;text-align:left">標籤</th></tr></thead><tbody>`;
+        matched.forEach(r => {
+            h += `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px">${r.代號}</td><td style="padding:5px">${r.名稱||''}</td>
+                <td style="padding:5px;text-align:right;font-weight:600">${r.綜合評分??'-'}</td>
+                <td style="padding:5px;text-align:right">${r.收盤價?(+r.收盤價).toFixed(1):'-'}</td>
+                <td style="padding:5px;text-align:right;color:#a78bfa">${r.法人月市值比pct||'-'}</td>
+                <td style="padding:5px;font-size:11px;color:#cbd5e1">${r.狀態標註||''}</td></tr>`;
+        });
+        h += `</tbody></table></div></div>`;
+        box.innerHTML = h;
+        box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+    window.filterIndustryStocks = filterIndustryStocks;
     // ── 自製 CSV 解析器(取代 PapaParse,header 模式,處理引號) ──
     function parseCSVText(text) {
         const rows = [];
@@ -2687,13 +2724,21 @@
             .map(([ind, { count }]) => ({ label: ind, value: count }))
             .filter(d => d.value > 0);
 
+        // 填充族群篩選池(供點圓餅圖篩個股):hot=全部、wave=站上週布林、moon=站上月布林
+        const _poolMap = r => ({ 代號:r.代號, 名稱:r.名稱, 相關產業:r.相關產業, 綜合評分:r.綜合評分, 收盤價:r.收盤價||r.當日收盤價, 法人月市值比pct:r.法人月市值比pct, 狀態標註:r.狀態標註 });
+        window._indStockPool = {
+            hot:  finalData.filter(r=>r && r.相關產業).map(_poolMap),
+            wave: finalData.filter(r=>r && r.週布林站上上軌 && r.相關產業).map(_poolMap),
+            moon: finalData.filter(r=>r && r.月布林站上上軌 && r.相關產業).map(_poolMap),
+        };
+
         let out4HTML = `<div class="report-section">
             <h2>輸出 1：今日熱門族群解析 (TOP 50 資金匯聚)
                 <button class="btn-download" onclick='downloadCSV("輸出4_熱門族群.csv", ${JSON.stringify([["排行","產業名稱","進榜檔數","三大法人資金匯入(億元估算)"], ...out4Rows])})'>下載 CSV</button>
             </h2>`;
         out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大熱門族群（個股TAG依此標記）：${[...top5Inds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ')}</div>`;
         if (pieData.length > 0) {
-            out4HTML += buildPieChart(pieData, 260);
+            out4HTML += buildPieChart(pieData, 260, 'hot');
             out4HTML += `<p style="font-size:12px;color:#888;margin-top:4px">※ 資金 = 三大法人5日累計買賣超金額加總（百萬 ÷ 100 = 億元）</p>`;
         }
         out4HTML += `<table><tr><th>排行</th><th>產業名稱</th><th>進榜檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
@@ -2711,7 +2756,7 @@
             });
             const wavePieData = sortedWaveInds.map(([ind, {count}]) => ({ label: ind, value: count })).filter(d => d.value > 0);
             out4HTML += `<div style="font-size:12px;color:#5eead4;margin:6px 0;padding:6px 10px;background:#0c1a2e;border-radius:6px">🏷️ 前5大波段熱門族群（🌊個股TAG依此標記）：${[...top5WaveInds].map(x=>`<span class="s-tag teal">${x}</span>`).join(' ') || '（無）'}</div>`;
-            if (wavePieData.length > 0) out4HTML += buildPieChart(wavePieData, 260);
+            if (wavePieData.length > 0) out4HTML += buildPieChart(wavePieData, 260, 'wave');
             out4HTML += `<table style="margin-top:6px"><tr><th>排行</th><th>產業名稱</th><th>開週布林檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
             waveRows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
             out4HTML += `</table>`;
@@ -2732,7 +2777,7 @@
             });
             const moonPieData = sortedMoonInds.map(([ind, {count}]) => ({ label: ind, value: count })).filter(d => d.value > 0);
             out4HTML += `<div style="font-size:12px;color:#c4b5fd;margin:6px 0;padding:6px 10px;background:#1a1530;border-radius:6px">🏷️ 前5大長線熱門族群（🌙個股TAG依此標記）：${[...top5MoonInds].map(x=>`<span class="s-tag purple">${x}</span>`).join(' ') || '（無）'}</div>`;
-            if (moonPieData.length > 0) out4HTML += buildPieChart(moonPieData, 260);
+            if (moonPieData.length > 0) out4HTML += buildPieChart(moonPieData, 260, 'moon');
             out4HTML += `<table style="margin-top:6px"><tr><th>排行</th><th>產業名稱</th><th>開月布林檔數</th><th>三大法人資金匯入(億元估算)</th></tr>`;
             moonRows.forEach(row => { out4HTML += `<tr>${row.map(c=>`<td>${c}</td>`).join('')}</tr>`; });
             out4HTML += `</table>`;
@@ -4572,9 +4617,18 @@
             // 統一用上方重算的 _sortedInds(5日漲幅TOP40檔數,與當日分析一致)
             const indsUse = _sortedInds.map(([k,v]) => ({ ind: k, count: v.count, corp: v.corp }));
             const pieData = indsUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
+            // 填充族群篩選池(歷史:用 payload 全市場 + 字典產業)
+            const _indOf = sym => (customInd[sym]) || (typeof STOCK_DICT!=='undefined' && STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
+            const _t50map = {}; (payload.top50||[]).forEach(r => { _t50map[r.代號]=r; });
+            const _mkPool = sym => { const r=_t50map[sym]||{}; return { 代號:sym, 名稱:r.名稱||'', 相關產業:_indOf(sym), 綜合評分:r.綜合評分, 收盤價:r.收盤價||(payload.priceMap&&payload.priceMap[sym]), 法人月市值比pct:r.法人月市值比pct, 狀態標註:r.狀態標註 }; };
+            window._indStockPool = {
+                hot:  (payload.top50||[]).filter(r=>_indOf(r.代號)).map(r=>_mkPool(r.代號)),
+                wave: (Array.isArray(payload.bollUp)?payload.bollUp:[]).filter(s=>_indOf(s)).map(_mkPool),
+                moon: (Array.isArray(payload.mbollUp)?payload.mbollUp:[]).filter(s=>_indOf(s)).map(_mkPool),
+            };
             let out4 = `<div class="report-section"><h2>輸出 1：今日熱門族群解析</h2>`;
             if (pieData.length) {
-                out4 += buildPieChart(pieData, 220);   // 已含 pie-wrap + 圖例,不重複加
+                out4 += buildPieChart(pieData, 220, 'hot');   // 已含 pie-wrap + 圖例,不重複加
             }
             out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>進榜檔數</th><th>資金匯入(億)</th></tr>`;
             indsUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${(d.corp/100).toFixed(1)}億</td></tr>`; });
@@ -4617,7 +4671,7 @@
                 const wavePie = waveUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
                 out4 += `<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
                     <div style="font-size:15px;font-weight:700;color:#5eead4;margin-bottom:6px">🌊 波段熱門族群（開週布林）</div>`;
-                if (wavePie.length) out4 += buildPieChart(wavePie, 220);
+                if (wavePie.length) out4 += buildPieChart(wavePie, 220, 'wave');
                 out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>開週布林檔數</th><th>資金匯入(億)</th></tr>`;
                 waveUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${((d.corp||0)/100).toFixed(1)}億</td></tr>`; });
                 out4 += `</table></div></div>`;
@@ -4658,7 +4712,7 @@
                 const moonPie = moonUse.filter(d=>(d.count||0)>0).map(d=>({label:d.ind,value:d.count}));
                 out4 += `<div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border)">
                     <div style="font-size:15px;font-weight:700;color:#a78bfa;margin-bottom:6px">🌙 長線熱門族群（開月布林）</div>`;
-                if (moonPie.length) out4 += buildPieChart(moonPie, 220);
+                if (moonPie.length) out4 += buildPieChart(moonPie, 220, 'moon');
                 out4 += `<div class="tbl-wrap"><table><tr><th>排行</th><th>產業</th><th>開月布林檔數</th><th>資金匯入(億)</th></tr>`;
                 moonUse.forEach((d,i)=>{ out4+=`<tr><td>${i+1}</td><td>${d.ind}</td><td>${d.count}檔</td><td>${((d.corp||0)/100).toFixed(1)}億</td></tr>`; });
                 out4 += `</table></div></div>`;
