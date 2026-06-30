@@ -227,9 +227,12 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
   // 加族群標籤,組 top50
   data.forEach(r => {
     const myInds = splitI(r.相關產業);
+    const selfWeekBoll = !!(bollMap[r.代號] && bollMap[r.代號].aboveUpper);
+    const selfMonthBoll = !!(mbollMap[r.代號] && mbollMap[r.代號].aboveUpper);
     if (myInds.some(i=>top5Hot.has(i))) r._tags.push('🔥熱門族群');
-    if (myInds.some(i=>top5Wave.has(i))) r._tags.push('🌊波段熱門族群');
-    if (myInds.some(i=>top5Moon.has(i))) r._tags.push('🌙長線熱門族群');
+    // 嚴格:屬熱門族群 且 自己也開週/月布林才標
+    if (myInds.some(i=>top5Wave.has(i)) && selfWeekBoll) r._tags.push('🌊波段熱門族群');
+    if (myInds.some(i=>top5Moon.has(i)) && selfMonthBoll) r._tags.push('🌙長線熱門族群');
     r.狀態標註 = r._tags.join(' / ');
     const b = bollMap[r.代號], mb = mbollMap[r.代號];
     r.布林上軌 = b ? b.upper : null;
