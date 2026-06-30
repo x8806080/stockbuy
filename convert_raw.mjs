@@ -250,8 +250,9 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
       布林上軌:r.布林上軌, 月布林上軌:r.月布林上軌, 週布林站上上軌:r.週布林站上上軌, 月布林站上上軌:r.月布林站上上軌 }));
 
   const priceMap = {}; data.forEach(r => { if(r.收盤價>0) priceMap[r.代號]=r.收盤價; });
+  const nameMap = {}; data.forEach(r => { if(r.名稱) nameMap[r.代號]=r.名稱; });   // 全市場代號→名稱
 
-  return { dateKey, top50, priceMap, bollUp, mbollUp, hotInds, waveInds, moonInds,
+  return { dateKey, top50, priceMap, nameMap, bollUp, mbollUp, hotInds, waveInds, moonInds,
            generatedBy:'convert_raw.mjs', at:Date.now() };
 }
 
