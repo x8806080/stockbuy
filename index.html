@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eo</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ep</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1753,27 +1753,47 @@
         return `<div class="pie-wrap">${svgStr}${legendHTML}</div>${hint}${filterBox}`;
     }
 
-    // 點圓餅圖族群 → 在對應容器篩出該族群個股
-    // groupKey: 'hot'/'wave'/'moon';存於 window._indStockPool[groupKey] = [{代號,名稱,相關產業,綜合評分,收盤價,法人月市值比pct,狀態標註}]
+    // 點圓餅圖族群 → 在對應容器篩出該族群個股(可排序+下載CSV)
     window._indStockPool = window._indStockPool || {};
-    function filterIndustryStocks(groupKey, ind) {
+    window._indFilterState = window._indFilterState || {};   // {groupKey: {ind, sortKey, sortDir}}
+    function filterIndustryStocks(groupKey, ind, sortKey, sortDir) {
         const box = document.getElementById('indFilter_' + groupKey);
         if (!box) return;
         const pool = (window._indStockPool && window._indStockPool[groupKey]) || [];
         const splitFn = (s) => (s||'').split(/[,、，;；/]/).map(x=>x.trim()).filter(Boolean);
-        const matched = pool.filter(r => splitFn(r.相關產業).includes(ind));
+        let matched = pool.filter(r => splitFn(r.相關產業).includes(ind));
         if (!matched.length) { box.innerHTML = `<div style="font-size:12px;color:#94a3b8;padding:8px">「${ind}」無符合個股</div>`; return; }
-        // 依綜合評分排序
-        matched.sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0));
+        // 排序狀態
+        const st = window._indFilterState[groupKey] || {};
+        sortKey = sortKey || st.sortKey || '綜合評分';
+        sortDir = sortDir || st.sortDir || 'desc';
+        window._indFilterState[groupKey] = { ind, sortKey, sortDir };
+        const numKeys = { '綜合評分':1, '收盤價':1, '法人月市值比pct':1 };
+        const getV = (r,k) => {
+            if (k==='法人月市值比pct') { const v=parseFloat(String(r[k]||'').replace('%','')); return Number.isFinite(v)?v:-1; }
+            if (numKeys[k]) { const v=parseFloat(r[k]); return Number.isFinite(v)?v:-Infinity; }
+            return String(r[k]||'');
+        };
+        matched.sort((a,b) => {
+            const va=getV(a,sortKey), vb=getV(b,sortKey);
+            const cmp = (typeof va==='number') ? va-vb : String(va).localeCompare(String(vb));
+            return sortDir==='desc' ? -cmp : cmp;
+        });
+        // 表頭(可點排序)
+        const cols = [['代號','代號'],['名稱','名稱'],['評分','綜合評分'],['收盤','收盤價'],['月比值','法人月市值比pct'],['標籤','狀態標註']];
+        const arrow = k => sortKey===k ? (sortDir==='desc'?' ▼':' ▲') : '';
+        const nextDir = k => (sortKey===k && sortDir==='desc') ? 'asc' : 'desc';
         let h = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <span style="font-size:13px;font-weight:700;color:#5eead4">📋 ${ind}（${matched.length} 檔）</span>
-            <button onclick="document.getElementById('indFilter_${groupKey}').innerHTML=''" style="background:var(--bg3);color:#94a3b8;border:1px solid var(--border);padding:3px 10px;border-radius:5px;font-size:11px;cursor:pointer">✕ 清除</button></div>`;
-        h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:var(--bg3)">
-            <th style="padding:5px;text-align:left">代號</th><th style="padding:5px;text-align:left">名稱</th>
-            <th style="padding:5px;text-align:right">評分</th><th style="padding:5px;text-align:right">收盤</th>
-            <th style="padding:5px;text-align:right">月比值</th><th style="padding:5px;text-align:left">標籤</th></tr></thead><tbody>`;
+            <span><button onclick="downloadIndCSV('${groupKey}','${ind.replace(/'/g,"\\'")}')" style="background:#0891b2;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:6px">⬇ 下載CSV</button>
+            <button onclick="document.getElementById('indFilter_${groupKey}').innerHTML=''" style="background:var(--bg3);color:#94a3b8;border:1px solid var(--border);padding:3px 10px;border-radius:5px;font-size:11px;cursor:pointer">✕ 清除</button></span></div>`;
+        h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg3)">`;
+        cols.forEach(([label,key]) => {
+            const align = (key==='綜合評分'||key==='收盤價'||key==='法人月市值比pct')?'right':'left';
+            h += `<th onclick="filterIndustryStocks('${groupKey}','${ind.replace(/'/g,"\\'")}','${key}','${nextDir(key)}')" style="padding:5px;text-align:${align};cursor:pointer;user-select:none;color:#93c5fd">${label}${arrow(key)}</th>`;
+        });
+        h += `</tr></thead><tbody>`;
         matched.forEach(r => {
             h += `<tr style="border-bottom:1px solid var(--border)">
                 <td style="padding:5px">${r.代號}</td><td style="padding:5px">${r.名稱||''}</td>
@@ -1787,6 +1807,28 @@
         box.scrollIntoView({behavior:'smooth', block:'nearest'});
     }
     window.filterIndustryStocks = filterIndustryStocks;
+
+    // 下載族群篩選結果 CSV
+    function downloadIndCSV(groupKey, ind) {
+        const pool = (window._indStockPool && window._indStockPool[groupKey]) || [];
+        const splitFn = (s) => (s||'').split(/[,、，;；/]/).map(x=>x.trim()).filter(Boolean);
+        const st = window._indFilterState[groupKey] || {};
+        let matched = pool.filter(r => splitFn(r.相關產業).includes(ind));
+        // 沿用當前排序
+        if (st.sortKey) {
+            const getV = (r,k)=>{ if(k==='法人月市值比pct'){const v=parseFloat(String(r[k]||'').replace('%',''));return Number.isFinite(v)?v:-1;} const v=parseFloat(r[k]); return Number.isFinite(v)?v:(String(r[k]||'')); };
+            matched.sort((a,b)=>{ const va=getV(a,st.sortKey),vb=getV(b,st.sortKey); const cmp=(typeof va==='number')?va-vb:String(va).localeCompare(String(vb)); return st.sortDir==='desc'?-cmp:cmp; });
+        }
+        const rows = [['代號','名稱','綜合評分','收盤價','月比值','標籤']];
+        matched.forEach(r => rows.push([r.代號, r.名稱||'', r.綜合評分??'', r.收盤價?(+r.收盤價).toFixed(2):'', r.法人月市值比pct||'', (r.狀態標註||'').replace(/,/g,';')]));
+        const csv = '\uFEFF' + rows.map(row => row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${ind}_${groupKey}_個股.csv`; a.click();
+        setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }
+    window.downloadIndCSV = downloadIndCSV;
     // ── 自製 CSV 解析器(取代 PapaParse,header 模式,處理引號) ──
     function parseCSVText(text) {
         const rows = [];
@@ -3110,6 +3152,18 @@
         resultPayload.inv       = (resultPayload.inv||[]).map(slimEntry);
         resultPayload.top20     = (resultPayload.top20||[]).map(slimEntry);
         resultPayload.resonance = (resultPayload.resonance||[]).map(slimEntry);
+        // 全市場代號→名稱、月比值(供歷史載入時,非top50個股也能顯示名稱/月比值)
+        try {
+            const nm = {}, mrm = {};
+            Object.values(masterDict).forEach(r => {
+                if (r && r.代號) {
+                    if (r.名稱) nm[r.代號] = r.名稱;
+                    if (r.法人月市值比pct && r.法人月市值比pct !== '-') mrm[r.代號] = r.法人月市值比pct;
+                }
+            });
+            resultPayload.nameMap = nm;
+            resultPayload.monthRatioMap = mrm;
+        } catch(e) {}
         // analysisDateKey / analysisLabel 已在前面定義
         resultPayload.date     = analysisLabel;   // 覆蓋為使用者指定日期
         resultPayload.dateKey  = analysisDateKey;
@@ -4621,7 +4675,8 @@
             const _t50map = {}; (payload.top50||[]).forEach(r => { _t50map[r.代號]=r; });
             const _indOf = sym => (customInd[sym]) || (typeof STOCK_DICT!=='undefined' && STOCK_DICT[sym] && STOCK_DICT[sym].i) || '';
             const _nameOf = sym => (payload.nameMap && payload.nameMap[sym]) || (_t50map[sym] && _t50map[sym].名稱) || '';
-            const _mkPool = sym => { const r=_t50map[sym]||{}; return { 代號:sym, 名稱:_nameOf(sym), 相關產業:_indOf(sym), 綜合評分:r.綜合評分, 收盤價:r.收盤價||(payload.priceMap&&payload.priceMap[sym]), 法人月市值比pct:r.法人月市值比pct, 狀態標註:r.狀態標註 }; };
+            const _mrOf = sym => (payload.monthRatioMap && payload.monthRatioMap[sym]) || (_t50map[sym] && _t50map[sym].法人月市值比pct) || '-';
+            const _mkPool = sym => { const r=_t50map[sym]||{}; return { 代號:sym, 名稱:_nameOf(sym), 相關產業:_indOf(sym), 綜合評分:r.綜合評分, 收盤價:r.收盤價||(payload.priceMap&&payload.priceMap[sym]), 法人月市值比pct:_mrOf(sym), 狀態標註:r.狀態標註 }; };
             window._indStockPool = {
                 hot:  (payload.top50||[]).filter(r=>_indOf(r.代號)).map(r=>_mkPool(r.代號)),
                 wave: (Array.isArray(payload.bollUp)?payload.bollUp:[]).filter(s=>_indOf(s)).map(_mkPool),
