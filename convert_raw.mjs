@@ -251,8 +251,9 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
 
   const priceMap = {}; data.forEach(r => { if(r.收盤價>0) priceMap[r.代號]=r.收盤價; });
   const nameMap = {}; data.forEach(r => { if(r.名稱) nameMap[r.代號]=r.名稱; });   // 全市場代號→名稱
+  const monthRatioMap = {}; data.forEach(r => { if(r.法人月市值比pct && r.法人月市值比pct!=='-') monthRatioMap[r.代號]=r.法人月市值比pct; });  // 全市場月比值
 
-  return { dateKey, top50, priceMap, nameMap, bollUp, mbollUp, hotInds, waveInds, moonInds,
+  return { dateKey, top50, priceMap, nameMap, monthRatioMap, bollUp, mbollUp, hotInds, waveInds, moonInds,
            generatedBy:'convert_raw.mjs', at:Date.now() };
 }
 
