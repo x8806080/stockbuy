@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eq</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04er</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2112,8 +2112,11 @@
                     const k1m = headers.find(k => k.includes('1個月漲幅') || k.includes('1月漲幅'));
                     const kDay = headers.find(k => k.includes('當日漲幅'));
                     // idx 用「-漲幅」→ 漲幅大的排前面(final_output 按代號排序,不能用列順序當排名)
-                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: -v }); } }
-                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: -v }); } }
+                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; entry.五日漲幅 = v; rise5dRankList.push({ sym: symbol, idx: -v }); } }
+                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; entry.一月漲幅 = v; rise1mRankList.push({ sym: symbol, idx: -v }); } }
+                    // 3個月漲幅:CSV 有此欄就直接讀(無則維持 null 顯示 -)
+                    const k3m = headers.find(k => k.includes('3個月漲幅') || k.includes('3月漲幅') || k.includes('三個月漲幅'));
+                    if (k3m) { const v = parseNum(row[k3m]); if (v !== null) entry.三月漲幅 = v; }
                     // 當日漲幅:final_output 若有此欄就直接用(不必等前一日推算)
                     if (kDay) { const v = parseNum(row[kDay]); if (v !== null) { riseDayMap[symbol] = v; riseDayRankList.push({ sym: symbol, idx: -v }); } }
                     // 收盤價(供當日漲幅用前日推算 + 評分)
@@ -2122,12 +2125,12 @@
                 }
                 if (is5dRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
-                    if (v !== null) rise5dMap[symbol] = v;
+                    if (v !== null) { rise5dMap[symbol] = v; entry.五日漲幅 = v; }
                     rise5dRankList.push({ sym: symbol, idx: rowIdx });
                 }
                 if (is1mRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
-                    if (v !== null) rise1mMap[symbol] = v;
+                    if (v !== null) { rise1mMap[symbol] = v; entry.一月漲幅 = v; }
                     rise1mRankList.push({ sym: symbol, idx: rowIdx });
                 }
                 if (isDayRankFile && riseKey) {
@@ -2389,34 +2392,6 @@
         console.log('[分析] rise5dTop40:', rise5dTop40.size, '| rise1mTop40:', rise1mTop40.size);
 
         // ── 計分（使用編輯器設定）──
-        // 填入漲幅(rise map → entry 欄位,供表格顯示與 payload 保存)
-        Object.keys(masterDict).forEach(s => {
-            const e = masterDict[s];
-            if (e.五日漲幅 == null && rise5dMap[s] != null) e.五日漲幅 = rise5dMap[s];
-            if (e.一月漲幅 == null && rise1mMap[s] != null) e.一月漲幅 = rise1mMap[s];
-        });
-        // 3月漲幅:從 repo 歷史找約60個交易日前的收盤推算(有歷史資料才算)
-        try {
-            if (hasRepo()) {
-                setProgress(48, '推算3月漲幅(讀取歷史收盤)…');
-                const allIdx = (await loadDailyIndex().catch(()=>[])).slice().sort();
-                if (allIdx.length > 60) {
-                    // 用今天(或最新)往前第60個交易日
-                    const baseIdx = Math.max(0, allIdx.length - 1 - 60);
-                    const oldDk = allIdx[baseIdx];
-                    const oldPayload = await loadDailyResult(oldDk).catch(()=>null);
-                    const oldPm = oldPayload?.priceMap || {};
-                    let cnt = 0;
-                    Object.keys(masterDict).forEach(s => {
-                        const e = masterDict[s];
-                        const oldC = oldPm[s], curC = e.收盤價;
-                        if (e.三月漲幅 == null && oldC > 0 && curC > 0) { e.三月漲幅 = +(((curC-oldC)/oldC)*100).toFixed(2); cnt++; }
-                    });
-                    console.log('[分析] 3月漲幅推算完成(基準日', oldDk, '):', cnt, '檔');
-                }
-            }
-        } catch(e) { console.warn('3月漲幅推算失敗:', e); }
-
         let finalData = Object.values(masterDict).map(row => {
             let score = 0, tags = [];
             const corp          = row.三大法人5日買超;
