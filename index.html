@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04er</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04es</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1959,10 +1959,7 @@
             reader.onerror = () => { clearTimeout(timer); finish({ name: file.name, data: [], meta: { fields: [] } }); };
             reader.readAsArrayBuffer(file);
         }));
-        setProgress(5, `解析 CSV 中(共 ${files.length} 檔)…`);
-        let _parsedCount = 0;
-        const _tickParse = () => { _parsedCount++; setProgress(5 + (_parsedCount/files.length)*20, `解析 CSV ${_parsedCount}/${files.length}…`); };
-        filePromises.forEach(p => p.then(_tickParse));
+        setProgress(10, `解析 CSV 中(共 ${files.length} 檔)…`);
         const parsedFiles = await Promise.all(filePromises);
         console.log('[分析] 階段1: CSV 解析完成,共', parsedFiles.length, '檔');
         setProgress(25, `CSV 解析完成(${parsedFiles.length} 檔),建立股票總表…`);
@@ -2112,11 +2109,8 @@
                     const k1m = headers.find(k => k.includes('1個月漲幅') || k.includes('1月漲幅'));
                     const kDay = headers.find(k => k.includes('當日漲幅'));
                     // idx 用「-漲幅」→ 漲幅大的排前面(final_output 按代號排序,不能用列順序當排名)
-                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; entry.五日漲幅 = v; rise5dRankList.push({ sym: symbol, idx: -v }); } }
-                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; entry.一月漲幅 = v; rise1mRankList.push({ sym: symbol, idx: -v }); } }
-                    // 3個月漲幅:CSV 有此欄就直接讀(無則維持 null 顯示 -)
-                    const k3m = headers.find(k => k.includes('3個月漲幅') || k.includes('3月漲幅') || k.includes('三個月漲幅'));
-                    if (k3m) { const v = parseNum(row[k3m]); if (v !== null) entry.三月漲幅 = v; }
+                    if (k5) { const v = parseNum(row[k5]); if (v !== null) { rise5dMap[symbol] = v; rise5dRankList.push({ sym: symbol, idx: -v }); } }
+                    if (k1m) { const v = parseNum(row[k1m]); if (v !== null) { rise1mMap[symbol] = v; rise1mRankList.push({ sym: symbol, idx: -v }); } }
                     // 當日漲幅:final_output 若有此欄就直接用(不必等前一日推算)
                     if (kDay) { const v = parseNum(row[kDay]); if (v !== null) { riseDayMap[symbol] = v; riseDayRankList.push({ sym: symbol, idx: -v }); } }
                     // 收盤價(供當日漲幅用前日推算 + 評分)
@@ -2125,12 +2119,12 @@
                 }
                 if (is5dRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
-                    if (v !== null) { rise5dMap[symbol] = v; entry.五日漲幅 = v; }
+                    if (v !== null) rise5dMap[symbol] = v;
                     rise5dRankList.push({ sym: symbol, idx: rowIdx });
                 }
                 if (is1mRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
-                    if (v !== null) { rise1mMap[symbol] = v; entry.一月漲幅 = v; }
+                    if (v !== null) rise1mMap[symbol] = v;
                     rise1mRankList.push({ sym: symbol, idx: rowIdx });
                 }
                 if (isDayRankFile && riseKey) {
@@ -2612,6 +2606,7 @@
 
 
         console.log('[分析] 階段3: 評分完成,開始渲染輸出1');
+        window._rise5dMap = rise5dMap; window._rise1mMap = rise1mMap;   // 供表格漲幅欄顯示(渲染期唯讀)
         setProgress(60, '評分完成,產生族群解析…');
         // 輸出 1
         // ── 族群統計（供輸出1標籤 + 輸出4使用）──
@@ -3158,8 +3153,8 @@
             return {
                 代號: r.代號, 名稱: r.名稱, 相關產業: r.相關產業||'',
                 綜合評分: r.綜合評分, 狀態標註: r.狀態標註,
-                五日漲幅: r.五日漲幅 ?? null,
-                一月漲幅: r.一月漲幅 ?? null,
+                五日漲幅: r.五日漲幅 ?? (window._rise5dMap||{})[r.代號] ?? null,
+                一月漲幅: r.一月漲幅 ?? (window._rise1mMap||{})[r.代號] ?? null,
                 三月漲幅: r.三月漲幅 ?? null,
                 三大法人5日買超: r.三大法人5日買超||0,
                 法人一月買超:   r.法人一月買超||0,
@@ -4513,7 +4508,7 @@
         const rk    = (rank !== undefined && rank !== null) ? rank : '-';
         const score = (r.綜合評分 !== undefined && r.綜合評分 !== null) ? r.綜合評分 : '-';
         const fmtRise = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
-        return [rk, r.代號, r.名稱, score, price, fmtRise(r.五日漲幅), fmtRise(r.一月漲幅), fmtRise(r.三月漲幅), r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
+        return [rk, r.代號, r.名稱, score, price, fmtRise(r.五日漲幅 ?? (window._rise5dMap||{})[r.代號]), fmtRise(r.一月漲幅 ?? (window._rise1mMap||{})[r.代號]), fmtRise(r.三月漲幅), r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
     }
 
     // ── 把 payload 完整渲染到主輸出區（六大輸出）───────────
