@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ep</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04et</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1903,9 +1903,8 @@
         let etfSourceDict    = {};
         let fileTypeLog      = [];
 
-        // ── 解析所有 CSV ──
-        const filePromises = Array.from(files).map(file => new Promise(resolve => {
-            // 保險:單檔 15 秒沒解析完就跳過,避免永久卡住
+        // ── 解析所有 CSV(改序列讀取,避免多檔並行 FileReader 過載逾時)──
+        const parseOneFile = (file) => new Promise(resolve => {
             let done = false;
             const finish = (result) => { if (!done) { done = true; resolve(result); } };
             const timer = setTimeout(() => {
@@ -1917,18 +1916,14 @@
                 try {
                     const buf = reader.result;
                     let text, enc;
-                    // 先試 UTF-8(fatal:true 遇到非法序列會丟錯)
                     try {
                         text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
                         enc = 'UTF-8';
                     } catch (e1) {
-                        // UTF-8 失敗 → 用 Big5
                         text = new TextDecoder('big5').decode(buf);
                         enc = 'Big5';
                     }
-                    // 去除 BOM
                     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-                    // 用自製解析器(取代 PapaParse,避免卡死)
                     const parsed = parseCSVText(text);
                     clearTimeout(timer);
                     console.log('  ✓ 解析:', file.name, parsed.data.length, '列');
@@ -1941,8 +1936,12 @@
             };
             reader.onerror = () => { clearTimeout(timer); finish({ name: file.name, data: [], meta: { fields: [] } }); };
             reader.readAsArrayBuffer(file);
-        }));
-        const parsedFiles = await Promise.all(filePromises);
+        });
+        // 逐檔序列處理(一個讀完再讀下一個)
+        const parsedFiles = [];
+        for (const file of Array.from(files)) {
+            parsedFiles.push(await parseOneFile(file));
+        }
         console.log('[分析] 階段1: CSV 解析完成,共', parsedFiles.length, '檔');
         parsedFiles.forEach(f => console.log('  -', f.name, '編碼:', f.enc, '列數:', f.data?.length, '欄位:', f.meta?.fields?.length));
 
