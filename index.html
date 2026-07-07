@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ew</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ex</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2824,7 +2824,24 @@
             moon: finalData.filter(r=>r && r.月布林站上上軌 && r.相關產業).map(_poolMap),
         };
 
+        // ── 三聯集市場廣度訊號:熱門族群 ∩ 波段熱門族群 ∩ 雙動能共振 ──
+        // 數量萎縮 = 強勢股退潮 = 大盤修正領先訊號
+        const tripleStocks = finalData.filter(r => {
+            const s = r.狀態標註 || '';
+            return s.includes('🔥熱門族群') && s.includes('🌊波段熱門族群') && s.includes('雙動能共振');
+        });
+        const tripleCount = tripleStocks.length;
+        let tripleHist = {};
+        try { tripleHist = JSON.parse(localStorage.getItem('_tripleHist') || '{}'); } catch(e) {}
+        const _todayKey = (window._currentHistDate) || (new Date().getFullYear()+String(new Date().getMonth()+1).padStart(2,'0')+String(new Date().getDate()).padStart(2,'0'));
+        tripleHist[_todayKey] = tripleCount;
+        try { localStorage.setItem('_tripleHist', JSON.stringify(tripleHist)); } catch(e) {}
+        const _histVals = Object.entries(tripleHist).filter(([k])=>k!==_todayKey).map(([,v])=>v);
+        const _histAvg = _histVals.length ? _histVals.reduce((a,b)=>a+b,0)/_histVals.length : null;
+        window._tripleData = { count: tripleCount, stocks: tripleStocks, histAvg: _histAvg, histCount: _histVals.length, dateKey: _todayKey };
+
         let out4HTML = `<div class="report-section">
+            ${buildTripleSignalCard()}
             <h2>輸出 1：今日熱門族群解析 (TOP 50 資金匯聚)
                 <button class="btn-download" onclick='downloadCSV("輸出4_熱門族群.csv", ${JSON.stringify([["排行","產業名稱","進榜檔數","三大法人資金匯入(億元估算)"], ...out4Rows])})'>下載 CSV</button>
             </h2>`;
@@ -4524,6 +4541,58 @@
 
     // ── 統一表格欄位（8欄）──
     // 代號 名稱 當日價格 法人市值比 投信市值比 營收年增 狀態標註 週K布林位置
+    // 三聯集市場廣度訊號卡片
+    function buildTripleSignalCard() {
+        const d = window._tripleData;
+        if (!d) return '';
+        const { count, histAvg, histCount, dateKey } = d;
+        // 大盤:用當月漲跌(無每日資料時的近似)
+        const ym = (dateKey||'').slice(0,4)+'/'+(dateKey||'').slice(4,6);
+        const taiexPct = (typeof TAIEX_MONTHLY!=='undefined' && TAIEX_MONTHLY[ym]!=null) ? TAIEX_MONTHLY[ym] : null;
+        // 警示判斷:低於歷史平均
+        let signal, sigColor, sigText;
+        if (histAvg == null || histCount < 3) {
+            signal = '📊'; sigColor = '#94a3b8'; sigText = `歷史樣本不足(${histCount}天),持續累積中`;
+        } else if (count < histAvg * 0.6) {
+            signal = '🔴'; sigColor = '#dc2626'; sigText = `強勢股大幅萎縮!僅為歷史均值的 ${(count/histAvg*100).toFixed(0)}%,慎防大盤修正`;
+        } else if (count < histAvg) {
+            signal = '🟡'; sigColor = '#f59e0b'; sigText = `略低於歷史均值(${histAvg.toFixed(0)}檔),留意動能轉弱`;
+        } else {
+            signal = '🟢'; sigColor = '#16a34a'; sigText = `高於歷史均值(${histAvg.toFixed(0)}檔),強勢股活躍`;
+        }
+        const taiexStr = taiexPct!=null ? `<span style="color:${taiexPct>=0?'#4ade80':'#f87171'};font-weight:700">大盤當月 ${taiexPct>=0?'+':''}${taiexPct}%</span>` : '<span style="color:#64748b">大盤資料無</span>';
+        return `<div style="background:linear-gradient(135deg,${sigColor}22,${sigColor}11);border:1px solid ${sigColor}66;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <span style="font-size:28px">${signal}</span>
+                <div style="flex:1;min-width:200px">
+                    <div style="font-size:15px;font-weight:700;color:#e2e8f0">🎯 三聯集強勢核心：<span style="color:${sigColor};font-size:22px">${count}</span> 檔　${taiexStr}</div>
+                    <div style="font-size:12px;color:#94a3b8;margin-top:3px">🔥熱門族群 ∩ 🌊波段熱門族群 ∩ 雙動能共振${histAvg!=null?`　歷史均值 ${histAvg.toFixed(1)} 檔`:''}</div>
+                    <div style="font-size:12px;color:${sigColor};margin-top:4px;font-weight:600">${sigText}</div>
+                </div>
+                <button onclick="showTripleStocks()" style="background:${sigColor};color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">看清單</button>
+            </div>
+            <div id="tripleStockList" style="margin-top:10px"></div>
+        </div>`;
+    }
+    function showTripleStocks() {
+        const box = document.getElementById('tripleStockList');
+        const d = window._tripleData;
+        if (!box || !d) return;
+        if (box.innerHTML) { box.innerHTML = ''; return; }
+        const stocks = d.stocks || [];
+        if (!stocks.length) { box.innerHTML = '<div style="font-size:12px;color:#94a3b8">今日無三聯集標的</div>'; return; }
+        let h = `<div style="background:var(--bg2);border-radius:6px;padding:8px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg3)"><th style="padding:4px;text-align:left">代號</th><th style="padding:4px;text-align:left">名稱</th><th style="padding:4px;text-align:right">評分</th><th style="padding:4px;text-align:left">相關產業</th></tr></thead><tbody>`;
+        stocks.sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).forEach(r => {
+            h += `<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px">${r.代號}</td><td style="padding:4px">${r.名稱||''}</td><td style="padding:4px;text-align:right;font-weight:600">${r.綜合評分??'-'}</td><td style="padding:4px;font-size:11px;color:#cbd5e1">${r.相關產業||''}</td></tr>`;
+        });
+        h += `</tbody></table></div>`;
+        box.innerHTML = h;
+    }
+    window.showTripleStocks = showTripleStocks;
+
+    // 三聯集市場廣度訊號卡片(function 定義結束)
+
     // 產生 5日/1月/3月 三欄漲幅值(給排行榜表格用),回傳陣列[5日,1月,3月]
     function rise3cols(sym) {
         const fmt = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
