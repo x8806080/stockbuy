@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eu</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ev</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1964,12 +1964,9 @@
                 (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('當沖')) &&
                 !fileName.includes('5日') && !fileName.includes('五日');
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
-            // 3個月漲幅檔:含「3個月/三個月/3月/季」漲幅(優先於1月判斷,避免「3個月」被1月誤抓)
-            const has3m = fileName.includes('3個月') || fileName.includes('三個月') || fileName.includes('3月漲') || fileName.includes('季漲');
-            const is3mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has3m;
-            const has1m = !has3m && (fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計'));
-            const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is3mRankFile && has1m;
-            const is5dRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is1mRankFile && !is3mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
+            const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
+            const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has1m;
+            const is5dRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is1mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -1986,13 +1983,9 @@
 
             // riseKey 依檔案類型抓對應漲幅欄（避免1月檔抓到5日欄）
             let riseKey;
-            if (is3mRankFile) {
-                // 3個月檔:抓含「3個月/三個月/季」的漲幅欄
-                riseKey = headers.find(k => (k.includes('3個月')||k.includes('三個月')||k.includes('季')) && (k.includes('漲')||k.includes('累計')))
-                       || headers.find(k => k.includes('漲跌幅') || k.includes('累計漲跌') || k.includes('漲幅'));
-            } else if (is1mRankFile) {
+            if (is1mRankFile) {
                 // 1月檔：優先抓含「月」的漲幅欄
-                riseKey = headers.find(k => (k.includes('月')) && (k.includes('漲') || k.includes('累計')))
+                riseKey = headers.find(k => (k.includes('月')) && (k.includes('漲') || k.includes('累計')) && !k.includes('3') && !k.includes('三') && !k.includes('季'))
                        || headers.find(k => k.includes('漲跌幅') || k.includes('累計漲跌') || k.includes('漲幅'));
             } else if (is5dRankFile) {
                 // 5日檔：優先抓含「5日/五日」的漲幅欄，排除含「月」的
@@ -2114,10 +2107,9 @@
                     const v = parseNum(row[riseKey]);
                     if (v !== null) rise1mMap[symbol] = v;
                     rise1mRankList.push({ sym: symbol, idx: rowIdx });
-                }
-                if (is3mRankFile && riseKey) {
-                    const v = parseNum(row[riseKey]);
-                    if (v !== null) rise3mMap[symbol] = v;
+                    // 同一檔若有「3個月/三個月/季」漲幅欄,一併抓 3月漲幅
+                    const k3m = headers.find(k => (k.includes('3個月')||k.includes('三個月')||k.includes('季')||k.includes('3月')) && (k.includes('漲')||k.includes('累計')));
+                    if (k3m) { const v3 = parseNum(row[k3m]); if (v3 !== null) rise3mMap[symbol] = v3; }
                 }
                 if (isDayRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
@@ -2887,7 +2879,7 @@
             outputHTML += createSection(
                 `輸出 6：大摩與指定 ETF 共振清單 (出現 ≥ ${SC.etf.minCount}次，依共振次數排序)`,
                 '輸出6_特定ETF大摩共振.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
                 etfResonanceData.map((r,i) => {
                     // ETF 來源改為彩色 TAG
                     const etfTags = (r.出現清單||'').split(' / ').filter(Boolean)
@@ -2897,7 +2889,7 @@
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
                     const m = masterDict[r.代號]||{};
-                    return [i+1, r.代號, r.名稱, m.綜合評分??'-', fmtPrice(m), r.共振次數, etfTags, m.法人市值比pct||'-', m.法人月市值比pct||'-', m.投信市值比pct||'-', fmtRev(m), renderBoll(m)];
+                    return [i+1, r.代號, r.名稱, m.綜合評分??'-', fmtPrice(m), r.共振次數, etfTags, ...rise3cols(r.代號), m.法人市值比pct||'-', m.法人月市值比pct||'-', m.投信市值比pct||'-', fmtRev(m), renderBoll(m)];
                 })
             );
         } else {
@@ -2911,10 +2903,10 @@
         if (rise5dArr.length) {
             outputHTML += createSection(
                 `輸出 7：5日漲幅排行 前${SC.momentum.topPct}%（${rise5dArr.length} 檔）`, '輸出7_5日漲幅.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise5dArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
-                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), chg.toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
+                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
                 })
             );
         }
@@ -2926,10 +2918,10 @@
         if (rise1mArr.length) {
             outputHTML += createSection(
                 `輸出 8：1個月漲幅排行 前${SC.momentum.topPct}%（${rise1mArr.length} 檔）`, '輸出8_1月漲幅.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
-                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), chg.toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
+                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
                 })
             );
         }
@@ -2941,10 +2933,10 @@
         if (riseDayArr.length) {
             outputHTML += createSection(
                 `輸出 8b：當日漲幅排行 前${SC.momentum.dayPct}%（${riseDayArr.length} 檔）`, '輸出8b_當日漲幅.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','當日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 riseDayArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
-                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), chg.toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
+                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
                 })
             );
         }
@@ -4485,6 +4477,12 @@
 
     // ── 統一表格欄位（8欄）──
     // 代號 名稱 當日價格 法人市值比 投信市值比 營收年增 狀態標註 週K布林位置
+    // 產生 5日/1月/3月 三欄漲幅值(給排行榜表格用),回傳陣列[5日,1月,3月]
+    function rise3cols(sym) {
+        const fmt = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
+        return [ fmt((window._rise5dMap||{})[sym]), fmt((window._rise1mMap||{})[sym]), fmt((window._rise3mMap||{})[sym]) ];
+    }
+
     // 當日分析時,表頭多3欄漲幅;批次分析不加
     function stdHeaders() {
         const base = ['排名','代號','名稱','綜合評分','當日價格'];
