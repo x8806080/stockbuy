@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ev</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ew</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1153,7 +1153,13 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button onclick="runAnalysis()">▶ 開始執行大師策略分析</button>
         </div>
-        <div id="loadingStatus" class="loading">資料高速運算與交叉比對中，請稍候...</div>
+        <div id="loadingStatus" class="loading" style="display:none">
+            <div id="progressText" style="font-size:13px;color:#93c5fd;margin-bottom:6px">準備開始…</div>
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;height:16px;overflow:hidden">
+                <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#06b6d4);transition:width .3s;border-radius:8px"></div>
+            </div>
+            <div id="progressPct" style="font-size:11px;color:#64748b;margin-top:4px;text-align:right">0%</div>
+        </div>
     </div>
 
     <!-- ══════════════ 批次匯入歷史資料 ══════════════ -->
@@ -1865,12 +1871,23 @@
     }
 
     // ── 自製 CSV 解析器結束 ──
+    // 進度條(只在階段之間呼叫,不進解析迴圈)
+    function setProgress(pct, msg) {
+        const bar = document.getElementById('progressBar');
+        const txt = document.getElementById('progressText');
+        const p = document.getElementById('progressPct');
+        if (bar) bar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+        if (txt && msg) txt.textContent = msg;
+        if (p) p.textContent = Math.round(pct) + '%';
+    }
+
     async function runAnalysis() {
         const files = document.getElementById('csvFiles').files;
         if (files.length === 0) { alert("請先選擇 CSV 檔案！"); return; }
 
         window._currentHistDate = null;   // 進入當日分析模式,清除歷史標記
         document.getElementById('loadingStatus').style.display = 'block';
+        setProgress(3, `準備解析 ${files.length} 個檔案…`);
         document.getElementById('outputArea').innerHTML = '';
         window._prevDayPayload = null; // 重置前日資料
 
@@ -1940,8 +1957,10 @@
         });
         // 逐檔序列處理(一個讀完再讀下一個)
         const parsedFiles = [];
-        for (const file of Array.from(files)) {
-            parsedFiles.push(await parseOneFile(file));
+        const _fileArr = Array.from(files);
+        for (let _fi = 0; _fi < _fileArr.length; _fi++) {
+            parsedFiles.push(await parseOneFile(_fileArr[_fi]));
+            setProgress(5 + ((_fi+1)/_fileArr.length)*30, `解析 CSV ${_fi+1}/${_fileArr.length}：${_fileArr[_fi].name}`);
         }
         console.log('[分析] 階段1: CSV 解析完成,共', parsedFiles.length, '檔');
         parsedFiles.forEach(f => console.log('  -', f.name, '編碼:', f.enc, '列數:', f.data?.length, '欄位:', f.meta?.fields?.length));
@@ -2183,6 +2202,29 @@
             });
         });
 
+        // ── 補漲幅:掃所有已解析檔案,若有1月/3月/5日漲幅欄,補進缺值的個股(解析迴圈外,安全)──
+        // 有些個股在1月檔缺漲幅,改從5日/當日等其他檔的月漲幅欄補
+        parsedFiles.forEach(fileObj => {
+            const rows = fileObj.data || [];
+            if (!rows.length) return;
+            const hs = Object.keys(rows[0] || {});
+            const k1m = hs.find(k => (k.includes('1個月')||k.includes('一月')||k.includes('1月')) && (k.includes('漲')||k.includes('累計')) && !k.includes('3') && !k.includes('三'));
+            const k3m = hs.find(k => (k.includes('3個月')||k.includes('三個月')||k.includes('季')||k.includes('3月')) && (k.includes('漲')||k.includes('累計')));
+            const k5d = hs.find(k => (k.includes('5日')||k.includes('五日')) && (k.includes('漲')||k.includes('累計')) && !k.includes('月'));
+            if (!k1m && !k3m && !k5d) return;
+            const kSym = hs.find(k => k.includes('代號') || k.includes('股票代號') || k === '代碼');
+            if (!kSym) return;
+            rows.forEach(row => {
+                const sym = String(row[kSym]||'').trim();
+                if (!/^\d{4}$/.test(sym)) return;
+                if (k1m && !(sym in rise1mMap)) { const v = parseNum(row[k1m]); if (v !== null) rise1mMap[sym] = v; }
+                if (k3m && !(sym in rise3mMap)) { const v = parseNum(row[k3m]); if (v !== null) rise3mMap[sym] = v; }
+                if (k5d && !(sym in rise5dMap)) { const v = parseNum(row[k5d]); if (v !== null) rise5dMap[sym] = v; }
+            });
+        });
+        setProgress(45, '建立股票總表、補漲幅…');
+        console.log('[分析] 補漲幅完成: 5日', Object.keys(rise5dMap).length, '｜1月', Object.keys(rise1mMap).length, '｜3月', Object.keys(rise3mMap).length, '檔');
+
         // null → 0
         Object.values(masterDict).forEach(e => {
             if (e.五日漲幅          === null)          e.五日漲幅          = 0;
@@ -2366,6 +2408,7 @@
         );
 
         console.log('[分析] 階段2: masterDict 建立完成,共', Object.keys(masterDict).length, '檔股票');
+        setProgress(55, `評分計算中(${Object.keys(masterDict).length} 檔)…`);
         console.log('[分析] rise5dTop40:', rise5dTop40.size, '| rise1mTop40:', rise1mTop40.size);
 
         // ── 計分（使用編輯器設定）──
@@ -2589,6 +2632,7 @@
 
 
         console.log('[分析] 階段3: 評分完成,開始渲染輸出1');
+        setProgress(68, '評分完成,產生族群解析…');
         // 當日分析:漲幅 map 掛 window,供表格 5日/1月/3月漲幅欄顯示(解析已完成,渲染期唯讀,不影響流程)
         window._rise5dMap = rise5dMap; window._rise1mMap = rise1mMap; window._rise3mMap = rise3mMap;
         window._isCurrentDayAnalysis = true;   // 標記當日分析(批次分析不設此旗標)
@@ -2942,6 +2986,7 @@
         }
 
         console.log('[分析] 階段5: 輸出4完成,開始5系列');
+        setProgress(80, '產生排行榜與清單…');
         // ── 輸出 5d：起漲標的（來自起漲CSV）──
         if (riseStartSymbols.size > 0) {
             const riseStartData = [...riseStartSymbols]
@@ -3230,12 +3275,14 @@
             window._out4HTML_firstOutput = null;
         }
         console.log('[分析] 階段8: 輸出7完成,outputHTML 大小:', (outputHTML.length/1024).toFixed(0), 'KB');
+        setProgress(92, '報表渲染中…');
         await renderOutputBatched(outputHTML);
         console.log('[分析] 階段9: 分批渲染完成');
         buildMobileOutputNav();   // 手機:建立輸出下拉選單
         console.log('[分析] 階段10: 手機選單完成');
         if (typeof switchTab === 'function') switchTab('analysis');  // 切回分析分頁看結果
         console.log('[分析] 階段11: 切換分頁完成');
+        setProgress(100, '✅ 分析完成');
 
         // 儲存本次的檔名標籤,並刷新回測標籤篩選清單(以最終版標籤為主)
         // 回測檔名標籤:納入所有檔名標籤(含起漲/大摩等有專屬輸出的),只排除純ETF成分檔
