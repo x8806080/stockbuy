@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04et</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04eu</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1896,6 +1896,7 @@
         let riseDayTop       = new Set();   // 當日漲幅前N%
         let rise5dMap        = {};
         let rise1mMap        = {};
+        let rise3mMap        = {};          // 3個月漲幅值(來自3個月漲幅排行檔)
         let riseDayMap       = {};          // 當日漲幅值
         let rise5dRankList   = [];          // {sym, idx} 暫存,迴圈後算前N%
         let rise1mRankList   = [];
@@ -1963,9 +1964,12 @@
                 (fileName.includes('當日漲幅') || fileName.includes('今日漲幅') || fileName.includes('單日漲幅') || fileName.includes('當沖')) &&
                 !fileName.includes('5日') && !fileName.includes('五日');
             // 1月優先判斷（避免「5日」字樣干擾）；5日排除含月字樣
-            const has1m = fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計');
-            const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has1m;
-            const is5dRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is1mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
+            // 3個月漲幅檔:含「3個月/三個月/3月/季」漲幅(優先於1月判斷,避免「3個月」被1月誤抓)
+            const has3m = fileName.includes('3個月') || fileName.includes('三個月') || fileName.includes('3月漲') || fileName.includes('季漲');
+            const is3mRankFile = !isInventory && !isRiseStart && !isDayRankFile && has3m;
+            const has1m = !has3m && (fileName.includes('1個月') || fileName.includes('一月') || fileName.includes('1月') || fileName.includes('月漲') || fileName.includes('月累計'));
+            const is1mRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is3mRankFile && has1m;
+            const is5dRankFile = !isInventory && !isRiseStart && !isDayRankFile && !is1mRankFile && !is3mRankFile && !isMorgan5d && (fileName.includes('5日') || fileName.includes('五日'));
             const isEtfOrMorgan = /0050|00888|00913|00927|00929|00981A|大摩/i.test(fileName);
             const etfLabel = fileName.replace(/\.csv$/i, '');
 
@@ -1982,7 +1986,11 @@
 
             // riseKey 依檔案類型抓對應漲幅欄（避免1月檔抓到5日欄）
             let riseKey;
-            if (is1mRankFile) {
+            if (is3mRankFile) {
+                // 3個月檔:抓含「3個月/三個月/季」的漲幅欄
+                riseKey = headers.find(k => (k.includes('3個月')||k.includes('三個月')||k.includes('季')) && (k.includes('漲')||k.includes('累計')))
+                       || headers.find(k => k.includes('漲跌幅') || k.includes('累計漲跌') || k.includes('漲幅'));
+            } else if (is1mRankFile) {
                 // 1月檔：優先抓含「月」的漲幅欄
                 riseKey = headers.find(k => (k.includes('月')) && (k.includes('漲') || k.includes('累計')))
                        || headers.find(k => k.includes('漲跌幅') || k.includes('累計漲跌') || k.includes('漲幅'));
@@ -2106,6 +2114,10 @@
                     const v = parseNum(row[riseKey]);
                     if (v !== null) rise1mMap[symbol] = v;
                     rise1mRankList.push({ sym: symbol, idx: rowIdx });
+                }
+                if (is3mRankFile && riseKey) {
+                    const v = parseNum(row[riseKey]);
+                    if (v !== null) rise3mMap[symbol] = v;
                 }
                 if (isDayRankFile && riseKey) {
                     const v = parseNum(row[riseKey]);
@@ -2585,6 +2597,9 @@
 
 
         console.log('[分析] 階段3: 評分完成,開始渲染輸出1');
+        // 當日分析:漲幅 map 掛 window,供表格 5日/1月/3月漲幅欄顯示(解析已完成,渲染期唯讀,不影響流程)
+        window._rise5dMap = rise5dMap; window._rise1mMap = rise1mMap; window._rise3mMap = rise3mMap;
+        window._isCurrentDayAnalysis = true;   // 標記當日分析(批次分析不設此旗標)
         // 輸出 1
         // ── 族群統計（供輸出1標籤 + 輸出4使用）──
         // 統一正規化：去除前後空白、全形空白，避免比對失敗
@@ -2689,7 +2704,7 @@
         </div>`;
         outputHTML += createSection(
             '輸出 2：整份資料 TOP 50 推薦表', '輸出2_TOP50.csv',
-            STD_HEADERS,
+            stdHeaders(),
             top50.map((r,i) => stdRow(r, addIndTag, i+1))
         );
 
@@ -2701,7 +2716,7 @@
         if (hotStocks.length) {
             outputHTML += createSection(
                 `🔥 熱門族群個股清單（${hotStocks.length} 檔，屬前5大熱門族群）`, '輸出_熱門族群個股.csv',
-                STD_HEADERS,
+                stdHeaders(),
                 hotStocks.map((r,i) => stdRow(r, addIndTag, i+1))
             );
         }
@@ -2712,7 +2727,7 @@
         if (waveStocks.length) {
             outputHTML += createSection(
                 `🌊 波段熱門族群個股清單（${waveStocks.length} 檔，開週布林＋屬前5大波段族群）`, '輸出_波段族群個股.csv',
-                STD_HEADERS,
+                stdHeaders(),
                 waveStocks.map((r,i) => stdRow(r, addIndTag, i+1))
             );
         }
@@ -2723,7 +2738,7 @@
         if (moonStocks.length) {
             outputHTML += createSection(
                 `🌙 長線熱門族群個股清單（${moonStocks.length} 檔，開月布林＋屬前5大長線族群）`, '輸出_長線族群個股.csv',
-                STD_HEADERS,
+                stdHeaders(),
                 moonStocks.map((r,i) => stdRow(r, addIndTag, i+1))
             );
         }
@@ -2734,7 +2749,7 @@
             if (invData.length > 0) {
                 outputHTML += createSection(
                     '輸出 3：庫存標的診斷報告', '輸出3_庫存診斷.csv',
-                    STD_HEADERS,
+                    stdHeaders(),
                     invData.map((r,i) => stdRow(r, null, i+1))
                 );
             } else {
@@ -2748,7 +2763,7 @@
         const top20NoInv = top50.filter(r => !inventorySymbols.has(r.代號)).slice(0, 20);
         outputHTML += createSection(
             '輸出 4：Top 20 推薦表 (排除庫存)', '輸出4_TOP20_排除庫存.csv',
-            STD_HEADERS,
+            stdHeaders(),
             top20NoInv.map((r,i) => stdRow(r, null, i+1))
         );
 
@@ -2849,7 +2864,7 @@
         if (resonanceData.length > 0) {
             outputHTML += createSection(
                 `輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}`, '輸出5_長短動能共振.csv',
-                STD_HEADERS,
+                stdHeaders(),
                 resonanceData.map((r,i) => stdRow(masterDict[r.代號]||{代號:r.代號,名稱:r.名稱}, null, i+1))
             );
         } else {
@@ -2945,7 +2960,7 @@
                 outputHTML += createSection(
                     `輸出 9：起漲標的（${riseStartData.length} 檔，來自起漲CSV）`,
                     '輸出9_起漲標的.csv',
-                    STD_HEADERS,
+                    stdHeaders(),
                     riseStartData.map((r,i) => stdRow(r, null, i+1))
                 );
             }
@@ -2961,7 +2976,7 @@
                 outputHTML += createSection(
                     `輸出 10：大摩5日買超（${morganData.length} 檔）`,
                     '輸出10_大摩5日買超.csv',
-                    STD_HEADERS,
+                    stdHeaders(),
                     morganData.map((r,i) => stdRow(r, null, i+1))
                 );
             }
@@ -2977,7 +2992,7 @@
                 outputHTML += createSection(
                     `輸出 11：投信當週買超排行（${trustRankData.length} 檔）`,
                     '輸出11_投信當週買超.csv',
-                    STD_HEADERS,
+                    stdHeaders(),
                     trustRankData.map((r,i) => stdRow(r, null, i+1))
                 );
             }
@@ -3011,7 +3026,7 @@
             outputHTML += createSection(
                 `輸出 ${lbl}：${tagName}（共${arrAll.length} 檔${moreNote}）`,
                 `輸出${lbl}_${tagName}.csv`,
-                STD_HEADERS,
+                stdHeaders(),
                 arr.map((r,i) => stdRow(r, null, i+1))
             );
         });
@@ -3041,7 +3056,7 @@
             // 退出（昨天有今天沒有）
             const droppedSyms   = [...prevTop50Syms].filter(s => !todaySyms.has(s));
 
-            const compHeaders = STD_HEADERS;
+            const compHeaders = stdHeaders();
 
             function makeCompRows(syms) {
                 return syms.map((sym,i) => {
@@ -4470,6 +4485,12 @@
 
     // ── 統一表格欄位（8欄）──
     // 代號 名稱 當日價格 法人市值比 投信市值比 營收年增 狀態標註 週K布林位置
+    // 當日分析時,表頭多3欄漲幅;批次分析不加
+    function stdHeaders() {
+        const base = ['排名','代號','名稱','綜合評分','當日價格'];
+        const rise = (typeof window!=='undefined' && window._isCurrentDayAnalysis) ? ['5日漲幅','1月漲幅','3月漲幅'] : [];
+        return [...base, ...rise, '法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
+    }
     const STD_HEADERS = ['排名','代號','名稱','綜合評分','當日價格','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'];
     function stdRow(r, tagFn, rank) {
         const price = (r.收盤價 !== null && r.收盤價 !== undefined && r.收盤價 !== 0) ? r.收盤價 : '-';
@@ -4478,7 +4499,15 @@
         const tags  = tagFn ? tagFn(r) : renderTags(r.狀態標註 || '');
         const rk    = (rank !== undefined && rank !== null) ? rank : '-';
         const score = (r.綜合評分 !== undefined && r.綜合評分 !== null) ? r.綜合評分 : '-';
-        return [rk, r.代號, r.名稱, score, price, r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
+        const base = [rk, r.代號, r.名稱, score, price];
+        // 當日分析:插入 5日/1月/3月漲幅(來自上傳漲幅排行檔的 map)
+        if (typeof window!=='undefined' && window._isCurrentDayAnalysis) {
+            const fmtRise = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
+            base.push(fmtRise((window._rise5dMap||{})[r.代號]));
+            base.push(fmtRise((window._rise1mMap||{})[r.代號]));
+            base.push(fmtRise((window._rise3mMap||{})[r.代號]));
+        }
+        return [...base, r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
     }
 
     // ── 把 payload 完整渲染到主輸出區（六大輸出）───────────
@@ -4489,6 +4518,7 @@
         const label = dateLabel || date || '';
 
         // 統一設定歷史模式標記(所有歷史載入都會經過這裡,供族群編輯重算用)
+        window._isCurrentDayAnalysis = false;   // 歷史載入=批次分析,不顯示漲幅欄(欄數與表頭一致)
         // 從 label(如 2026/06/19)反推 dateKey(20260619)
         const dkMatch = (label || '').match(/(\d{4})\D?(\d{2})\D?(\d{2})/);
         if (dkMatch) {
