@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ex</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ey</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1194,6 +1194,11 @@
         </div>
     </details>
 
+    <div id="analysisToolbar" data-tab="analysis" style="display:none;gap:8px;margin-bottom:10px">
+        <button onclick="collapseAllSections(true)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">▶ 全部收折</button>
+        <button onclick="collapseAllSections(false)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">▼ 全部展開</button>
+        <span style="font-size:11px;color:#64748b;align-self:center">表格預設收折可加速、省記憶體;需要時再展開</span>
+    </div>
     <div id="outputArea" data-tab="analysis">
     <div class="pdf-header" style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:16px">
         <div style="font-size:18pt;font-weight:700;color:#1e3a5f">籌碼先行動能待發 — 量化策略分析報告</div>
@@ -3295,6 +3300,7 @@
         setProgress(92, '報表渲染中…');
         await renderOutputBatched(outputHTML);
         console.log('[分析] 階段9: 分批渲染完成');
+        const _tb = document.getElementById('analysisToolbar'); if (_tb) _tb.style.display = 'flex';
         buildMobileOutputNav();   // 手機:建立輸出下拉選單
         console.log('[分析] 階段10: 手機選單完成');
         if (typeof switchTab === 'function') switchTab('analysis');  // 切回分析分頁看結果
@@ -4097,8 +4103,14 @@
     // 唯一 ID 計數器（每個 section 有不同的 id）
     let _sectionCount = 0;
 
-    function createSection(title, filename, headers, dataRows) {
+    function createSection(title, filename, headers, dataRows, defaultCollapsed) {
         const secId = 'sec' + (++_sectionCount);
+        // 預設收折:明確指定 true,或標題是「輸出 5~99」的次要表格(省記憶體、加速)
+        let _collapsed = defaultCollapsed === true;
+        if (defaultCollapsed === undefined) {
+            const m = String(title).match(/輸出\s*(\d+)/);
+            if (m && parseInt(m[1]) >= 5) _collapsed = true;   // 輸出5以上預設收折
+        }
         // CSV下載用純文字（去除 HTML）
         const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
         const csvRows = dataRows.map(row => row.map(stripHtml));
@@ -4198,11 +4210,11 @@
         return `<div class="report-section" id="${secId}">
             <h2>
                 <span onclick="toggleSection('${secId}')" style="cursor:pointer;user-select:none">
-                    <span id="${secId}-arrow" style="display:inline-block;width:16px;color:var(--accent2)">▼</span>${title}
+                    <span id="${secId}-arrow" style="display:inline-block;width:16px;color:var(--accent2)">${_collapsed?'▶':'▼'}</span>${title}
                 </span>
                 <button class="btn-download" onclick='downloadTableCSV("${secId}","${filename}")'>下載 CSV</button>
             </h2>
-            <div id="${secId}-body">
+            <div id="${secId}-body"${_collapsed?' style="display:none"':''}>
                 <div class="mobile-sort-bar">
                     <label>排序：</label>
                     <select onchange="sortTableByName('${secId}', this.value)">
@@ -4261,30 +4273,23 @@
     // 表格收折
     // ── 手機版:輸出下拉選單切換(一次只顯示一個輸出) ──
     // ── 分批渲染:避免一次 innerHTML 巨量 HTML 卡死瀏覽器 ──
+    // 用 insertAdjacentHTML 分段插入(不先建整棵 tmp DOM,省一半記憶體)
     function renderOutputBatched(html) {
         return new Promise(resolve => {
             const area = document.getElementById('outputArea');
             if (!area) { resolve(); return; }
             area.innerHTML = '';
-            // 用暫存容器解析 HTML 成節點(不直接進 DOM,避免一次渲染)
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            const nodes = [...tmp.childNodes];
+            // 依 report-section 邊界切割(每個 section 一段),而非先解析整棵 DOM
+            const parts = html.split(/(?=<div class="report-section")/);
             let i = 0;
-            const BATCH = 3;   // 每批 append 幾個頂層節點
             function step() {
-                const frag = document.createDocumentFragment();
                 let n = 0;
-                while (i < nodes.length && n < BATCH) {
-                    frag.appendChild(nodes[i]);
+                while (i < parts.length && n < 2) {
+                    if (parts[i]) area.insertAdjacentHTML('beforeend', parts[i]);
                     i++; n++;
                 }
-                area.appendChild(frag);
-                if (i < nodes.length) {
-                    requestAnimationFrame(step);   // 讓瀏覽器喘息再續
-                } else {
-                    resolve();
-                }
+                if (i < parts.length) requestAnimationFrame(step);
+                else resolve();
             }
             requestAnimationFrame(step);
         });
@@ -4397,6 +4402,16 @@
         body.style.display = collapsed ? '' : 'none';
         if (arrow) arrow.textContent = collapsed ? '▼' : '▶';
     }
+    // 全部收折/展開(收折可大幅省記憶體與加速)
+    function collapseAllSections(collapse) {
+        document.querySelectorAll('[id$="-body"]').forEach(body => {
+            if (!body.id.startsWith('sec')) return;
+            body.style.display = collapse ? 'none' : '';
+            const arrow = document.getElementById(body.id.replace('-body','-arrow'));
+            if (arrow) arrow.textContent = collapse ? '▶' : '▼';
+        });
+    }
+    window.collapseAllSections = collapseAllSections;
 
     // 表格排序（點欄位標題）
     const _sortState = {}; // secId+col → asc/desc
