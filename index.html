@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ey</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ez</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3769,6 +3769,21 @@
         }
     }
 
+    // 小批次序列載入多日資料(避免並行過多請求觸發 GitHub rate limit → CORS 錯誤)
+    async function loadDailyResultsBatched(dates, batchSize) {
+        const BATCH = batchSize || 5;   // 一次最多5個並行,做完再下一批
+        const results = [];
+        for (let i = 0; i < dates.length; i += BATCH) {
+            const chunk = dates.slice(i, i + BATCH);
+            const part = await Promise.all(chunk.map(d => loadDailyResult(d).catch(()=>null)));
+            results.push(...part);
+            // 每批之間短暫喘息,進一步降低 rate limit 風險
+            if (i + BATCH < dates.length) await new Promise(r => setTimeout(r, 120));
+        }
+        return results;
+    }
+    window.loadDailyResultsBatched = loadDailyResultsBatched;
+
     async function loadDailyResult(dateKey) {
         if (!hasRepo()) throw new Error('Token 未設定，請點 ⚙ 設定');
         // 優先用 rawFetch（直接讀 JSON，不需 Base64 解碼）
@@ -5078,7 +5093,7 @@
             container.innerHTML = '<div style="color:var(--text-dim);padding:12px">載入中…</div>';
             // 先排序（由舊到新），確保「已退出」用最新日判斷
             dates.sort();
-            const payloads = await Promise.all(dates.map(d => loadDailyResult(d).catch(()=>null)));
+            const payloads = await loadDailyResultsBatched(dates, 5);
             const labels   = dates.map(d => d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6,8));
 
             // 建立每日 TOP50 集合
@@ -5226,8 +5241,8 @@
         const msg = document.getElementById('histLoadMsg');
         msg.textContent = `載入 ${dates.length} 個日期資料中…`;
 
-        // 並行載入所有選取日期的資料
-        const payloads = await Promise.all(dates.map(d => loadDailyResult(d)));
+        // 小批次序列載入所有選取日期的資料(避免並行過多觸發 CORS/rate limit)
+        const payloads = await loadDailyResultsBatched(dates, 5);
         const latest   = await loadResult();
         msg.textContent = '';
 
