@@ -191,6 +191,9 @@ function buildPayload(rows, dateKey, bollMap, mbollMap, DICT, baseClose) {
     if (r5In && r1mIn) { score+=SC.mBoth; tags.push('雙動能共振'); }
     else if (r5In)     { score+=SC.m5d; tags.push('5日動能'); }
     else if (r1mIn)    { score+=SC.m1m; tags.push('一月動能'); }
+    // 獨立進榜標籤(不互斥,供回測篩選;含雙動能共振者也會標)
+    if (r5In)  tags.push('📈5日漲幅前40');
+    if (r1mIn) tags.push('📊1月漲幅前40');
     if (rDayIn)        { score+=SC.mDay; tags.push('當日強勢'); }
     // 組合獎勵(當日強勢 + 月P90/P70)
     if (rDayIn && monthLevel==='P90') { score+=SC.comboP90; tags.push('⭐當日+月P90'); }
