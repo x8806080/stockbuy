@@ -588,7 +588,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.04ez</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05a</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2465,6 +2465,9 @@
             if (r5In && r1mIn) { score += m.both;   tags.push('雙動能共振'); }
             else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
+            // 獨立進榜標籤(不互斥,供回測篩選;含雙動能共振者也會標)
+            if (r5In)  tags.push('📈5日漲幅前40');
+            if (r1mIn) tags.push('📊1月漲幅前40');
             if (rDayIn)        { score += m.day;    tags.push('當日強勢'); }
 
             // ③ 中期法人（法人一月買超/市值 比值，門檻0=自動分位；市值缺漏時退回絕對金額保底）
@@ -5572,6 +5575,9 @@
             if (r5In && r1mIn) { score += m.both; tags.push('雙動能共振'); }
             else if (r5In)     { score += m.only5d; tags.push('5日動能'); }
             else if (r1mIn)    { score += m.only1m; tags.push('一月動能'); }
+            // 獨立進榜標籤(不互斥,供回測篩選)
+            if (r5In)  tags.push('📈5日漲幅前40');
+            if (r1mIn) tags.push('📊1月漲幅前40');
             if (rDayIn)        { score += m.day; tags.push('當日強勢'); }
 
             // 組合獎勵
@@ -6001,6 +6007,7 @@
         { group: '法人月比值', tags: ['🏛️月P90','月比P70','月比P50'] },
         { group: '投信比值', tags: ['🏦投信P90','投信比P70','投信比P50'] },
         { group: '動能', tags: ['雙動能共振','5日動能','一月動能','當日強勢'] },
+        { group: '漲幅進榜', tags: ['📈5日漲幅前40','📊1月漲幅前40'] },
         { group: '組合獎勵', tags: ['⭐當日+月P90','⭐當日+月P70'] },
         { group: '族群', tags: ['🔥熱門族群','🌊波段熱門族群','🌙長線熱門族群','📈開週布林','📅開月布林'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
