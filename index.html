@@ -280,6 +280,8 @@
         .tag-filter-bar .f-tag { cursor:pointer; opacity:.65; transition:opacity .15s, outline .15s; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; user-select:none; white-space:nowrap; }
         .tag-filter-bar .f-tag:hover { opacity:1; }
         .tag-filter-bar .f-tag.active { opacity:1; outline:2px solid #fff; outline-offset:1px; }
+        .tag-filter-bar .f-rise { cursor:pointer; opacity:.65; transition:opacity .15s, outline .15s; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; user-select:none; white-space:nowrap; }
+        .tag-filter-bar .f-rise.active { opacity:1; outline:2px solid #fff; outline-offset:1px; }
         .tag-filter-bar .f-clear { background:none; border:1px solid var(--border); color:var(--text-dim); padding:2px 10px; border-radius:4px; font-size:11px; cursor:pointer; }
         .tag-filter-bar .f-clear:hover { border-color:var(--accent); color:var(--accent); }
         tr.tag-hidden { display:none; }
@@ -588,7 +590,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05a</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05b</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -4154,7 +4156,8 @@
 
         // 篩選列 HTML（依類型分組排序：同類型放一起）
         let filterHtml = '';
-        if (tagSet.size > 0) {
+        const _hasRise5d = headers.some(h => String(h).includes('5日漲幅'));
+        if (tagSet.size > 0 || _hasRise5d) {
             // TAG 分類排序權重（數字小的排前面）
             function tagOrder(t) {
                 // 法人5日比值
@@ -4208,6 +4211,11 @@
             sortedTags.forEach(([txt, cls]) => {
                 filterHtml += `<span class="s-tag f-tag ${cls}" onclick="toggleTagFilter('${secId}','${txt.replace(/'/g,"\'")}')">${txt}</span>`;
             });
+            // 5日漲幅數值篩選(表格有此欄才顯示)
+            if (_hasRise5d) {
+                filterHtml += `<span class="s-tag f-rise" data-th="10" onclick="toggleRiseFilter('${secId}',10)" style="cursor:pointer;background:#0f766e;color:#fff">📈5日漲幅≥10%</span>`;
+                filterHtml += `<span class="s-tag f-rise" data-th="5" onclick="toggleRiseFilter('${secId}',5)" style="cursor:pointer;background:#0e7490;color:#fff">📈≥5%</span>`;
+            }
             filterHtml += `<button class="f-clear" onclick="clearTagFilter('${secId}')">✕ 清除</button>
             </div>`;
         }
@@ -4261,23 +4269,44 @@
         applyTagFilter(secId);
     }
 
+    // 5日漲幅數值篩選(可與標籤篩選並用)
+    function toggleRiseFilter(secId, threshold) {
+        const bar = document.getElementById(secId + '-bar');
+        if (!bar) return;
+        const btn = [...bar.querySelectorAll('.f-rise')].find(el => +el.dataset.th === threshold);
+        if (!btn) return;
+        const wasActive = btn.classList.contains('active');
+        // 同組互斥(只能選一個門檻)
+        bar.querySelectorAll('.f-rise').forEach(el => el.classList.remove('active'));
+        if (!wasActive) btn.classList.add('active');
+        applyTagFilter(secId);
+    }
+    window.toggleRiseFilter = toggleRiseFilter;
+
     function applyTagFilter(secId) {
         const bar = document.getElementById(secId + '-bar');
         const sec = document.getElementById(secId);
         if (!bar || !sec) return;
 
         const activeTags = [...bar.querySelectorAll('.f-tag.active')].map(el => el.textContent.trim());
+        const riseBtn = bar.querySelector('.f-rise.active');
+        const riseTh = riseBtn ? parseFloat(riseBtn.dataset.th) : null;
         // 選所有資料列（排除標題列 th）
         sec.querySelectorAll('table tr').forEach(tr => {
             if (tr.querySelector('th')) return; // 跳過標題列
-            if (activeTags.length === 0) {
-                tr.classList.remove('tag-hidden');
-            } else {
-                // 無 data-tags（無標註）的列：有篩選時一律隱藏
+            let show = true;
+            // 標籤條件
+            if (activeTags.length > 0) {
                 const rowTags = (tr.dataset.tags || '').split('|').filter(Boolean);
-                const match = rowTags.length > 0 && activeTags.every(t => rowTags.includes(t));
-                tr.classList.toggle('tag-hidden', !match);
+                show = rowTags.length > 0 && activeTags.every(t => rowTags.includes(t));
             }
+            // 5日漲幅條件(與標籤條件 AND)
+            if (show && riseTh != null) {
+                const td = tr.querySelector('td[data-label="5日漲幅"]');
+                const v = td ? parseFloat(String(td.textContent).replace(/[+%\s]/g,'')) : NaN;
+                show = Number.isFinite(v) && v >= riseTh;
+            }
+            tr.classList.toggle('tag-hidden', !show);
         });
     }
 
@@ -4285,6 +4314,7 @@
         const bar = document.getElementById(secId + '-bar');
         if (!bar) return;
         bar.querySelectorAll('.f-tag.active').forEach(el => el.classList.remove('active'));
+        bar.querySelectorAll('.f-rise.active').forEach(el => el.classList.remove('active'));
         applyTagFilter(secId);
     }
 
