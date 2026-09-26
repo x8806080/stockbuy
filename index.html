@@ -590,7 +590,7 @@
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
     <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05b</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05d</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -1196,10 +1196,12 @@
         </div>
     </details>
 
-    <div id="analysisToolbar" data-tab="analysis" style="display:none;gap:8px;margin-bottom:10px">
+    <div id="analysisToolbar" data-tab="analysis" style="display:none;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
         <button onclick="collapseAllSections(true)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">▶ 全部收折</button>
         <button onclick="collapseAllSections(false)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">▼ 全部展開</button>
-        <span style="font-size:11px;color:#64748b;align-self:center">表格預設收折可加速、省記憶體;需要時再展開</span>
+        <button onclick="resetSecPrefs()" title="清除記憶的顯示偏好,恢復預設(輸出5以上收折、其餘展開)" style="background:var(--bg2);color:#fbbf24;border:1px solid #fbbf2455;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer">↺ 恢復預設顯示</button>
+        <span id="secPrefMsg" style="font-size:12px;color:#4ade80;font-weight:700"></span>
+        <span style="font-size:11px;color:#64748b">💾 收折狀態會自動記住,下次開啟沿用</span>
     </div>
     <div id="outputArea" data-tab="analysis">
     <div class="pdf-header" style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:16px">
@@ -4123,13 +4125,58 @@
     // 唯一 ID 計數器（每個 section 有不同的 id）
     let _sectionCount = 0;
 
+    // ══════════════════════════════════════════════
+    //  表格顯示偏好記憶(LocalStorage)
+    //  key 用「標題正規化」而非動態 secId,確保重整後仍能對應到同一份表格
+    //  例:「🔥 熱門族群個股清單（12 檔，屬前5大熱門族群）」→「🔥 熱門族群個股清單」
+    // ══════════════════════════════════════════════
+    const _SEC_PREF_KEY = '_secCollapsePrefs';
+
+    /** 把表格標題正規化成穩定的 key(去掉會變動的括號內容,如檔數) */
+    function _secKeyOf(title) {
+        return String(title)
+            .replace(/[（(][^）)]*[）)]/g, '')   // 去掉全形/半形括號及內容(檔數會變動)
+            .replace(/<[^>]+>/g, '')             // 去掉 HTML 標籤
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /** 讀取所有表格的收折偏好 → { key: true(收折)/false(展開) } */
+    function _loadSecPrefs() {
+        try { return JSON.parse(localStorage.getItem(_SEC_PREF_KEY) || '{}'); }
+        catch (e) { return {}; }
+    }
+
+    /** 寫入單一表格的收折偏好 */
+    function _saveSecPref(key, collapsed) {
+        if (!key) return;
+        try {
+            const prefs = _loadSecPrefs();
+            prefs[key] = collapsed;
+            localStorage.setItem(_SEC_PREF_KEY, JSON.stringify(prefs));
+        } catch (e) { /* 隱私模式或容量滿:忽略,不影響功能 */ }
+    }
+
+    /** 清除所有偏好(恢復預設) */
+    function _clearSecPrefs() {
+        try { localStorage.removeItem(_SEC_PREF_KEY); } catch (e) {}
+    }
+
     function createSection(title, filename, headers, dataRows, defaultCollapsed) {
         const secId = 'sec' + (++_sectionCount);
-        // 預設收折:明確指定 true,或標題是「輸出 5~99」的次要表格(省記憶體、加速)
-        let _collapsed = defaultCollapsed === true;
-        if (defaultCollapsed === undefined) {
+        const _secKey = _secKeyOf(title);   // 穩定 key(供 LocalStorage 記憶)
+
+        // 收折狀態決定順序:① 使用者偏好(LocalStorage) > ② 明確指定 > ③ 預設規則(輸出5以上收折)
+        let _collapsed;
+        const _prefs = _loadSecPrefs();
+        if (Object.prototype.hasOwnProperty.call(_prefs, _secKey)) {
+            _collapsed = _prefs[_secKey] === true;          // ① 使用者記憶優先
+        } else if (defaultCollapsed !== undefined) {
+            _collapsed = defaultCollapsed === true;          // ② 呼叫時明確指定
+        } else {
+            _collapsed = false;                              // ③ 預設規則
             const m = String(title).match(/輸出\s*(\d+)/);
-            if (m && parseInt(m[1]) >= 5) _collapsed = true;   // 輸出5以上預設收折
+            if (m && parseInt(m[1]) >= 5) _collapsed = true; // 輸出5以上預設收折(省記憶體、加速)
         }
         // CSV下載用純文字（去除 HTML）
         const stripHtml = s => String(s).replace(/<[^>]+>/g,'');
@@ -4222,6 +4269,7 @@
 
         // 表格列（每列加 data-tags 屬性）
         let tableRows = '';
+        const _rise5dIdx = headers.findIndex(h => String(h).includes('5日漲幅'));  // 5日漲幅欄索引(渲染時算一次)
         dataRows.forEach(row => {
             const tags = [];
             row.forEach(cell => {
@@ -4230,10 +4278,16 @@
                 for (const m of matches) tags.push(m[2].trim());
             });
             const tagAttr = tags.length ? ` data-tags="${tags.map(t=>t.replace(/"/g,'&quot;')).join('|')}"` : '';
-            tableRows += `<tr${tagAttr}>${row.map((cell,ci)=>`<td data-label="${(headers[ci]||'').replace(/"/g,'&quot;')}">${cell}</td>`).join('')}</tr>`;
+            // 預存5日漲幅數值(篩選時直接讀 dataset,免逐列 querySelector,大幅加速)
+            let riseAttr = '';
+            if (_rise5dIdx >= 0) {
+                const rv = parseFloat(String(row[_rise5dIdx]).replace(/[+%\s]/g,''));
+                if (Number.isFinite(rv)) riseAttr = ` data-rise5d="${rv}"`;
+            }
+            tableRows += `<tr class="data-row"${tagAttr}${riseAttr}>${row.map((cell,ci)=>`<td data-label="${(headers[ci]||'').replace(/"/g,'&quot;')}">${cell}</td>`).join('')}</tr>`;
         });
 
-        return `<div class="report-section" id="${secId}">
+        return `<div class="report-section" id="${secId}" data-seckey="${_secKey.replace(/"/g,'&quot;')}">
             <h2>
                 <span onclick="toggleSection('${secId}')" style="cursor:pointer;user-select:none">
                     <span id="${secId}-arrow" style="display:inline-block;width:16px;color:var(--accent2)">${_collapsed?'▶':'▼'}</span>${title}
@@ -4291,22 +4345,29 @@
         const activeTags = [...bar.querySelectorAll('.f-tag.active')].map(el => el.textContent.trim());
         const riseBtn = bar.querySelector('.f-rise.active');
         const riseTh = riseBtn ? parseFloat(riseBtn.dataset.th) : null;
-        // 選所有資料列（排除標題列 th）
-        sec.querySelectorAll('table tr').forEach(tr => {
-            if (tr.querySelector('th')) return; // 跳過標題列
+        const hasTagFilter = activeTags.length > 0;
+        const hasRiseFilter = riseTh != null;
+
+        // 只選資料列(class="data-row"),直接讀 dataset,不再逐列 querySelector th/td → 快很多
+        const rows = sec.querySelectorAll('tr.data-row');
+        // 先計算所有列的顯示狀態,再一次套用(減少 reflow)
+        rows.forEach(tr => {
             let show = true;
-            // 標籤條件
-            if (activeTags.length > 0) {
-                const rowTags = (tr.dataset.tags || '').split('|').filter(Boolean);
-                show = rowTags.length > 0 && activeTags.every(t => rowTags.includes(t));
+            if (hasTagFilter) {
+                const dt = tr.dataset.tags;
+                if (!dt) { show = false; }
+                else {
+                    const rowTags = dt.split('|');
+                    show = activeTags.every(t => rowTags.includes(t));
+                }
             }
-            // 5日漲幅條件(與標籤條件 AND)
-            if (show && riseTh != null) {
-                const td = tr.querySelector('td[data-label="5日漲幅"]');
-                const v = td ? parseFloat(String(td.textContent).replace(/[+%\s]/g,'')) : NaN;
-                show = Number.isFinite(v) && v >= riseTh;
+            if (show && hasRiseFilter) {
+                const rv = tr.dataset.rise5d;
+                show = rv !== undefined && parseFloat(rv) >= riseTh;
             }
-            tr.classList.toggle('tag-hidden', !show);
+            // 只在狀態改變時才動 class(避免不必要的 DOM 寫入)
+            const hidden = tr.classList.contains('tag-hidden');
+            if (show === hidden) tr.classList.toggle('tag-hidden', !show);
         });
     }
 
@@ -4371,8 +4432,7 @@
         // 只在手機模式作用
         if (!window.matchMedia('(max-width: 1024px)').matches) return;
         const tr = e.target.closest('.tbl-wrap table tr');
-        if (!tr) return;
-        if (tr.querySelector('th')) return;  // 表頭不處理
+        if (!tr || !tr.classList.contains('data-row')) return;  // 只處理資料列(表頭無 data-row class)
         // 不干擾 TAG 篩選等互動元素
         if (e.target.closest('.s-tag, button, select, a')) return;
         tr.classList.toggle('expanded');
@@ -4449,24 +4509,49 @@
         const collapsed = body.style.display === 'none';
         body.style.display = collapsed ? '' : 'none';
         if (arrow) arrow.textContent = collapsed ? '▼' : '▶';
+        // 記憶使用者偏好(下次開啟/重整自動套用)
+        const sec = document.getElementById(secId);
+        if (sec) _saveSecPref(sec.dataset.seckey, !collapsed);
     }
-    // 全部收折/展開(收折可大幅省記憶體與加速)
+    // 全部收折/展開(收折可大幅省記憶體與加速),並記憶偏好
     function collapseAllSections(collapse) {
-        document.querySelectorAll('[id$="-body"]').forEach(body => {
-            if (!body.id.startsWith('sec')) return;
+        document.querySelectorAll('.report-section[data-seckey]').forEach(sec => {
+            const body = document.getElementById(sec.id + '-body');
+            const arrow = document.getElementById(sec.id + '-arrow');
+            if (!body) return;
             body.style.display = collapse ? 'none' : '';
-            const arrow = document.getElementById(body.id.replace('-body','-arrow'));
             if (arrow) arrow.textContent = collapse ? '▶' : '▼';
+            _saveSecPref(sec.dataset.seckey, collapse);
         });
     }
     window.collapseAllSections = collapseAllSections;
+
+    /** 恢復預設顯示(清除記憶,重新套用預設規則:輸出5以上收折、其餘展開) */
+    function resetSecPrefs() {
+        _clearSecPrefs();
+        document.querySelectorAll('.report-section[data-seckey]').forEach(sec => {
+            const body = document.getElementById(sec.id + '-body');
+            const arrow = document.getElementById(sec.id + '-arrow');
+            if (!body) return;
+            // 依標題重算預設:輸出5以上收折
+            const titleEl = sec.querySelector('h2 span');
+            const title = titleEl ? titleEl.textContent : '';
+            const m = String(title).match(/輸出\s*(\d+)/);
+            const shouldCollapse = !!(m && parseInt(m[1]) >= 5);
+            body.style.display = shouldCollapse ? 'none' : '';
+            if (arrow) arrow.textContent = shouldCollapse ? '▶' : '▼';
+        });
+        const msg = document.getElementById('secPrefMsg');
+        if (msg) { msg.textContent = '✓ 已恢復預設顯示'; setTimeout(()=>{ msg.textContent=''; }, 2500); }
+    }
+    window.resetSecPrefs = resetSecPrefs;
 
     // 表格排序（點欄位標題）
     const _sortState = {}; // secId+col → asc/desc
     function sortTable(secId, colIdx) {
         const table = document.getElementById(secId + '-table');
         if (!table) return;
-        const rows = [...table.querySelectorAll('tr')].filter(tr => !tr.querySelector('th'));
+        const rows = [...table.querySelectorAll('tr.data-row')];
         const key = secId + '_' + colIdx;
         const asc = _sortState[key] = !_sortState[key];
 
@@ -4504,7 +4589,7 @@
         if (!table || col === '' || col == null) return;
         col = parseInt(col);
         const asc = _sortDir[secId] === 'asc';
-        const rows = [...table.querySelectorAll('tr')].filter(tr => !tr.querySelector('th'));
+        const rows = [...table.querySelectorAll('tr.data-row')];
         const cellVal = tr => {
             const td = tr.children[col];
             if (!td) return '';
@@ -5085,6 +5170,7 @@
         }
         renderOutputBatched(outputHTML).then(() => {
             buildMobileOutputNav();   // 手機:建立輸出下拉選單
+            const _tb2 = document.getElementById('analysisToolbar'); if (_tb2) _tb2.style.display = 'flex';   // 歷史載入也顯示收折工具列
             if (typeof switchTab === 'function') switchTab('analysis');
         });
         // 更新 PDF 頁首
