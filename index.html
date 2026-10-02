@@ -589,8 +589,7 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-    <button onclick="resetPrevTop50()" title="清除新入選比對基準，下次分析重新建立" style="background:#1a1a2e;color:#a78bfa;border:1px solid #3b0764;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔄 重置比對</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05d</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05e</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -2573,64 +2572,7 @@
         const analysisDateKey = getAnalysisDateKey();
         const analysisLabel   = analysisDateKey.slice(0,4)+'/'+analysisDateKey.slice(4,6)+'/'+analysisDateKey.slice(6,8);
 
-        // ── 比對前一個歷史日期的 TOP50，標記新入選 ──
-        // 優先從 repo 讀前一個分析日，這樣今天跑就能和昨天比對
-        let prevTop50Syms = new Set();
-        let prevDateLabel = '';
-        let newEntryCount = 0;
-        let newEntryDebug = '';
-
-        try {
-            // 從 index.json 找前一個日期（排除今天）
-            const allDates  = await loadDailyIndex();
-            const todayK    = analysisDateKey;
-            const prevDates = allDates.filter(d => d < todayK).sort().reverse();
-            const prevDate  = prevDates[0] || null;
-
-            if (prevDate && hasRepo()) {
-                // 從 repo 載入前一日完整資料
-                const prevPayload = await loadDailyResult(prevDate);
-                if (prevPayload?.top50?.length) {
-                    prevPayload.top50.forEach(r => prevTop50Syms.add(r.代號));
-                    prevDateLabel = prevDate.slice(0,4)+'/'+prevDate.slice(4,6)+'/'+prevDate.slice(6,8);
-                    // 存完整 payload 供後續聯集/交集/差集分析
-                    window._prevDayPayload = { dateKey: prevDate, label: prevDateLabel, payload: prevPayload };
-                    console.log(`[新入選比對] 前一日 ${prevDateLabel}：${prevTop50Syms.size} 檔`);
-                }
-            } else if (!hasRepo()) {
-                // 無 repo，fallback 用 localStorage
-                const prevRaw = localStorage.getItem(PREV_TOP50_KEY);
-                if (prevRaw) {
-                    const prev = JSON.parse(prevRaw);
-                    if (prev?.syms?.length && prev.date !== analysisLabel) {
-                        prev.syms.forEach(sym => prevTop50Syms.add(sym));
-                        prevDateLabel = prev.date;
-                    }
-                }
-            }
-        } catch(e) {
-            console.warn('[新入選比對] 載入前次資料失敗:', e.message);
-        }
-
-        // 標記新入選
-        if (prevTop50Syms.size > 0) {
-            top50.forEach(r => {
-                if (!prevTop50Syms.has(r.代號)) {
-                    r.狀態標註 = r.狀態標註
-                        ? '🆕新入選 / ' + r.狀態標註
-                        : '🆕新入選';
-                    newEntryCount++;
-                }
-            });
-            newEntryDebug = `✅ 與 ${prevDateLabel} 比對（${prevTop50Syms.size} 檔），本次新入選 <b style="color:#22d3ee">${newEntryCount}</b> 檔`;
-        } else {
-            newEntryDebug = `⚠️ 無前日資料可比對${hasRepo() ? '（尚無歷史紀錄，需先累積至少兩天）' : '（未設定同步）'}`;
-        }
-
         outputHTML += `<details class="debug-box"><summary>🔍 檔案識別偵錯記錄（展開查看）</summary><pre style="margin-top:8px;font-size:12px;line-height:1.6">${fileTypeLog.join('\n')}</pre></details>`;
-        outputHTML += `<div style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:6px;padding:8px 14px;font-size:12px;color:#93c5fd;margin-bottom:8px">
-            🆕 <b>新入選比對：</b>${newEntryDebug}
-        </div>`;
 
 
         // 將狀態標註字串轉為彩色 TAG HTML
@@ -2807,14 +2749,6 @@
             outputHTML += `<div class="report-section"><h2>輸出 3：庫存標的診斷報告</h2><p style="color:red;font-weight:bold;">⚠️ 未偵測到檔名含「庫存」的 CSV。</p></div>`;
         }
 
-        // 輸出 3
-        const top20NoInv = top50.filter(r => !inventorySymbols.has(r.代號)).slice(0, 20);
-        outputHTML += createSection(
-            '輸出 4：Top 20 推薦表 (排除庫存)', '輸出4_TOP20_排除庫存.csv',
-            stdHeaders(),
-            top20NoInv.map((r,i) => stdRow(r, null, i+1))
-        );
-
         console.log('[分析] 階段4: 輸出1完成,開始輸出4族群');
         // 輸出 4（indMap/sortedInds/top5Inds 已在輸出1前計算）
         const out4Rows = sortedInds.map(([ ind, { count, corpSum } ], i) => {
@@ -2915,30 +2849,6 @@
         // 熱門族群改排輸出1：不在此處 append,留待最後 prepend 到最前面
         window._out4HTML_firstOutput = out4HTML;
 
-        // 輸出 5
-        const resonanceSymbols = [...rise5dTop40].filter(s => rise1mTop40.has(s));
-        const resonanceData = resonanceSymbols
-            .map(s => {
-                const base = masterDict[s] || { 代號: s, 名稱: '' };
-                // 帶完整欄位(供存檔/歷史載入用 stdRow 渲染)
-                return { ...slimEntry(base), 五日漲幅: rise5dMap[s] ?? 0, 一月漲幅: rise1mMap[s] ?? 0 };
-            })
-            .sort((a, b) => b.五日漲幅 - a.五日漲幅);
-
-        const out5Hint = `（5日排行 前${SC.momentum.topPct}% 共 ${rise5dTop40.size} 檔 ∩ 1個月排行 前${SC.momentum.topPct}% 共 ${rise1mTop40.size} 檔，交集 ${resonanceData.length} 檔）`;
-        if (resonanceData.length > 0) {
-            outputHTML += createSection(
-                `輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}`, '輸出5_長短動能共振.csv',
-                stdHeaders(),
-                resonanceData.map((r,i) => stdRow(masterDict[r.代號]||{代號:r.代號,名稱:r.名稱}, null, i+1))
-            );
-        } else {
-            const h5 = rise5dTop40.size === 0 ? '（未偵測到檔名含「5日」的排行檔）' : '';
-            const h1 = rise1mTop40.size === 0 ? '（未偵測到檔名含「1個月/一月/1月」的排行檔）' : '';
-            outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單 ${out5Hint}</h2>
-                <p style="color:#e67e22;font-weight:bold;">⚠️ 本期無標的同時出現在兩份排行榜 前${SC.momentum.topPct}% 中。${h5}${h1}</p></div>`;
-        }
-
         // 輸出 6
         const etfResonanceData = Object.entries(etfSourceDict)
             .map(([sym, sourceSet]) => {
@@ -2969,21 +2879,6 @@
             outputHTML += `<div class="report-section"><h2>輸出 6：大摩與指定 ETF 共振清單</h2><p>本期無標的在指定名單中重疊出現兩次以上。</p></div>`;
         }
 
-        // ── 輸出 5b：5日漲幅排行前40 ──
-        const rise5dArr = Object.entries(rise5dMap)
-            .filter(([sym]) => masterDict[sym] && rise5dTop40.has(sym))
-            .sort((a,b) => b[1]-a[1]);
-        if (rise5dArr.length) {
-            outputHTML += createSection(
-                `輸出 7：5日漲幅排行 前${SC.momentum.topPct}%（${rise5dArr.length} 檔）`, '輸出7_5日漲幅.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
-                rise5dArr.map(([sym,chg],i) => {
-                    const r = masterDict[sym] || {};
-                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
-                })
-            );
-        }
-
         // ── 輸出 8：1月漲幅排行 前N% ──
         const rise1mArr = Object.entries(rise1mMap)
             .filter(([sym]) => masterDict[sym] && rise1mTop40.has(sym))
@@ -2993,21 +2888,6 @@
                 `輸出 8：1個月漲幅排行 前${SC.momentum.topPct}%（${rise1mArr.length} 檔）`, '輸出8_1月漲幅.csv',
                 ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
                 rise1mArr.map(([sym,chg],i) => {
-                    const r = masterDict[sym] || {};
-                    return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
-                })
-            );
-        }
-
-        // ── 輸出 8b：當日漲幅排行 前N% ──
-        const riseDayArr = Object.entries(riseDayMap)
-            .filter(([sym]) => masterDict[sym] && riseDayTop.has(sym))
-            .sort((a,b) => b[1]-a[1]);
-        if (riseDayArr.length) {
-            outputHTML += createSection(
-                `輸出 8b：當日漲幅排行 前${SC.momentum.dayPct}%（${riseDayArr.length} 檔）`, '輸出8b_當日漲幅.csv',
-                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
-                riseDayArr.map(([sym,chg],i) => {
                     const r = masterDict[sym] || {};
                     return [i+1, sym, r.名稱||'', r.綜合評分??'-', fmtPrice(r), ...rise3cols(sym), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)];
                 })
@@ -3098,67 +2978,6 @@
         });
 
         console.log('[分析] 階段7: 通用檔案輸出完成,開始輸出7比對');
-        // ── 輸出 7：與前日比對分析（聯集/交集/差集）──
-        console.log('[輸出7] _prevDayPayload=', !!window._prevDayPayload, 'prevTop50Syms=', prevTop50Syms.size);
-        if (!window._prevDayPayload || prevTop50Syms.size === 0) {
-            outputHTML += `<div style="background:#2a1a0a;border-left:4px solid #fb923c;padding:10px 16px;
-                border-radius:0 8px 8px 0;font-size:12px;color:#fdba74;margin-top:32px;margin-bottom:14px">
-                ⚠️ <b>輸出 7 無法產生前日比對</b><br>
-                <span style="font-size:11px">原因：${!hasRepo()?'未設定 Token，無法讀取歷史':!window._prevDayPayload?'repo 中找不到更早的分析日（需先有前一日的資料）':'前日 TOP50 為空'}</span>
-            </div>`;
-        }
-        if (window._prevDayPayload && prevTop50Syms.size > 0) {
-            const pd = window._prevDayPayload;
-            const prevMap   = Object.fromEntries((pd.payload.top50||[]).map(r=>[r.代號,r]));
-            const todayMap  = Object.fromEntries(top50.map(r=>[r.代號,r]));
-            const todaySyms = new Set(top50.map(r=>r.代號));
-
-            // 聯集（今天或昨天出現）
-            const unionSyms    = new Set([...todaySyms, ...prevTop50Syms]);
-            // 交集（兩天都有）
-            const intersectSyms = [...todaySyms].filter(s => prevTop50Syms.has(s));
-            // 新入選（今天有昨天沒有）
-            const newEntrySyms  = [...todaySyms].filter(s => !prevTop50Syms.has(s));
-            // 退出（昨天有今天沒有）
-            const droppedSyms   = [...prevTop50Syms].filter(s => !todaySyms.has(s));
-
-            const compHeaders = stdHeaders();
-
-            function makeCompRows(syms) {
-                return syms.map((sym,i) => {
-                    const t = todayMap[sym]||{};
-                    const p = prevMap[sym]||{};
-                    return stdRow(Object.keys(t).length ? t : p, null, i+1);
-                });
-            }
-
-            const dateRange = `${pd.label} → ${analysisLabel}`;
-            outputHTML += `<div style="background:#1a2540;border-left:4px solid #22d3ee;padding:10px 16px;
-                border-radius:0 8px 8px 0;font-size:12px;color:#a5f3fc;margin-top:32px;margin-bottom:14px;line-height:2">
-                <b>📊 輸出 7：與前日比對分析（${dateRange}）</b><br>
-                今日 TOP50：${todaySyms.size} 檔 ／ 前日 TOP50：${prevTop50Syms.size} 檔<br>
-                🔵 兩日交集（持續入榜）：<b>${intersectSyms.length}</b> 檔 ／
-                🆕 新入選：<b style="color:#22d3ee">${newEntrySyms.length}</b> 檔 ／
-                ⚠️ 退出：<b style="color:#fb923c">${droppedSyms.length}</b> 檔
-            </div>`;
-
-            if (intersectSyms.length) {
-                outputHTML += createSection(
-                    `🔵 兩日交集：${pd.label} & ${analysisLabel} 都在 TOP50（${intersectSyms.length} 檔）`,
-                    `交集_${pd.dateKey}_${analysisDateKey}.csv`, compHeaders, makeCompRows(intersectSyms));
-            }
-            if (newEntrySyms.length) {
-                outputHTML += createSection(
-                    `🆕 ${analysisLabel} 新入選（${newEntrySyms.length} 檔，前日未出現）`,
-                    `新入選_${analysisDateKey}.csv`, compHeaders, makeCompRows(newEntrySyms));
-            }
-            if (droppedSyms.length) {
-                outputHTML += createSection(
-                    `⚠️ ${pd.label} 退出（${droppedSyms.length} 檔，今日不在 TOP50）`,
-                    `退出_${pd.dateKey}.csv`, compHeaders, makeCompRows(droppedSyms));
-            }
-        }
-
         document.getElementById('loadingStatus').style.display = 'none';
 
         // 寫入全域供 PDF 按鈕存取
@@ -3176,7 +2995,7 @@
             inds:      Object.entries(indMap)
                            .sort((a,b)=>b[1].corpSum-a[1].corpSum).slice(0,8)
                            .map(([k,v])=>({ind:k,count:v.count,corp:v.corpSum})),
-            resonance: resonanceData,
+            resonance: [],
             etfRes:    Object.entries(etfSourceDict)
                            .map(([s,st])=>{
                                const base = masterDict[s] || {代號:s,名稱:''};
@@ -5068,19 +4887,6 @@
             window._histOut4 = out4;   // 留待最後 prepend 到最前(輸出1)
         }
 
-        // 輸出5
-        if (resonance.length) {
-            outputHTML += createSection(
-                `輸出 5：五日/一月漲幅多重共振清單（${resonance.length} 檔）`,
-                `輸出5_共振_${label.replace(/\//g,'')}.csv`,
-                STD_HEADERS,
-                resonance.map((r,i) => stdRow(r, null, i+1))
-            );
-        } else {
-            outputHTML += `<div class="report-section"><h2>輸出 5：五日/一月漲幅多重共振清單</h2>
-                <p style="color:var(--text-dim)">本期無雙漲幅共振標的。</p></div>`;
-        }
-
         // 輸出6
         if (etfRes.length) {
             outputHTML += createSection(
@@ -5115,14 +4921,6 @@
             </button>
         </div>`;
 
-                // 輸出 5b/5c：漲幅排行（歷史載入時顯示）
-        if (payload.rise5dRank?.length) {
-            outputHTML += createSection(
-                `輸出 7：5日漲幅排行 TOP 40（${label}）`, `輸出7_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
-                payload.rise5dRank.map((r,i)=>[i+1, r.代號, r.名稱, r.綜合評分??'-', fmtPrice(r), (r.漲幅||0).toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)])
-            );
-        }
         if (payload.rise1mRank?.length) {
             outputHTML += createSection(
                 `輸出 8：1個月漲幅排行 TOP 40（${label}）`, `輸出8_${label.replace(/\//g,'')}.csv`,
@@ -5266,9 +5064,7 @@
                         const u = unionMap[sym]||{};
                         const r = u.bestEntry||{};
                         const contTag = continuousTag(u.count, total);
-                        const extraTag = newEntry.includes(sym)  ? renderTags('🆕新入選') :
-                                         dropped.includes(sym)   ? renderTags('⚠️已退出') : '';
-                        const tagHtml = [contTag, extraTag, renderTags(r.狀態標註||'')].filter(Boolean).join('');
+                        const tagHtml = [contTag, renderTags(r.狀態標註||'')].filter(Boolean).join('');
                         const price = (r.收盤價!=null&&r.收盤價!==0)?r.收盤價:'-';
                         const rev = (r.營收年增!=null&&r.營收年增!==0)?(Number(r.營收年增)>0?'+':'')+Number(r.營收年增).toFixed(1)+'%':'-';
                         return [i+1, sym, r.名稱||'', r.綜合評分??'-', price, `${u.count}/${total}日`, u.dates.join(' · '),
@@ -5284,9 +5080,7 @@
                 border-radius:0 8px 8px 0;font-size:12px;color:#c4b5fd;margin-bottom:14px;line-height:2">
                 <b>📊 多日分析：${dateRange}</b><br>
                 聯集共 ${Object.keys(unionMap).length} 檔 ／
-                🔴 每日交集：${intersect.length} 檔 ／
-                🆕 最後一日新入選：${newEntry.length} 檔 ／
-                ⚠️ 已退出：${dropped.length} 檔
+                🔴 每日交集：${intersect.length} 檔
             </div>`;
 
             // 聯集總表（含連續天數）
@@ -5299,17 +5093,7 @@
                     headers, makeRows(intersect));
             }
 
-            // 最後一日新入選
-            if (newEntry.length) {
-                html += createSection(`🆕 ${labels[labels.length-1]} 新入選（${newEntry.length} 檔，前幾日未出現）`, `新入選_${csvFn}.csv`,
-                    headers, makeRows(newEntry));
-            }
-
-            // 已退出（歷史日有，最新日消失）
-            if (dropped.length) {
-                html += createSection(`⚠️ 已退出（${dropped.length} 檔，最新日 ${labels[labels.length-1]} 已不在 TOP50）`, `退出_${csvFn}.csv`,
-                    headers, makeRows(dropped));
-            }
+            // 最後一日新入選、已退出 — 已移除
 
             // 各日 TOP50 並排（可點「載入完整報告」）
             html += `<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
@@ -6128,7 +5912,6 @@
         { group: '族群', tags: ['🔥熱門族群','🌊波段熱門族群','🌙長線熱門族群','📈開週布林','📅開月布林'] },
         { group: '特殊', tags: ['⚡超級基本面','🐉潛龍出海','💎大摩投信合買','🎯ETF共振'] },
         { group: '基本面', tags: ['營收>80%','營收>50%'] },
-        { group: '狀態', tags: ['🆕新入選'] },
     ];
     // 動態檔名標籤群組(分析後由 fileTagOrder 填入,存 localStorage 供回測用)
     const BT_FILETAG_KEY = 'btFileTags_v1';
