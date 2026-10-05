@@ -589,11 +589,7 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-<<<<<<< HEAD
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05f</span>
-=======
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05e</span>
->>>>>>> bdb750b1bcc134dec45e802e606e94d90160d853
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05h</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -3025,7 +3021,15 @@
             rise5dRank: Object.entries(rise5dMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
                 .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',相關產業:r.相關產業||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
             rise1mRank: Object.entries(rise1mMap).filter(([s])=>masterDict[s]).sort((a,b)=>b[1]-a[1]).slice(0,40)
-                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',相關產業:r.相關產業||'',漲幅:chg,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+                .map(([sym,chg])=>{const r=masterDict[sym]||{};return {代號:sym,名稱:r.名稱||'',相關產業:r.相關產業||'',漲幅:chg,五日漲幅:(window._rise5dMap||{})[sym]??null,一月漲幅:chg,三月漲幅:(window._rise3mMap||{})[sym]??null,綜合評分:r.綜合評分||'-',法人市值比pct:r.法人市值比pct||'-',法人月市值比pct:r.法人月市值比pct||'-',投信市值比pct:r.投信市值比pct||'-',收盤價:r.收盤價||null,營收年增:r.營收年增||0,布林σ位置:r.布林σ位置||null,布林上軌:r.布林上軌||null,布林中軌:r.布林中軌||null,布林下軌:r.布林下軌||null,狀態標註:r.狀態標註||''};}),
+            // 檔名標籤表(策略選股檔:營收創高主力買/週主力發動等),供歷史載入重現各自的輸出表
+            fileTags: fileTagOrder.filter(tagName => !_hasOwnOutput(tagName)).map(tagName => ({
+                name: tagName,
+                stocks: [...(fileTagMap[tagName]||[])].map(s=>masterDict[s]).filter(Boolean)
+                    .sort((a,b)=>(b.綜合評分||0)-(a.綜合評分||0)).slice(0,50)
+                    .map(r => ({ ...slimEntry(r), 五日漲幅:(window._rise5dMap||{})[r.代號]??null, 一月漲幅:(window._rise1mMap||{})[r.代號]??null, 三月漲幅:(window._rise3mMap||{})[r.代號]??null })),
+                total: (fileTagMap[tagName]||new Set()).size,
+            })).filter(t => t.stocks.length),
         };
 
         // ── Payload 精簡（移除不必要欄位，降低 API 傳輸量）──
@@ -4588,12 +4592,20 @@
         const rk    = (rank !== undefined && rank !== null) ? rank : '-';
         const score = (r.綜合評分 !== undefined && r.綜合評分 !== null) ? r.綜合評分 : '-';
         const base = [rk, r.代號, r.名稱, score, price];
-        // 5日/1月/3月漲幅:當日分析從上傳CSV的map取,歷史載入從row本身取(payload已存)
+        // 5日/1月/3月漲幅:當日分析從上傳CSV的map取(masterDict的漲幅被null→0污染,不能用),歷史載入從row本身取(payload已存)
         if (typeof window!=='undefined' && window._showRiseCols) {
             const fmtRise = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
-            base.push(fmtRise(r.五日漲幅 ?? (window._rise5dMap||{})[r.代號]));
-            base.push(fmtRise(r.一月漲幅 ?? (window._rise1mMap||{})[r.代號]));
-            base.push(fmtRise(r.三月漲幅 ?? (window._rise3mMap||{})[r.代號]));
+            if (window._isCurrentDayAnalysis) {
+                // 當日分析:一律用上傳漲幅排行CSV的map(masterDict的五日漲幅被轉成0,會蓋掉真值)
+                base.push(fmtRise((window._rise5dMap||{})[r.代號]));
+                base.push(fmtRise((window._rise1mMap||{})[r.代號]));
+                base.push(fmtRise((window._rise3mMap||{})[r.代號]));
+            } else {
+                // 歷史載入:用 payload 存的漲幅值
+                base.push(fmtRise(r.五日漲幅));
+                base.push(fmtRise(r.一月漲幅));
+                base.push(fmtRise(r.三月漲幅));
+            }
         }
         return [...base, r.法人市值比pct || '-', r.法人月市值比pct || '-', r.投信市值比pct || '-', rev, tags, renderBoll(r)];
     }
@@ -4604,6 +4616,8 @@
                 thrA, thrB, thrC, date } = payload;
         const SC = getScoreConfig();
         const label = dateLabel || date || '';
+        // 歷史版漲幅格式化(從 payload 存的漲幅值)
+        const _histRise = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '-' : ((Number(v)>0?'+':'')+Number(v).toFixed(1)+'%');
 
         // 統一設定歷史模式標記(所有歷史載入都會經過這裡,供族群編輯重算用)
         window._isCurrentDayAnalysis = false; window._showRiseCols = true;   // 歷史載入:也顯示漲幅欄(從payload讀)
@@ -4899,7 +4913,7 @@
             outputHTML += createSection(
                 `輸出 6：ETF/大摩共振清單（${etfRes.length} 檔）`,
                 `輸出6_ETF_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
+                ['排名','代號','名稱','綜合評分','當日價格','共振次數','ETF/大摩清單','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','週K布林位置'],
                 etfRes.map((r,i)=>{
                     const etfTags = (r.ETF清單||'').split(' / ').filter(Boolean)
                         .map(t => {
@@ -4907,7 +4921,7 @@
                                         t.startsWith('00')?'teal':'blue';
                             return `<span class="s-tag ${cls}">${t}</span>`;
                         }).join('');
-                    return [i+1,r.代號,r.名稱,r.綜合評分??'-',fmtPrice(r),r.共振次數,etfTags,r.法人市值比pct||'-',r.法人月市值比pct||'-',r.投信市值比pct||'-',fmtRev(r),renderBoll(r)];
+                    return [i+1,r.代號,r.名稱,r.綜合評分??'-',fmtPrice(r),r.共振次數,etfTags,_histRise(r.五日漲幅),_histRise(r.一月漲幅),_histRise(r.三月漲幅),r.法人市值比pct||'-',r.法人月市值比pct||'-',r.投信市值比pct||'-',fmtRev(r),renderBoll(r)];
                 })
             );
         } else {
@@ -4931,8 +4945,8 @@
         if (payload.rise1mRank?.length) {
             outputHTML += createSection(
                 `輸出 8：1個月漲幅排行 TOP 40（${label}）`, `輸出8_${label.replace(/\//g,'')}.csv`,
-                ['排名','代號','名稱','綜合評分','當日價格','1月漲幅(%)','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
-                payload.rise1mRank.map((r,i)=>[i+1, r.代號, r.名稱, r.綜合評分??'-', fmtPrice(r), (r.漲幅||0).toFixed(2), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)])
+                ['排名','代號','名稱','綜合評分','當日價格','5日漲幅','1月漲幅','3月漲幅','法人5日市值比','法人月市值比','投信市值比','營收年增','狀態標註','週K布林位置'],
+                payload.rise1mRank.map((r,i)=>[i+1, r.代號, r.名稱, r.綜合評分??'-', fmtPrice(r), _histRise(r.五日漲幅), _histRise(r.一月漲幅 ?? r.漲幅), _histRise(r.三月漲幅), r.法人市值比pct||'-', r.法人月市值比pct||'-', r.投信市值比pct||'-', fmtRev(r), renderTags(r.狀態標註||''), renderBoll(r)])
             );
         }
 
@@ -4964,6 +4978,20 @@
                 stdHeaders(),
                 payload.trustRank.map((r,i) => stdRow(r, null, i+1))
             );
+        }
+
+        // 檔名標籤表(策略選股檔:營收創高主力買/週主力發動等)歷史載入重現
+        if (Array.isArray(payload.fileTags)) {
+            payload.fileTags.forEach((ft, idx) => {
+                if (!ft.stocks?.length) return;
+                const moreNote = ft.total > ft.stocks.length ? `，顯示前${ft.stocks.length}` : '';
+                outputHTML += createSection(
+                    `📋 ${ft.name}（共${ft.total} 檔${moreNote}）（${label}）`,
+                    `${ft.name}_${label.replace(/\//g,'')}.csv`,
+                    stdHeaders(),
+                    ft.stocks.map((r,i) => stdRow(r, null, i+1))
+                );
+            });
         }
 
         // 熱門族群排輸出1:插到第一個 report-section 前
