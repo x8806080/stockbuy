@@ -589,7 +589,7 @@
     <button onclick="doSync()" title="立即同步" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">↻ 同步</button>
     <button onclick="openSettings()" style="background:#1e3a5f;color:#60a5fa;border:1px solid #2a4a7f;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">⚙ 設定</button>
     <button onclick="debugConfig();alert('設定已輸出到 console（F12）')" title="輸出設定到 console" style="background:#1a2a1a;color:#4ade80;border:1px solid #14532d;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer">🔍 診斷</button>
-    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05h</span>
+    <span style="margin-left:auto;font-size:10px;color:#334155;white-space:nowrap;font-family:monospace">v2026.06.05i</span>
 </div>
 
 <!-- ══ 設定 Modal ══ -->
@@ -676,8 +676,10 @@
                         <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入日期清單…</div>
                     </div>
                     <div style="display:flex;gap:6px;margin-top:6px">
+                        <button onclick="changeSelectedHistDate()"
+                            style="background:none;border:1px solid #f59e0b;color:#f59e0b;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;flex:1">✏️ 修改日期</button>
                         <button onclick="deleteSelectedHistDates()"
-                            style="background:none;border:1px solid #ef4444;color:#ef4444;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;width:100%">🗑️ 刪除選取日期資料</button>
+                            style="background:none;border:1px solid #ef4444;color:#ef4444;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;flex:1">🗑️ 刪除資料</button>
                     </div>
                     <div style="font-size:11px;color:var(--text-dim);margin-top:5px">
                         共振比對可選多個日期，取聯集後與最新漲幅比對
@@ -714,12 +716,11 @@
             </button>
         </div>
         <div id="backtestPanelInner" style="margin-top:14px">
-            <!-- Step 1：選入場日 -->
-            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px">
+            <!-- ── 第一排:日期 + 現價來源 ── -->
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px">
                 <div style="flex:0 0 auto;min-width:260px">
-                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">① 選擇入場日期<br><span style="font-size:11px;color:#64748b">單日回測:點1天｜批次區間:點起訖2天(含中間所有日)</span></div>
-                    <div id="backtestDateList"
-                        style="border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:10px">
+                    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">① 選擇入場日期<br><span style="font-size:11px;color:#64748b">單日:點1天｜區間:點起訖2天</span></div>
+                    <div id="backtestDateList" style="border:1px solid var(--border);border-radius:8px;background:var(--input-bg);padding:10px">
                         <div style="color:var(--text-dim);font-size:12px;padding:8px;text-align:center">同步後載入…</div>
                     </div>
                 </div>
@@ -734,93 +735,61 @@
                         </label>
                     </div>
                     <div id="backtestCsvRow" style="display:none;margin-bottom:8px">
-                        <input type="file" id="backtestPriceFile" accept=".csv"
-                            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);font-size:13px">
+                        <input type="file" id="backtestPriceFile" accept=".csv" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);font-size:13px">
                         <div style="font-size:11px;color:var(--text-dim);margin-top:4px">上傳含「代號」與「成交/收盤價」的 CSV</div>
                     </div>
                     <div id="backtestPriceDate" style="margin-bottom:8px;font-size:12px;color:var(--text-dim)">
-                        現價日期：<input type="date" id="btPriceDate"
-                            style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
+                        現價日期：<input type="date" id="btPriceDate" style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
                         <span style="margin-left:4px;color:#64748b">（空白=今日）</span>
                     </div>
-                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                        <button onclick="runStrategyBacktest()"
-                            style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:11px 24px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
-                            🎯 完整回測(績效+標籤比較)
-                        </button>
-                        <button onclick="runPoolBacktest()"
-                            title="模擬抱N檔、資金滾動複利、月比值汰換,最接近真實操作"
-                            style="background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
-                            💰 資金池複利回測
-                        </button>
-                        <button onclick="runRangeBacktest()"
-                            title="進階:標籤交集矩陣分析(比較多標籤同時成立的效果)"
-                            style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
-                            🔲 標籤交集矩陣(進階)
-                        </button>
-                        <button onclick="runBacktest()"
-                            title="單日快照:看某一天買進後N天的表現"
-                            style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:11px 20px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:700">
-                            📊 單日快照
-                        </button>
-                        <button onclick="if(confirm('清除所有回測快取?')){clearBtCache();document.getElementById('backtestMsg').textContent='✓ 快取已清除';}"
-                            title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
-                            🗑️ 清快取
-                        </button>
-                        <button onclick="if(confirm('掃描repo重建日期索引?用於修復「資料有匯入但日曆選不到」的問題')){rebuildDailyIndex();}"
-                            title="掃描repo所有每日資料,重建索引(修復索引遺漏)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:9px 12px;border-radius:7px;font-size:12px;cursor:pointer">
-                            🔧 重建索引
-                        </button>
-                        <button onclick="saveBtToCloud()" title="把目前回測條件+結果具名存到 GitHub repo"
-                            style="background:#0ea5e9;color:#fff;border:none;padding:9px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 儲存回測(命名)</button>
-                        <select id="btSavedSelect" onchange="loadBtSaved(this.value)" title="載入已存回測"
-                            style="padding:8px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px;min-width:160px">
-                            <option value="">— 載入已存回測 —</option>
-                        </select>
-                        <button onclick="refreshBtSavedSelect()" title="重新整理雲端回測清單"
-                            style="background:#475569;color:#fff;border:none;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer">🔄</button>
-                        <button onclick="deleteBtSaved()" title="刪除選取的回測"
-                            style="background:#7f1d1d;color:#fff;border:none;padding:9px 12px;border-radius:7px;font-size:13px;cursor:pointer">🗑️</button>
-                        <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1a2e;border:1px solid #1e3a5f;padding:8px 12px;border-radius:6px;width:100%">
-                            <span style="font-weight:700;color:#4ade80">🔧 回測條件開關（兩種回測共用）:</span>
-                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-                                <input type="checkbox" id="btUseEntry" style="width:14px;height:14px;accent-color:#4ade80">
-                                <span>啟用進場條件</span>
-                                <span style="color:#64748b;font-size:11px">(站上週布林上軌且超出≤<input type="number" id="btEntryMaxPct" value="10" min="1" max="100" style="width:42px;padding:1px 3px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">%；已持有不重複買進)</span>
-                            </label>
-                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-                                <input type="checkbox" id="btUseExit" style="width:14px;height:14px;accent-color:#f97316">
-                                <span>啟用停利條件</span>
-                                <span style="color:#64748b;font-size:11px">(用下方離場策略；不勾則固定持有N天)</span>
-                            </label>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:#0c1f1e;border:1px solid #155e5a;padding:8px 12px;border-radius:6px;width:100%">
-                            <span style="font-weight:700;color:#06b6d4">💰 資金池參數(資金池複利回測用):</span>
-                            <label style="display:flex;align-items:center;gap:4px">初始資金<input type="number" id="poolInitCap" value="100" min="1" style="width:60px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">萬</label>
-                            <label style="display:flex;align-items:center;gap:4px">最多持有<input type="number" id="poolMaxHold" value="25" min="1" max="100" style="width:48px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">檔</label>
-                            <span style="color:#64748b;font-size:11px">等金額分配,月比值高者優先,汰弱留強</span>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px;width:100%">
+                </div>
+            </div>
+
+            <!-- ── 第二排:四個回測引擎按鈕(主要操作) ── -->
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+                <button onclick="runStrategyBacktest()" style="background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700">🎯 完整回測(績效+標籤比較)</button>
+                <button onclick="runPoolBacktest()" title="模擬抱N檔、資金滾動複利、月比值汰換,最接近真實操作" style="background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700">💰 資金池複利回測</button>
+                <button onclick="runRangeBacktest()" title="進階:標籤交集矩陣分析(比較多標籤同時成立的效果)" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700">🔲 標籤交集矩陣(進階)</button>
+                <button onclick="runBacktest()" title="單日快照:看某一天買進後N天的表現" style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:12px 20px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700">📊 單日快照</button>
+            </div>
+
+            <!-- ── 第三排:回測設定(分組收折) ── -->
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+
+                <!-- 進場設定 -->
+                <details open style="background:#0c1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:0">
+                    <summary style="cursor:pointer;font-weight:700;color:#4ade80;padding:10px 14px;font-size:13px">🎯 進場設定</summary>
+                    <div style="padding:4px 14px 12px;font-size:12px;color:var(--text-dim)">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex-wrap:wrap">
+                            <input type="checkbox" id="btUseEntry" style="width:14px;height:14px;accent-color:#4ade80">
+                            <span>啟用進場條件</span>
+                            <span style="color:#64748b;font-size:11px">(站上週布林上軌且超出≤<input type="number" id="btEntryMaxPct" value="10" min="1" max="100" style="width:42px;padding:1px 3px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">%；已持有不重複買進)</span>
+                        </label>
+                    </div>
+                </details>
+
+                <!-- 出場設定 -->
+                <details open style="background:#1f1206;border:1px solid #7c2d12;border-radius:8px;padding:0">
+                    <summary style="cursor:pointer;font-weight:700;color:#f97316;padding:10px 14px;font-size:13px">🚪 出場設定</summary>
+                    <div style="padding:4px 14px 12px;font-size:12px;color:var(--text-dim);display:flex;flex-direction:column;gap:10px">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex-wrap:wrap">
+                            <input type="checkbox" id="btUseExit" style="width:14px;height:14px;accent-color:#f97316">
+                            <span>啟用停利條件</span>
+                            <span style="color:#64748b;font-size:11px">(用下方離場策略；不勾則固定持有N天)</span>
+                        </label>
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
                             <span style="font-weight:600;color:#f97316">離場策略:</span>
-                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-                                <input type="radio" name="exitMode" value="leave" checked style="accent-color:#f97316">
-                                離榜出場(連續離開TOP50 N日)
-                            </label>
-                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-                                <input type="radio" name="exitMode" value="custom4" style="accent-color:#f97316">
-                                🎚️ 自訂4層停利(下方設定)
-                            </label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="exitMode" value="leave" checked style="accent-color:#f97316"> 離榜出場(連續離開TOP50 N日)</label>
+                            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="exitMode" value="custom4" style="accent-color:#f97316"> 🎚️ 自訂4層停利(下方設定)</label>
                         </div>
-                        <details id="custom4Panel" style="background:var(--bg2);padding:8px 12px;border-radius:6px;font-size:12px;color:var(--text-dim);width:100%">
+                        <details id="custom4Panel" style="background:var(--bg2);padding:8px 12px;border-radius:6px">
                             <summary style="cursor:pointer;font-weight:600;color:#f97316">🎚️ 自訂4層停利設定(選「自訂4層」時生效)</summary>
                             <div style="margin-top:8px;line-height:2.2">
                                 <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">每層:獲利達到區間時,符合「觸發條件」連續N日就出場。門檻空白=用預設。</div>
-                                <!-- 第1層:停損 -->
                                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
                                     <span style="color:#f87171;font-weight:600;width:60px">①停損</span>
                                     獲利≤ <span style="color:#f87171">−</span><input type="number" id="c4_stopLoss" placeholder="10" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% → 直接出場
                                 </div>
-                                <!-- 第2層:獲利<N% -->
                                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
                                     <span style="color:#fbbf24;font-weight:600;width:60px">②低獲利</span>
                                     獲利&lt; <input type="number" id="c4_t2" placeholder="10" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% 時,
@@ -835,7 +804,6 @@
                                         <option value="hold">持有不出場(抱到最新)</option>
                                     </select> 連續 <input type="number" id="c4_n2" placeholder="3" style="width:42px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">日
                                 </div>
-                                <!-- 第3層:N%<獲利<N% -->
                                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
                                     <span style="color:#4ade80;font-weight:600;width:60px">③中獲利</span>
                                     <input type="number" id="c4_t3lo" placeholder="10" style="width:46px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">%≤獲利&lt;
@@ -851,7 +819,6 @@
                                         <option value="hold">持有不出場(抱到最新)</option>
                                     </select> 連續 <input type="number" id="c4_n3" placeholder="10" style="width:42px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">日
                                 </div>
-                                <!-- 第4層:獲利>N% -->
                                 <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
                                     <span style="color:#22d3ee;font-weight:600;width:60px">④高獲利</span>
                                     獲利≥ <input type="number" id="c4_t4" placeholder="100" style="width:50px;padding:3px;border-radius:4px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">% 時,
@@ -868,64 +835,60 @@
                                 </div>
                             </div>
                         </details>
-                        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;background:var(--bg2);padding:8px 12px;border-radius:6px">
-                            <span style="font-weight:600;color:#f97316">離榜出場日設定:</span>
-                            <span style="display:flex;align-items:center;gap:4px">
-                                <label title="獲利<10%時,連續離開TOP50幾日就出場">獲利&lt;10%:</label>
-                                <input type="number" id="stratExitN1" value="3" min="1" max="120"
-                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
-                            </span>
-                            <span style="display:flex;align-items:center;gap:4px">
-                                <label title="獲利10-100%時,連續離開TOP50幾日就出場">10-100%:</label>
-                                <input type="number" id="stratExitN2" value="10" min="1" max="120"
-                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
-                            </span>
-                            <span style="display:flex;align-items:center;gap:4px">
-                                <label title="獲利>100%時,連續離開TOP50幾日就出場">&gt;100%:</label>
-                                <input type="number" id="stratExitN3" value="20" min="1" max="120"
-                                    style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日
-                            </span>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                            <span style="font-weight:600;color:#f97316">離榜出場日:</span>
+                            <span style="display:flex;align-items:center;gap:4px"><label title="獲利<10%時,連續離開TOP50幾日就出場">獲利&lt;10%:</label><input type="number" id="stratExitN1" value="3" min="1" max="120" style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日</span>
+                            <span style="display:flex;align-items:center;gap:4px"><label title="獲利10-100%時,連續離開TOP50幾日就出場">10-100%:</label><input type="number" id="stratExitN2" value="10" min="1" max="120" style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日</span>
+                            <span style="display:flex;align-items:center;gap:4px"><label title="獲利>100%時,連續離開TOP50幾日就出場">&gt;100%:</label><input type="number" id="stratExitN3" value="20" min="1" max="120" style="width:50px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">日</span>
                         </div>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label>持有交易日：</label>
-                            <input type="number" id="btHoldDays" value="5" min="0" max="120"
-                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                            <span style="font-size:11px;color:var(--text-dim)">日後出場(0=最新價)</span>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label>停損(%)：</label>
-                            <span style="font-size:16px;color:#f87171;font-weight:700;margin-right:-2px">−</span>
-                            <input type="number" id="btStopLoss" value="0" min="0" max="50" step="0.5"
-                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                            <span style="font-size:11px;color:var(--text-dim)">%(0=不停損)</span>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)">
-                            <label>取評分前幾名：</label>
-                            <input type="number" id="btTopN" value="50" min="1" max="50"
-                                style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px">
-                            <span style="font-size:11px;color:var(--text-dim)">名(不看絕對分數)</span>
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                            <span style="display:flex;align-items:center;gap:6px"><label>持有交易日:</label><input type="number" id="btHoldDays" value="5" min="0" max="120" style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px"><span style="font-size:11px;color:var(--text-dim)">日後出場(0=最新價)</span></span>
+                            <span style="display:flex;align-items:center;gap:6px"><label>停損(%):</label><span style="font-size:16px;color:#f87171;font-weight:700;margin-right:-2px">−</span><input type="number" id="btStopLoss" value="0" min="0" max="50" step="0.5" style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px"><span style="font-size:11px;color:var(--text-dim)">%(0=不停損)</span></span>
                         </div>
                     </div>
-                    <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">
-                        <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                            <label style="font-weight:600">標籤篩選（可複選）：</label>
+                </details>
+
+                <!-- 資金池設定 -->
+                <details style="background:#06201f;border:1px solid #155e5a;border-radius:8px;padding:0">
+                    <summary style="cursor:pointer;font-weight:700;color:#06b6d4;padding:10px 14px;font-size:13px">💰 資金池設定(資金池複利回測用)</summary>
+                    <div style="padding:4px 14px 12px;font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                        <label style="display:flex;align-items:center;gap:4px">初始資金<input type="number" id="poolInitCap" value="100" min="1" style="width:60px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">萬</label>
+                        <label style="display:flex;align-items:center;gap:4px">最多持有<input type="number" id="poolMaxHold" value="25" min="1" max="100" style="width:48px;padding:2px 4px;border-radius:3px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)">檔</label>
+                        <span style="color:#64748b;font-size:11px">等金額分配,月比值高者優先,汰弱留強</span>
+                    </div>
+                </details>
+
+                <!-- 標籤篩選 + 取前N名 -->
+                <details style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0">
+                    <summary style="cursor:pointer;font-weight:700;color:#a78bfa;padding:10px 14px;font-size:13px">🏷️ 標籤篩選 & 取樣設定</summary>
+                    <div style="padding:4px 14px 12px;font-size:12px;color:var(--text-dim);display:flex;flex-direction:column;gap:10px">
+                        <div style="display:flex;align-items:center;gap:6px"><label>取評分前幾名:</label><input type="number" id="btTopN" value="50" min="1" max="50" style="width:60px;padding:5px;border-radius:5px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:12px"><span style="font-size:11px;color:var(--text-dim)">名(不看絕對分數)</span></div>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                            <label style="font-weight:600">標籤篩選(可複選):</label>
                             <span style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
-                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg)">
-                                    <input type="radio" name="btTagMode" value="and" checked style="accent-color:#f97316;margin:0">AND(全符合)
-                                </label>
-                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg);border-left:1px solid var(--border)">
-                                    <input type="radio" name="btTagMode" value="or" style="accent-color:#f97316;margin:0">OR(符合任一)
-                                </label>
+                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg)"><input type="radio" name="btTagMode" value="and" checked style="accent-color:#f97316;margin:0">AND(全符合)</label>
+                                <label style="cursor:pointer;padding:3px 10px;font-size:11px;display:flex;align-items:center;gap:3px;background:var(--input-bg);border-left:1px solid var(--border)"><input type="radio" name="btTagMode" value="or" style="accent-color:#f97316;margin:0">OR(符合任一)</label>
                             </span>
                             <span style="font-size:11px;color:#64748b">AND=同時符合所有勾選;OR=符合其中一個即可</span>
                             <button type="button" onclick="clearBtTags()" style="background:#334155;color:#cbd5e1;border:none;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">清除</button>
                         </div>
-                        <div id="btTagFilterBox" style="display:flex;flex-wrap:wrap;gap:6px">
-                            <!-- 標籤勾選項由 JS 動態產生 -->
-                        </div>
+                        <div id="btTagFilterBox" style="display:flex;flex-wrap:wrap;gap:6px"></div>
                     </div>
-                    <div id="backtestMsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:16px"></div>
-                </div>
+                </details>
+            </div>
+
+            <!-- ── 第四排:工具列(儲存/載入/維護) ── -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+                <button onclick="saveBtToCloud()" title="把目前回測條件+結果具名存到 GitHub repo" style="background:#0ea5e9;color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:13px;cursor:pointer;font-weight:600">☁️ 儲存回測(命名)</button>
+                <select id="btSavedSelect" onchange="loadBtSaved(this.value)" title="載入已存回測" style="padding:8px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);font-size:13px;min-width:160px"><option value="">— 載入已存回測 —</option></select>
+                <button onclick="refreshBtSavedSelect()" title="重新整理雲端回測清單" style="background:#475569;color:#fff;border:none;padding:8px 12px;border-radius:7px;font-size:13px;cursor:pointer">🔄</button>
+                <button onclick="deleteBtSaved()" title="刪除選取的回測" style="background:#7f1d1d;color:#fff;border:none;padding:8px 12px;border-radius:7px;font-size:13px;cursor:pointer">🗑️</button>
+                <span style="flex:1"></span>
+                <button onclick="if(confirm('清除所有回測快取?')){clearBtCache();document.getElementById('backtestMsg').textContent='✓ 快取已清除';}" title="清除已記憶的回測結果" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:8px 12px;border-radius:7px;font-size:12px;cursor:pointer">🗑️ 清快取</button>
+                <button onclick="if(confirm('掃描repo重建日期索引?用於修復「資料有匯入但日曆選不到」的問題')){rebuildDailyIndex();}" title="掃描repo所有每日資料,重建索引(修復索引遺漏)" style="background:var(--bg2);color:var(--text-dim);border:1px solid var(--border);padding:8px 12px;border-radius:7px;font-size:12px;cursor:pointer">🔧 重建索引</button>
+            </div>
+
+            <div id="backtestMsg" style="font-size:12px;color:var(--text-dim);margin-top:8px;min-height:16px"></div>
             </div>
             <!-- 回測結果 -->
             <div id="backtestResult"></div>
@@ -3517,6 +3480,58 @@
         if (typeof initBacktestDateList === 'function') await initBacktestDateList();
     }
     window.deleteSelectedHistDates = deleteSelectedHistDates;
+
+    // 修改歷史資料的日期(輸入錯日期時修正):讀舊檔→改dateKey→寫新檔→刪舊檔→更新索引
+    async function changeSelectedHistDate() {
+        if (!hasRepo()) { alert('尚未設定 GitHub Token,無法修改'); return; }
+        const dates = getCalSelected('histDateList');
+        if (dates.length !== 1) { alert('請在日曆「只點選一天」要修改的日期'); return; }
+        const oldDk = dates[0];
+        const oldLabel = oldDk.slice(0,4)+'/'+oldDk.slice(4,6)+'/'+oldDk.slice(6,8);
+        const input = prompt(`把 ${oldLabel} 的資料改成哪一天?\n請輸入新日期(格式 YYYYMMDD,例如 20260611):`, oldDk);
+        if (!input) return;
+        const newDk = input.trim().replace(/[^0-9]/g,'');
+        if (!/^\d{8}$/.test(newDk)) { alert('日期格式錯誤,需為 8 位數字 YYYYMMDD'); return; }
+        if (newDk === oldDk) { alert('新舊日期相同,無需修改'); return; }
+        // 檢查新日期是否已存在
+        try {
+            const exist = await repoGet(dailyFileURL(newDk)).catch(()=>null);
+            if (exist) {
+                if (!confirm(`⚠️ ${newDk} 已經有資料,修改會「覆蓋」它。確定?`)) return;
+            }
+        } catch(e) {}
+        const newLabel = newDk.slice(0,4)+'/'+newDk.slice(4,6)+'/'+newDk.slice(6,8);
+        if (!confirm(`確定把 ${oldLabel} 的分析資料改成 ${newLabel} 嗎?\n(原 ${oldLabel} 會被刪除)`)) return;
+        try {
+            // 1. 讀舊檔
+            const payload = await loadDailyResult(oldDk);
+            if (!payload) { alert(`讀取 ${oldLabel} 資料失敗`); return; }
+            // 2. 更新 payload 內的日期欄位
+            payload.dateKey = newDk;
+            payload.date = newLabel;
+            // 3. 寫新檔(含更新索引)
+            await saveDailyResult(payload, newDk);
+            // 4. 刪舊檔(跳過 confirm,直接刪)
+            const existing = await repoGet(dailyFileURL(oldDk));
+            if (existing?.sha) await repoDelete(dailyFileURL(oldDk), existing.sha, `move ${oldDk}→${newDk}`);
+            // 5. 從索引移除舊日期
+            const idxData = await repoGet(dailyIndexURL());
+            if (idxData) {
+                let idx = [];
+                try { idx = decodeGitHubContent(idxData.content); } catch(e) { idx = []; }
+                idx = idx.filter(d => d !== oldDk);
+                if (!idx.includes(newDk)) idx.push(newDk);
+                idx.sort();
+                await repoPut(dailyIndexURL(), idx, idxData.sha, `index: ${oldDk}→${newDk}`);
+            }
+            alert(`✅ 已將 ${oldLabel} 的資料改為 ${newLabel}`);
+            await initHistDateSelect();
+            if (typeof initBacktestDateList === 'function') await initBacktestDateList();
+        } catch(e) {
+            alert(`修改失敗:${e.message}`);
+        }
+    }
+    window.changeSelectedHistDate = changeSelectedHistDate;
 
     async function saveDailyResult(payload, dateKey, skipIndex) {
         if (!hasRepo()) return;
